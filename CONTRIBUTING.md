@@ -19,7 +19,7 @@ TODO
 전체 규칙은 [AGENTS.md #7 Git & 협업 규칙](AGENTS.md)에 정리되어 있습니다. 요약:
 
 - 브랜치: `main`(절대 직접 작업 금지) / `dev`(통합) / `server`(백엔드) / `client`(프론트엔드)
-- 평소 작업은 `server`/`client`에 바로 커밋, 통합 확인되면 `dev`로, 배포 시점에만 `dev` → `main`
+- 분야별 작업은 `server/<작업 설명>` `client/<작업 설명>`처럼 하위 브랜치로 분기 → 완료되면 `server`/`client`로 병합 → 어느 정도 쌓이면 `dev`로 통합, 배포 시점에만 `dev` → `main`
 - 커밋 메시지: Conventional Commits (`feat:` `fix:` `docs:` `refactor:` `test:` `chore:` `style:` `perf:`)
 
 ## 이슈 등록

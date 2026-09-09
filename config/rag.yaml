@@ -1,0 +1,6 @@
+# RAG 설정
+retriever:
+  type:
+  top_k:
+embedding:
+  model:

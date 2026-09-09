@@ -126,19 +126,28 @@ TODO
 **브랜치** (2026-09-09 개정 — 실제 개발이 대부분 1인 체제라 영역별 브랜치로 단순화)
 
 ```
-main      # 배포 가능한 상태 — 절대 직접 작업/커밋 금지. dev에서 병합될 때만 갱신
-dev       # 통합 브랜치 — server + client를 합쳐서 검증
-server    # 백엔드(Spring) 작업
-client    # 프론트엔드(React) 작업
+main                     # 배포 가능한 상태 — 절대 직접 작업/커밋 금지. dev에서 병합될 때만 갱신
+dev                      # 통합 브랜치 — server + client 통합 검증 + 전 브랜치 공통 문서 작업
+server                   # 백엔드(Spring) 통합 브랜치
+client                   # 프론트엔드(React) 통합 브랜치
+server/feat-<설명>        # server에서 분기하는 기능별 작업 브랜치
+server/fix-<설명>
+server/docs-<설명>
+server/refactor-<설명>
+server/chore-<설명>
+client/feat-<설명>        # client에서 분기하는 기능별 작업 브랜치 (동일 접두사 체계)
+client/fix-<설명>
+...
 ```
 
-- 분야별 작업 흐름: `server`(또는 `client`)에서 `server/<작업 설명>` 하위 브랜치로 분기 → 작업 완료되면 `server`로 병합 → `server`가 어느 정도 쌓이면 `dev`로 통합
+- 기능/수정 단위 작업 흐름: `server`(또는 `client`)에서 `server/feat-<설명>` `server/fix-<설명>` 처럼 **기존 타입 접두사(feat/fix/docs/refactor/chore)를 유지한 채** 분기 → 작업 완료되면 해당 영역 브랜치(`server`/`client`)로 병합 → 영역 브랜치가 어느 정도 쌓이면 `dev`로 통합
 - 아주 작은 수정이면 하위 브랜치 없이 `server`/`client`에 바로 커밋해도 됨
 - `server`/`client` → `dev`: 통합 확인 위해 수시로 병합 (셀프 머지 가능)
 - `dev` → `main`: **배포할 때만** 병합. 병합 전 dev에서 실제로 동작 확인 필수
-- 팀원(오단비)이 코드에 기여할 경우에도 `server`/`client` 브랜치를 통해서만 작업하고 `main`은 건드리지 않음
+- 팀원(오단비)이 코드에 기여할 경우에도 `server`/`client` 하위 브랜치를 통해서만 작업하고 `main`은 건드리지 않음
+- **모든 브랜치에 공통으로 적용되는 문서**(`docs/decision_log.md`, `docs/ssot.md`, `AGENTS.md`, `CONTRIBUTING.md` 등 저장소 전역 규칙/기록 문서)는 `server`/`client`가 아니라 **`dev`에서 직접 작업**. 특정 영역에만 해당하는 문서(예: 백엔드 API 설계 메모)는 해당 영역의 `docs-` 브랜치에서 작업
 
-이전 방식(이슈번호 기반 `feat/fix/docs/refactor/chore` 접두사, `develop` 브랜치)은 폐기. 배경: [decision_log.md](../docs/decision_log.md)
+이전 방식(이슈번호 기반 브랜치, `develop` 브랜치)은 폐기하고 위 구조로 대체. 배경: [decision_log.md](../docs/decision_log.md)
 
 **커밋 메시지** — Conventional Commits 확정
 

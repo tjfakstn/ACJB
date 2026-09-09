@@ -123,20 +123,22 @@ TODO
 
 ## 7. Git & 협업 규칙
 
-**브랜치**
+**브랜치** (2026-09-09 개정 — 실제 개발이 대부분 1인 체제라 영역별 브랜치로 단순화)
 
 ```
-main                        # 배포 가능한 상태 — 직접 커밋 금지, PR로만 반영
-develop                     # 통합 브랜치
-feat/<이슈번호>-<간단설명>       # 기능 추가
-fix/<이슈번호>-<간단설명>        # 버그 수정
-docs/<이슈번호>-<간단설명>       # 문서만 변경
-refactor/<이슈번호>-<간단설명>   # 동작 변화 없는 리팩터링
-chore/<이슈번호>-<간단설명>      # 빌드/설정/의존성 등 잡무
+main      # 배포 가능한 상태 — 절대 직접 작업/커밋 금지. dev에서 병합될 때만 갱신
+dev       # 통합 브랜치 — server + client를 합쳐서 검증
+server    # 백엔드(Spring) 작업
+client    # 프론트엔드(React) 작업
 ```
 
-- 이슈 번호가 아직 없으면 `feat/frame-diff-api`처럼 짧은 설명만 사용해도 됨 (이슈 생성 후 번호 붙이는 걸 권장)
-- `develop` → `main`은 PR로만, 기능 브랜치 → `develop`도 PR로만
+- 평소 작업은 `server`/`client`에 바로 커밋 (혼자 개발하는 영역이라 이슈별 feature 브랜치는 필수 아님)
+- 작업 단위가 크거나 실험적이면 `server/<설명>`, `client/<설명>`처럼 하위 브랜치를 따서 작업 후 병합해도 됨
+- `server`/`client` → `dev`: 통합 확인 위해 수시로 병합 (셀프 머지 가능)
+- `dev` → `main`: **배포할 때만** 병합. 병합 전 dev에서 실제로 동작 확인 필수
+- 팀원(오단비)이 코드에 기여할 경우에도 `server`/`client` 브랜치를 통해서만 작업하고 `main`은 건드리지 않음
+
+이전 방식(이슈번호 기반 `feat/fix/docs/refactor/chore` 접두사, `develop` 브랜치)은 폐기. 배경: [decision_log.md](../docs/decision_log.md)
 
 **커밋 메시지** — Conventional Commits 확정
 
@@ -159,7 +161,8 @@ chore: eslint 설정 정리
 
 - 하나의 PR은 하나의 목적만 다룹니다
 - [PR 템플릿](../.github/PULL_REQUEST_TEMPLATE.md)에 따라 **무엇을 / 왜 / 어떻게 검증했는지**를 반드시 작성합니다
-- 리뷰어 최소 1명 승인 후 머지
+- `server`/`client` → `dev`는 셀프 머지 가능 (혼자 개발하는 영역이라 리뷰어를 못 구하는 경우가 많음)
+- `dev` → `main`(배포)은 가능하면 팀원 1명 확인 후 머지. 급하면 셀프 머지하되 PR 설명에 검증 근거를 충분히 남길 것
 - 제목도 Conventional Commits 형식 권장 (예: `feat: 프레임 diff 조회 API 추가`)
 
 **이슈**

@@ -18,8 +18,8 @@ TODO
 
 전체 규칙은 [AGENTS.md #7 Git & 협업 규칙](AGENTS.md)에 정리되어 있습니다. 요약:
 
-- `main`은 직접 커밋 금지, PR로만 반영
-- 브랜치명: `feat|fix|docs|refactor|chore/<이슈번호>-<간단설명>`
+- 브랜치: `main`(절대 직접 작업 금지) / `dev`(통합) / `server`(백엔드) / `client`(프론트엔드)
+- 평소 작업은 `server`/`client`에 바로 커밋, 통합 확인되면 `dev`로, 배포 시점에만 `dev` → `main`
 - 커밋 메시지: Conventional Commits (`feat:` `fix:` `docs:` `refactor:` `test:` `chore:` `style:` `perf:`)
 
 ## 이슈 등록

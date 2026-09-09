@@ -50,16 +50,18 @@ Figma와 GitHub를 기반으로 개발 과정에서 발생하는 QA를 보다 �
 
 ## 3. 기술 스택
 
-TODO: 확정되는 대로 채우기
+TODO: 나머지는 확정되는 대로 채우기
 
 | 영역 | 스택 | 비고 |
 | --- | --- | --- |
-| Frontend | TODO | |
-| Backend | TODO | |
+| Frontend | React + Vite + TypeScript | Spring API를 호출하는 순수 SPA. 스타일링은 Tailwind CSS 예정 |
+| Backend | Spring (Spring Boot) | |
 | DB | TODO | |
 | AI | TODO | |
 | 외부 연동 | Figma API, GitHub API | |
 | 인프라 / 배포 | TODO | |
+
+결정 배경은 [docs/decision_log.md](docs/decision_log.md) 참고.
 
 ---
 

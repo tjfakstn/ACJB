@@ -2,6 +2,7 @@ package com.acjb.server.config;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -24,6 +25,9 @@ public class SecurityConfig {
 
     private final CorsProperties corsProperties;
 
+    @Value("${app.oauth2.login-success-redirect}")
+    private String loginSuccessRedirect;
+
     public SecurityConfig(CorsProperties corsProperties) {
         this.corsProperties = corsProperties;
     }
@@ -37,8 +41,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2
-                // TODO: 로그인 성공 후 React 프론트 주소로 리다이렉트하도록 client 스캐폴딩 후 갱신
-                .defaultSuccessUrl("/api/v1/auth/me", true)
+                .defaultSuccessUrl(loginSuccessRedirect, true)
             )
             .logout(logout -> logout.logoutSuccessUrl("/"));
 

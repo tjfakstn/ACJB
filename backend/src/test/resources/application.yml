@@ -12,3 +12,5 @@ app:
   cors:
     allowed-origins:
       - http://localhost:5173
+  oauth2:
+    login-success-redirect: http://localhost:5173/

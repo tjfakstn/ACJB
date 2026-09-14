@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: acjb-server
+
+  # 로컬 개발 편의: backend/.env 에 KEY=VALUE 형식으로 넣어두면 자동으로 읽힘 (커밋 금지, .gitignore 처리됨)
+  config:
+    import: optional:file:.env[.properties]
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - email
+              - profile
+
+server:
+  port: 8080
+
+app:
+  # 프론트(client) 로컬 개발 origin — frontend/ 스캐폴딩 완료로 확정 (Vite 기본 포트 5173)
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+  oauth2:
+    # 구글 로그인 성공 후 리다이렉트할 프론트 주소. 쿠키는 host 기준(포트 무관)이라
+    # localhost:8080에서 만든 세션 쿠키가 localhost:5173 요청에도 그대로 붙음.
+    # TODO: 실제 배포 도메인 확정되면 프로필별로 분리
+    login-success-redirect: http://localhost:5173/

@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: acjb-server
+
+  # 로컬 개발 편의: backend/.env 에 KEY=VALUE 형식으로 넣어두면 자동으로 읽힘 (커밋 금지, .gitignore 처리됨)
+  config:
+    import: optional:file:.env[.properties]
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - email
+              - profile
+
+server:
+  port: 8080
+
+# TODO: 프론트(client) 로컬 개발 origin 확정되면 CORS 설정(SecurityConfig)과 함께 갱신
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:5173

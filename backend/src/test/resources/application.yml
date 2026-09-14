@@ -1,0 +1,14 @@
+# 테스트 전용 설정 — 실제 구글 자격증명 없이 컨텍스트 로딩만 확인하기 위한 더미 값
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-client-id
+            client-secret: test-client-secret
+
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:5173

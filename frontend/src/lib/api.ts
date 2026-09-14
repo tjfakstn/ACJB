@@ -9,9 +9,14 @@ export interface Me {
 }
 
 export async function fetchMe(): Promise<Me> {
-  const res = await fetch('/api/v1/auth/me', { credentials: 'include' })
-  if (!res.ok) return { authenticated: false }
-  return res.json()
+  try {
+    const res = await fetch('/api/v1/auth/me', { credentials: 'include' })
+    if (!res.ok) return { authenticated: false }
+    return await res.json()
+  } catch {
+    // 네트워크 에러 등 예외 상황에서도 화면이 무한 로딩으로 멈추지 않도록 방어
+    return { authenticated: false }
+  }
 }
 
 export function googleLoginUrl() {

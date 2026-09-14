@@ -1,7 +1,37 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "QAIssue",
+  "description": "구조화된 QA 이슈 — Design Diff에서 자동 생성되거나 수동으로 등록됨 (초안 v0.1)",
   "type": "object",
-  "properties": {},
-  "required": []
+  "properties": {
+    "id": { "type": "string" },
+    "project_id": { "type": "string" },
+    "design_diff_id": { "type": ["string", "null"], "description": "연결된 Design Diff. 수동 등록이면 null" },
+    "type": { "type": "string", "enum": ["bug", "design_mismatch", "feature"] },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "repro_steps": { "type": "array", "items": { "type": "string" } },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "device": { "type": "string" },
+        "browser": { "type": "string" },
+        "url": { "type": "string" }
+      }
+    },
+    "screenshots": { "type": "array", "items": { "type": "string" } },
+    "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+    "status": {
+      "type": "string",
+      "enum": ["open", "in_progress", "resolved", "closed", "wontfix"],
+      "default": "open"
+    },
+    "assignee": { "type": ["string", "null"] },
+    "reporter": { "type": "string" },
+    "github_issue_url": { "type": ["string", "null"] },
+    "github_issue_number": { "type": ["integer", "null"] },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "project_id", "type", "title", "priority", "status", "reporter", "created_at"]
 }

@@ -68,3 +68,9 @@
 - **왜**: 타입 접두사는 커밋 히스토리 가독성에 여전히 유용해서 유지. 공통 문서를 영역 브랜치에서 각각 건드리면 server/client가 서로 다른 버전을 갖게 되어 dev 통합 시 충돌 위험이 커짐 → 공통 문서의 단일 진행 지점을 dev로 고정
 - **참고**: 이 규칙을 적용하면 `server`/`client`에 남아있는 문서 사본은 최신이 아닐 수 있음 — server/client → dev 병합 시점에 문서 충돌이 날 수 있으니, 필요하면 dev의 최신 문서를 server/client로도 가끔 가져올 것
 - **결정자**: 설만수
+
+## 2026-09-14 API 명세 초안(v0.1) 작성
+
+- **결정**: 지금까지 확정된 MVP 흐름(Figma-구현 diff → QA Issue → GitHub 연동 → 재검증)을 기준으로 REST API 초안을 [docs/api_spec.md](api_spec.md)에 작성. 함께 `src/qating/schemas/`의 `DesignDiff` `QAIssue` `VerificationResult` 빈 스키마도 초안 필드로 채움
+- **왜**: 백엔드(Spring) 작업을 `server` 브랜치에서 시작하기 전에, 프론트/백엔드가 공유할 데이터 모델과 엔드포인트 형태를 먼저 합의해두기 위함. 인증/DB 스택이 아직 TODO라 세부는 계속 바뀔 여지 있음(v0.1)
+- **결정자**: 설만수 초안, 팀 확정 필요

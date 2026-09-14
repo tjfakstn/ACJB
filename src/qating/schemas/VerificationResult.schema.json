@@ -1,7 +1,16 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "VerificationResult",
+  "description": "QA Issue 수정 후 재검증 결과 (초안 v0.1)",
   "type": "object",
-  "properties": {},
-  "required": []
+  "properties": {
+    "id": { "type": "string" },
+    "qa_issue_id": { "type": "string" },
+    "result": { "type": "string", "enum": ["pass", "fail"] },
+    "verified_by": { "type": "string", "description": "재검증 수행자 (사람 또는 AI)" },
+    "verified_at": { "type": "string", "format": "date-time" },
+    "evidence_url": { "type": ["string", "null"], "description": "재검증 스크린샷/녹화 등" },
+    "notes": { "type": ["string", "null"] }
+  },
+  "required": ["id", "qa_issue_id", "result", "verified_by", "verified_at"]
 }

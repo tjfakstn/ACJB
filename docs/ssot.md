@@ -74,6 +74,7 @@
 - Git/브랜치/커밋/PR 규칙: [AGENTS.md #7](../AGENTS.md)
 - 이슈/PR 템플릿: [.github/](../.github/)
 - 결정 이력: [decision_log.md](decision_log.md)
+- API 명세(초안): [api_spec.md](api_spec.md), 데이터 모델: [src/qating/schemas/](../src/qating/schemas/)
 
 ## 아직 안 정해진 것 (TODO)
 
@@ -81,3 +82,4 @@
 - DB / AI 모델 / 인프라·배포 스택
 - 라벨 체계, 브랜치 보호 규칙 (보류 중, 이슈 쌓이면 재논의)
 - `docs/PROBLEM.md`, `docs/SPEC.md`, `docs/ARCHITECTURE.md` — 골격만 있고 내용 비어있음
+- API 인증 방식, 에러 코드 표준 (api_spec.md 참고 — v0.1 초안이라 확정 아님)

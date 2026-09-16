@@ -20,5 +20,9 @@ export async function fetchMe(): Promise<Me> {
 }
 
 export function googleLoginUrl() {
-  return '/oauth2/authorization/google'
+  return '/api/v1/auth/login/google'
+}
+
+export function logoutUrl() {
+  return '/api/v1/auth/logout'
 }

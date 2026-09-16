@@ -21,7 +21,7 @@
 ## 1. 공통 사항
 
 - **Base path**: `/api/v1` (TODO: 실제 배포 도메인 확정 전)
-- **인증**: TODO — DB/Auth 스택 미확정. 초안 단계에서는 로그인 없이 프로젝트당 API Key 헤더(`X-API-Key`)를 가정
+- **인증**: 구글 로그인(OAuth2, 아래 1.5 참고)은 실제로 동작 중. 그 외 QA 도메인 API는 TODO — DB/Auth 스택 미확정이라 초안 단계에서는 프로젝트당 API Key 헤더(`X-API-Key`)를 가정
 - **응답 포맷** (공통 envelope, 초안):
   ```json
   {
@@ -36,6 +36,26 @@
   ```
 - **페이지네이션**: 목록 API는 `?page=1&size=20` 쿼리, 응답에 `data.items` + `data.total` (TODO: cursor 기반으로 바꿀지 논의)
 - **날짜/시간**: ISO 8601 UTC (`2026-09-14T12:00:00Z`)
+
+---
+
+## 1.5 Auth (실제 구현됨)
+
+다른 섹션과 달리 **이미 동작 중인** 구글 소셜로그인. Base path(`/api/v1`) 밖이 아니라 안에 있음 — 전부 `/api/v1/auth/...`.
+
+### `GET /auth/login/google`
+구글 로그인 시작. **브라우저 전체 리다이렉트 전용** (`<a href>` 클릭 등, fetch로 호출 금지 — accounts.google.com이 CORS를 안 열어줘서 fetch로 따라가면 에러남)
+
+### `GET /auth/callback/google`
+구글이 인가 코드와 함께 호출하는 콜백. 우리 쪽에서 직접 호출할 일 없음. Google Cloud Console에 등록된 리디렉션 URI와 반드시 일치해야 함: `{baseUrl}/api/v1/auth/callback/google`
+
+### `GET /auth/me`
+로그인 상태 확인. 인증 여부 무관하게 200 — `{ "authenticated": false }` 또는 `{ "authenticated": true, "name", "email", "picture" }`
+
+### `GET /auth/logout`
+로그아웃. 의도적으로 GET (POST면 프론트에서 CSRF 토큰 처리가 필요한데 아직 안 붙임 — TODO)
+
+세션은 쿠키 기반이며 도메인(host) 기준으로 스코프됨 — 포트는 무관해서 `localhost:8080`에서 만든 세션이 `localhost:5173`(프론트) 요청에도 그대로 붙음. 구현: [backend/src/main/java/com/acjb/server/config/SecurityConfig.java](../backend/src/main/java/com/acjb/server/config/SecurityConfig.java)
 
 ---
 

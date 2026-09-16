@@ -1,5 +1,7 @@
 # API 명세 (초안 v0.1)
 
+> 기계가 읽을 수 있는 버전(OpenAPI 3.0): [openapi.yaml](openapi.yaml) — 이 문서와 항상 동기화 유지할 것
+>
 > 상태: **초안** — 지금까지 나온 MVP 방향([ssot.md](ssot.md), [decision_log.md](decision_log.md))을 기준으로 한 1차 draft입니다. DB/인증 스택이 아직 TODO라 세부 스펙은 백엔드(Spring) 작업 시작하면서 계속 바뀔 수 있습니다.
 > 엔드포인트 설계·확정은 담당자 설만수, 기능 우선순위는 오단비 확인 필요.
 

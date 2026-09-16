@@ -74,7 +74,7 @@
 - Git/브랜치/커밋/PR 규칙: [AGENTS.md #7](../AGENTS.md)
 - 이슈/PR 템플릿: [.github/](../.github/)
 - 결정 이력: [decision_log.md](decision_log.md)
-- API 명세(초안): [api_spec.md](api_spec.md), 데이터 모델: [src/qating/schemas/](../src/qating/schemas/)
+- API 명세(초안): [api_spec.md](api_spec.md) / [openapi.yaml](openapi.yaml), 데이터 모델: [src/qating/schemas/](../src/qating/schemas/)
 
 ## 아직 안 정해진 것 (TODO)
 

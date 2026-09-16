@@ -16,6 +16,10 @@ servers:
     description: 로컬 개발 (backend/ Spring 서버)
 
 tags:
+  - name: Auth
+    description: >-
+      구글 소셜로그인(OAuth2). 실제로 구현/동작 중인 유일한 태그 — 나머지 태그(Figma/DesignDiff/
+      QAIssue/Verification)는 아직 설계만 된 상태
   - name: Figma
     description: Figma 프레임/디자인 토큰 동기화
   - name: DesignDiff
@@ -29,6 +33,82 @@ security:
   - ApiKeyAuth: []
 
 paths:
+  /auth/login/google:
+    get:
+      tags: [Auth]
+      summary: 구글 로그인 시작
+      description: >-
+        브라우저 전체 리다이렉트 전용 (fetch로 호출하지 말 것). `<a href>` 클릭 등으로 이동시키면
+        구글 로그인 화면으로 리다이렉트됨. 로그인 성공 시 `app.oauth2.login-success-redirect`
+        설정값(프론트 주소)으로 다시 리다이렉트됨.
+      security: []
+      responses:
+        '302':
+          description: accounts.google.com으로 리다이렉트
+
+  /auth/callback/google:
+    get:
+      tags: [Auth]
+      summary: 구글 OAuth 콜백 (구글이 호출, 직접 호출 금지)
+      description: >-
+        Google Cloud Console에 등록된 리디렉션 URI(`{baseUrl}/api/v1/auth/callback/google`)로
+        구글이 인가 코드와 함께 호출하는 내부 엔드포인트. 우리 프론트/클라이언트가 직접 호출할 일 없음.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: 로그인 성공 시 프론트 주소로, 실패 시 에러 페이지로 리다이렉트
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: 로그인 상태 확인
+      description: 인증 여부와 무관하게 200으로 응답 (미인증이면 authenticated:false)
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated:
+                    type: boolean
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  picture:
+                    type: string
+              examples:
+                authenticated:
+                  value: { authenticated: true, name: 홍길동, email: hong@example.com, picture: 'https://...' }
+                anonymous:
+                  value: { authenticated: false }
+
+  /auth/logout:
+    get:
+      tags: [Auth]
+      summary: 로그아웃
+      description: >-
+        의도적으로 GET — 로그인 버튼과 동일하게 `<a href>` 링크만으로 동작하도록 함
+        (POST로 바꾸려면 프론트에서 CSRF 토큰 처리 필요, 아직 TODO)
+      security: []
+      responses:
+        '302':
+          description: 세션 종료 후 '/' 로 리다이렉트
+
   /projects/{projectId}/figma/sync:
     post:
       tags: [Figma]

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchMe, type Me } from '../lib/api'
+import { fetchMe, logoutUrl, type Me } from '../lib/api'
 
 // TODO: 와이어프레임 '첫 시작 안내 화면' / '프로젝트 목록 화면'으로 교체 예정.
 // 지금은 로그인 흐름이 끝까지 동작하는지 확인하기 위한 임시 화면.
@@ -33,6 +33,12 @@ export function HomePage() {
         <p className="mt-4 text-xs text-gray-400">
           로그인 성공 — 다음 화면(프로젝트 목록 등)은 아직 준비 중
         </p>
+        <a
+          href={logoutUrl()}
+          className="mt-2 text-xs text-gray-400 underline hover:text-gray-600"
+        >
+          로그아웃
+        </a>
       </div>
     </div>
   )

@@ -1,3 +1,106 @@
 # 미니 온톨로지
-entities: []
-relations: []
+# 도메인 구조의 정본. AGENTS.md 2절(도메인 용어집)은 이 파일에서 대표어와 필드명만 발췌한다 —
+# description/evidence/관계는 여기에만 두고 AGENTS.md에 복제하지 않는다.
+
+entities:
+  - name: User
+    description: 구글 로그인으로 인증된 사용자. 역할 구분(기획/개발/디자인)은 지금은 프로젝트 멤버십으로만 다룬다.
+    fields:
+      id: string
+      name: string
+      email: string
+      google_id: string
+
+  - name: Project
+    description: 하나의 Figma 파일 + 하나의 GitHub 저장소를 연결하는 작업 단위.
+    fields:
+      id: string
+      name: string
+      figma_file_key: string
+      github_repo: string (owner/repo)
+
+  - name: FigmaFrame
+    description: Figma에서 동기화해 온 화면/컴포넌트 단위. Design Diff 비교의 기준(expected) 쪽.
+    fields:
+      frame_id: string
+      name: string
+      figma_node_url: string
+      last_synced_at: datetime
+
+  - name: DesignDiff
+    description: >-
+      FigmaFrame과 실제 배포 화면(target_url)을 대조해 발견된 스타일/레이아웃 차이 하나.
+      근거: 로그3(색상/폰트 재비교), 로그7(뱃지 줄바꿈·색상 불일치), 로그10(bold/radius/shadow 등 속성 차이는 개발자가 발견하기 어려움).
+    fields:
+      id: string
+      frame_id: string
+      diff_type: enum(color, typography, spacing, radius, shadow, layout, text_content, other)
+      property: string (예 background-color, font-weight)
+      expected_value: string (Figma 기준값)
+      actual_value: string (실제 구현 값)
+      severity: enum(critical, major, minor)
+      status: enum(open, ignored, resolved)
+      detected_by: enum(auto, manual)
+    relations:
+      - FigmaFrame(1) 대조 DesignDiff(N) — 하나의 프레임에서 여러 diff가 나올 수 있음
+      - DesignDiff(0..1) 생성 QAIssue(0..1) — diff가 이슈로 전환될 수도, 안 될 수도 있음(status: ignored)
+
+  - name: QAIssue
+    description: >-
+      구조화된 QA 이슈. DesignDiff에서 자동 생성되거나 수동 등록됨. 재현 정보를 필수로 담는 이유:
+      로그1·로그8(재현 정보 부족 → 재질문에 30분~하루 소요).
+    fields:
+      id: string
+      project_id: string
+      design_diff_id: string | null
+      type: enum(bug, design_mismatch, feature)
+      title: string
+      description: string
+      repro_steps: string[]
+      environment: { device, browser, url }
+      screenshots: string[]
+      priority: enum(high, medium, low)
+      status: enum(open, in_progress, resolved, closed, wontfix)
+      github_issue_url: string | null
+      github_issue_number: integer | null
+    relations:
+      - QAIssue(1) 연동 GitHubIssue(0..1) — 외부 시스템, 우리 DB에는 URL/번호만 저장
+      - QAIssue(1) 갖음 VerificationResult(N) — 재검증할 때마다 이력이 쌓임
+
+  - name: TestDataset
+    description: >-
+      QA에 필요한 데이터를 시나리오 단위로 저장해 재사용하는 프리셋.
+      근거: 로그11(테스트셋을 QA마다 직접 세팅), 로그14(더미 데이터가 외부 서비스와 싱크 안 맞아 발생하는 오류).
+    fields:
+      id: string
+      project_id: string
+      name: string (시나리오명, 예 "핀 등록 정상 케이스")
+      seed_spec: string (무엇을 어떻게 채우는지에 대한 설명/스크립트 참조)
+      depends_on_external: boolean (외부 서비스 의존 여부 — true면 싱크 이슈 위험 표시)
+      created_by: User.id
+
+  - name: VerificationResult
+    description: >-
+      QAIssue 수정 후 재검증 결과. 최초 등록된 repro_steps를 그대로 재사용해 재현하는 것이 핵심 —
+      근거: 로그6(확인→재현→수정→배포→재확인 반복이 가장 번거로움), 로그9(작은 수정마다 화면 전체 수동 재확인).
+    fields:
+      id: string
+      qa_issue_id: string
+      result: enum(pass, fail)
+      verified_by: string (사람 또는 AI)
+      verified_at: datetime
+      evidence_url: string | null
+
+relations:
+  - Project(1) 보유 FigmaFrame(N)
+  - Project(1) 보유 TestDataset(N)
+  - User(1) reporter로 작성 QAIssue(N)
+  - User(1) verified_by로 수행 VerificationResult(N)
+
+# 범위 밖 (스펙 4절 "비포함"과 반드시 일치시킬 것)
+out_of_scope:
+  - 결제/과금
+  - 모바일 네이티브 앱 QA (지금은 웹 화면만 대상)
+  - 성능/부하 테스트
+  - 리뷰·텍스트 기반 AI 자동 분류 (우리 도메인에 해당 없음 — Figma 값 vs 실제 값의 구조적 대조가 핵심이라 자유 텍스트 분류 문제가 아님)
+  - 다국어 지원

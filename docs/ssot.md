@@ -9,9 +9,9 @@
 ## 프로젝트
 
 - **팀명**: 안캡잘부 (아주대학교 소프트웨어학과 26-2 캡스톤디자인)
-- **프로젝트명**: TODO — 서비스 이름 확정 전
+- **프로젝트명**: QAting
 - **한 줄 정의**: Figma와 GitHub를 연결해 디자인과 실제 구현의 차이를 AI가 자동으로 검증하고, QA 이슈 발견부터 수정 후 재검증까지 지원하는 개발 QA 자동화 서비스
-- 상세: [docs/PROBLEM.md](PROBLEM.md) (아직 비어있음, 채우기 필요)
+- 상세: [docs/PROBLEM.md](PROBLEM.md) — 인터뷰 로그 기반 문제 정의 완료
 
 ## 팀 & 역할
 
@@ -81,5 +81,5 @@
 - 서비스 이름
 - DB / AI 모델 / 인프라·배포 스택
 - 라벨 체계, 브랜치 보호 규칙 (보류 중, 이슈 쌓이면 재논의)
-- `docs/PROBLEM.md`, `docs/SPEC.md`, `docs/ARCHITECTURE.md` — 골격만 있고 내용 비어있음
+- `docs/ARCHITECTURE.md` — 골격만 있고 내용 비어있음 (PROBLEM.md/SPEC.md는 작성 완료)
 - API 인증 방식, 에러 코드 표준 (api_spec.md 참고 — v0.1 초안이라 확정 아님)

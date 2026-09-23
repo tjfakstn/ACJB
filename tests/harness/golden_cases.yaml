@@ -1,2 +1,82 @@
 # 골든 케이스 (데이터)
-cases: []
+# 구현 전 단계라 입출력 "형태"만 먼저 고정한 초안. 각 케이스는 docs/SPEC.md의 AC 번호와 대응한다.
+# 판정 규칙: expected에 명시된 키가 응답에 존재하고 조건을 만족하면 통과. 명시 안 된 키는 판정에 안 씀.
+
+cases:
+  - id: dd-001
+    ac: AC1
+    description: Figma 프레임과 배포 URL을 스캔하면 불일치 항목이 목록으로 나온다
+    input:
+      endpoint: POST /projects/{projectId}/design-diffs/scan
+      body: { frame_id: "frame-login-1", target_url: "https://staging.example.com/login" }
+    expected:
+      status: 202
+      body_has: [scan_id, status]
+
+  - id: dd-002
+    ac: AC2
+    description: 발견된 diff 항목마다 Figma 기준값과 실제 값이 함께 있어야 한다 (근거 없는 "다름" 금지)
+    input:
+      endpoint: GET /projects/{projectId}/design-diffs
+      query: { frame_id: "frame-login-1" }
+    expected:
+      status: 200
+      each_item_in: data.items
+      each_item_has: [expected_value, actual_value, property, diff_type]
+
+  - id: qi-001
+    ac: AC3
+    description: Design Diff에서 QA 이슈를 생성하면 재현 정보(스크린샷·대상 URL)가 자동으로 채워진다 — 사람이 다시 입력하지 않음
+    input:
+      endpoint: POST /projects/{projectId}/design-diffs/{diffId}/issues
+      body: { priority: "high" }
+    expected:
+      status: 201
+      body_has: [id, title, screenshots, environment]
+      environment.url_not_empty: true
+      screenshots_not_empty: true
+
+  - id: qi-002
+    ac: AC6
+    description: 존재하지 않는 diffId로 이슈 생성을 시도하면 404와 표준 오류 형식을 반환한다 (데이터 임의 생성 금지)
+    input:
+      endpoint: POST /projects/{projectId}/design-diffs/{diffId}/issues
+      diffId: "does-not-exist"
+      body: { priority: "high" }
+    expected:
+      status: 404
+      body: { success: false, data: null }
+      body_has: [error.code, error.message]
+
+  - id: vf-001
+    ac: AC5
+    description: 재검증 결과를 등록하면 최초 등록된 repro_steps가 이력에 함께 남아 재입력 없이 조회된다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
+      body: { result: "pass", notes: "재배포 후 확인" }
+    expected:
+      status: 201
+      body_has: [id, qa_issue_id, result, verified_at]
+      # 이어서 GET .../verifications 호출 시 응답에 원본 QAIssue.repro_steps가 그대로 포함돼야 함(재입력 불필요)
+      followup:
+        endpoint: GET /projects/{projectId}/qa-issues/{issueId}/verifications
+        expected_repro_steps_match_original: true
+
+  - id: health-001
+    ac: AC7
+    description: 헬스체크는 항상 200 (구현됨 — backend/src/main/java/com/acjb/server/controller/HealthController.java)
+    input:
+      endpoint: GET /api/v1/health
+    expected:
+      status: 200
+      body: { status: "ok" }
+
+  - id: auth-001
+    ac: AC8
+    description: 미인증 상태에서도 /auth/me는 200으로 응답한다 (구현됨 — AuthController.java)
+    input:
+      endpoint: GET /api/v1/auth/me
+      authenticated: false
+    expected:
+      status: 200
+      body: { authenticated: false }

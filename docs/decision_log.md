@@ -60,3 +60,23 @@
 - **결정**: 백엔드 작업은 `server`에서 `server/<작업 설명>`으로 분기해서 진행 후 `server`로 병합, `server`가 어느 정도 쌓이면 `dev`로 통합. 프론트도 동일 패턴(`client/<작업 설명>` → `client` → `dev`)
 - **왜**: `server`/`client`에 바로 커밋만 하면 작업 단위가 섞여서 되돌리기 어려움. 작업 단위별로 하위 브랜치를 나누되, 매번 `dev`까지 왕복하지 않고 영역 브랜치에서 먼저 모았다가 통합하는 게 1인 개발 흐름에 맞음
 - **결정자**: 설만수
+
+## 2026-09-09 브랜치 네이밍: feat/fix/docs 접두사는 유지, 영역 브랜치 하위로 이동
+
+- **결정**: 기존 타입 접두사(`feat` `fix` `docs` `refactor` `chore`)는 폐기하지 않고 `server/feat-<설명>` `client/fix-<설명>`처럼 영역 브랜치 하위에서 계속 사용. `server`/`client` → 각 영역 브랜치로 머지 → 최종적으로 `dev`로 머지하는 3단계 흐름으로 확정
+- **추가 규칙**: `docs/decision_log.md`, `docs/ssot.md`, `AGENTS.md`, `CONTRIBUTING.md`처럼 모든 브랜치에 공통 적용돼야 하는 문서는 `server`/`client`가 아니라 `dev`에서 직접 작업한다 (지금 이 항목도 `dev` 브랜치에서 작성 중)
+- **왜**: 타입 접두사는 커밋 히스토리 가독성에 여전히 유용해서 유지. 공통 문서를 영역 브랜치에서 각각 건드리면 server/client가 서로 다른 버전을 갖게 되어 dev 통합 시 충돌 위험이 커짐 → 공통 문서의 단일 진행 지점을 dev로 고정
+- **참고**: 이 규칙을 적용하면 `server`/`client`에 남아있는 문서 사본은 최신이 아닐 수 있음 — server/client → dev 병합 시점에 문서 충돌이 날 수 있으니, 필요하면 dev의 최신 문서를 server/client로도 가끔 가져올 것
+- **결정자**: 설만수
+
+## 2026-09-14 API 명세 초안(v0.1) 작성
+
+- **결정**: 지금까지 확정된 MVP 흐름(Figma-구현 diff → QA Issue → GitHub 연동 → 재검증)을 기준으로 REST API 초안을 [docs/api_spec.md](api_spec.md)에 작성. 함께 `src/qating/schemas/`의 `DesignDiff` `QAIssue` `VerificationResult` 빈 스키마도 초안 필드로 채움
+- **왜**: 백엔드(Spring) 작업을 `server` 브랜치에서 시작하기 전에, 프론트/백엔드가 공유할 데이터 모델과 엔드포인트 형태를 먼저 합의해두기 위함. 인증/DB 스택이 아직 TODO라 세부는 계속 바뀔 여지 있음(v0.1)
+- **결정자**: 설만수 초안, 팀 확정 필요
+
+## 2026-09-23 PROBLEM.md / SPEC.md / AGENTS.md를 정식 산출물 형식으로 재작성
+
+- **결정**: 강의 지침("문제 정의, 스펙(SDD), AGENTS 작성 지침")에 맞춰 세 문서를 재작성. 인터뷰 응답 4건에 로그 번호(로그1~14)를 매겨 `docs/research/interviews.md`에 정리하고, `PROBLEM.md`의 증거·반증조건이 전부 로그 번호로 역추적되게 함. `docs/ontology.yaml`을 실제 도메인(Project/FigmaFrame/DesignDiff/QAIssue/TestDataset/VerificationResult)으로 채우고, `AGENTS.md`는 7절 구조(제품맥락/용어집/절대규칙/금지사항/코딩컨벤션/완료의정의/운영정보)로 재구성 — 기존 팀·Git 규칙은 삭제하지 않고 7절(운영정보) 아래로 편입. `tests/harness/golden_cases.yaml`에 AC1~AC8 대응 골든 케이스 초안 7건 추가. `CLAUDE.md`를 신설해 `@AGENTS.md` 임포트만 두는 구조로 분리
+- **왜**: 이전 `PROBLEM.md`/`SPEC.md`는 빈 골격이었고, `AGENTS.md`는 팀 운영 규칙 위주라 "왜/무엇을/상시규칙"의 역할 구분이 없었음. 증거 없는 문제 정의, 테스트 불가능한 AC는 검증할 수 없다는 지침에 따라 전부 인터뷰 로그·실제 스키마에 근거하도록 다시 씀
+- **결정자**: 설만수

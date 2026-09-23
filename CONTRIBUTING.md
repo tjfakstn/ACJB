@@ -18,8 +18,9 @@ TODO
 
 전체 규칙은 [AGENTS.md #7 Git & 협업 규칙](AGENTS.md)에 정리되어 있습니다. 요약:
 
-- 브랜치: `main`(절대 직접 작업 금지) / `dev`(통합) / `server`(백엔드) / `client`(프론트엔드)
-- 분야별 작업은 `server/<작업 설명>` `client/<작업 설명>`처럼 하위 브랜치로 분기 → 완료되면 `server`/`client`로 병합 → 어느 정도 쌓이면 `dev`로 통합, 배포 시점에만 `dev` → `main`
+- 브랜치: `main`(절대 직접 작업 금지) / `dev`(통합 + 공통 문서) / `server`(백엔드) / `client`(프론트엔드)
+- 기능/수정 단위 작업은 `server/feat-<설명>` `server/fix-<설명>` `client/feat-<설명>`처럼 타입 접두사(feat/fix/docs/refactor/chore)를 유지한 하위 브랜치로 분기 → 완료되면 `server`/`client`로 병합 → 어느 정도 쌓이면 `dev`로 통합, 배포 시점에만 `dev` → `main`
+- `docs/decision_log.md`, `docs/ssot.md`, `AGENTS.md`, `CONTRIBUTING.md` 등 모든 브랜치에 공통 적용되는 문서는 `server`/`client`가 아니라 **`dev`에서 직접** 수정
 - 커밋 메시지: Conventional Commits (`feat:` `fix:` `docs:` `refactor:` `test:` `chore:` `style:` `perf:`)
 
 ## 이슈 등록

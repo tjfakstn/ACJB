@@ -1,4 +1,4 @@
-# AGENT.md
+# AGENTS.md
 
 > 이 문서는 이 저장소에서 작업하는 AI 코딩 에이전트(Claude Code, Cursor, Copilot 등)를 위한 안내서입니다.
 > 사람을 위한 문서는 `README.md`, 기여 규칙은 `CONTRIBUTING.md`를 참고하세요.

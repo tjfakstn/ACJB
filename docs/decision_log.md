@@ -74,3 +74,9 @@
 - **결정**: 지금까지 확정된 MVP 흐름(Figma-구현 diff → QA Issue → GitHub 연동 → 재검증)을 기준으로 REST API 초안을 [docs/api_spec.md](api_spec.md)에 작성. 함께 `src/qating/schemas/`의 `DesignDiff` `QAIssue` `VerificationResult` 빈 스키마도 초안 필드로 채움
 - **왜**: 백엔드(Spring) 작업을 `server` 브랜치에서 시작하기 전에, 프론트/백엔드가 공유할 데이터 모델과 엔드포인트 형태를 먼저 합의해두기 위함. 인증/DB 스택이 아직 TODO라 세부는 계속 바뀔 여지 있음(v0.1)
 - **결정자**: 설만수 초안, 팀 확정 필요
+
+## 2026-09-23 PROBLEM.md / SPEC.md / AGENTS.md를 정식 산출물 형식으로 재작성
+
+- **결정**: 강의 지침("문제 정의, 스펙(SDD), AGENTS 작성 지침")에 맞춰 세 문서를 재작성. 인터뷰 응답 4건에 로그 번호(로그1~14)를 매겨 `docs/research/interviews.md`에 정리하고, `PROBLEM.md`의 증거·반증조건이 전부 로그 번호로 역추적되게 함. `docs/ontology.yaml`을 실제 도메인(Project/FigmaFrame/DesignDiff/QAIssue/TestDataset/VerificationResult)으로 채우고, `AGENTS.md`는 7절 구조(제품맥락/용어집/절대규칙/금지사항/코딩컨벤션/완료의정의/운영정보)로 재구성 — 기존 팀·Git 규칙은 삭제하지 않고 7절(운영정보) 아래로 편입. `tests/harness/golden_cases.yaml`에 AC1~AC8 대응 골든 케이스 초안 7건 추가. `CLAUDE.md`를 신설해 `@AGENTS.md` 임포트만 두는 구조로 분리
+- **왜**: 이전 `PROBLEM.md`/`SPEC.md`는 빈 골격이었고, `AGENTS.md`는 팀 운영 규칙 위주라 "왜/무엇을/상시규칙"의 역할 구분이 없었음. 증거 없는 문제 정의, 테스트 불가능한 AC는 검증할 수 없다는 지침에 따라 전부 인터뷰 로그·실제 스키마에 근거하도록 다시 씀
+- **결정자**: 설만수

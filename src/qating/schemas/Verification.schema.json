@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Verification",
+  "description": "수정 후 재확인 1회 (docs/ontology.yaml Verification). pass면 QAIssue.status가 resolved로, fail이면 needs_recheck로 바뀐다(SPEC.md AC7)",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "qa_issue_id": { "type": "string" },
+    "result": { "type": "string", "enum": ["pass", "fail"] },
+    "scope": { "type": ["string", "null"], "description": "재확인 범위(해당 화면만 / 관련 화면 전체)" },
+    "verified_by": { "type": "string" },
+    "verified_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "qa_issue_id", "result", "verified_by", "verified_at"]
+}

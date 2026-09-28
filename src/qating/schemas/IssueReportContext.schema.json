@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IssueReportContext",
+  "description": "자유서술 이슈 텍스트를 파싱한 구조화 결과 (docs/ontology.yaml IssueReportContext, SPEC.md AC8). 텍스트에 없는 값은 지어내지 않고 비워 두며, 빠진 항목은 POST /qa-issues/parse 응답의 missing에 담아 되묻는다. 프롬프트 정본: src/qating/prompts/parse_query.md",
+  "type": "object",
+  "properties": {
+    "screen": { "type": ["string", "null"] },
+    "element": { "type": ["string", "null"] },
+    "symptom": { "type": ["string", "null"] },
+    "repro_steps": { "type": "array", "items": { "type": "string" } },
+    "platform_scope": { "type": ["string", "null"], "enum": ["common", "aos", "ios", null] }
+  }
+}

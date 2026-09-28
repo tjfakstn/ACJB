@@ -9,5 +9,6 @@
     "symptom": { "type": ["string", "null"] },
     "repro_steps": { "type": "array", "items": { "type": "string" } },
     "platform_scope": { "type": ["string", "null"], "enum": ["common", "aos", "ios", null] }
-  }
+  },
+  "additionalProperties": false
 }

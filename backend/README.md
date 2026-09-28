@@ -29,7 +29,7 @@ Spring Boot 4.1 / Java 21 / Gradle. 현재는 구글 소셜로그인(OAuth2 Logi
 ## 아직 안 된 것 (TODO)
 
 - DB 연동 (유저 저장 — 지금은 세션에만 유지, 서버 재시작하면 로그인 풀림)
-- 세션 쿠키 방식 유지할지, 로그인 성공 후 자체 JWT 발급할지 결정 ([../docs/api_spec.md](../docs/api_spec.md) 6장)
+- 세션 쿠키 방식 유지할지, 로그인 성공 후 자체 JWT 발급할지 결정
 - 에러 처리 (로그인 실패 시 응답 등)
 
-전체 API 설계는 [../docs/api_spec.md](../docs/api_spec.md) 참고.
+전체 API 설계는 [../docs/SPEC.md](../docs/SPEC.md) / [../docs/openapi.yaml](../docs/openapi.yaml) 참고.

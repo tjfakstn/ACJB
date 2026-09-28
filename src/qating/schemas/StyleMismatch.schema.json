@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StyleMismatch",
+  "description": "Figma 기준값과 구현 값이 다른 스타일 차이 한 건 (docs/ontology.yaml StyleMismatch). expected_value와 actual_value가 둘 다 있어야 저장된다(SPEC.md AC2) — 자동 추출·비교(scan) 자체의 포함 여부는 스파이크 결과로 정함",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "frame_id": { "type": ["string", "null"], "description": "기준이 된 FigmaFrame" },
+    "screen": { "type": ["string", "null"], "description": "비교한 Screen(배포 화면)" },
+    "property": { "type": "string", "enum": ["color", "font_weight", "font_family", "radius", "shadow", "spacing", "text"] },
+    "expected_value": { "type": "string", "description": "Figma 기준값(토큰 이름 포함 가능, 예 Gray 80)" },
+    "actual_value": { "type": "string", "description": "구현 화면에 실제 적용된 값(개발자 모드로 확인)" }
+  },
+  "required": ["property", "expected_value", "actual_value"]
+}

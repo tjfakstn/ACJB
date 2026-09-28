@@ -50,17 +50,19 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 
 ## 6. 수용 기준 (테스트로 검증 — Definition of Done)
 
+### 6. 수용 기준 (테스트로 검증 — Definition of Done)
+
 각 AC는 EARS 문형 "[조건]일 때, QAting은 [동작]한다"로 쓰고, 조건 자리의 유형을 [ ]에 표시한다. 괄호 안은 근거가 된 문제 정의서의 증거다.
 
-AC1 [이벤트 기반]: 사용자가 QA 이슈를 등록하면, QAting은 description·screen_location·repro_steps·platform_scope 중 하나라도 비어 있을 때 등록을 거부하고(400) 빠진 항목 이름을 반환한다. (재현 정보 부족 → 재질문과 대기)
-AC2 [상시 적용]: QAting은 항상 StyleMismatch를 expected_value와 actual_value가 둘 다 있을 때만 저장한다. 한쪽만 있으면 거부한다(400). (디자인-구현 차이를 사람이 눈으로 대조)
-AC3 [이벤트 기반]: QA 이슈가 등록될 때 assigned_to가 지정돼 있거나, 이후 PATCH로 assigned_to가 새로 지정되거나 바뀌면, QAting은 그 담당자에게 Notification(event: issue_created)을 정확히 1건 생성한다. 담당자가 없으면 생성하지 않는다. (등록·조치 알림 누락)
-AC4 [이벤트 기반]: 이슈 상태가 fixed로 바뀌면, QAting은 그 이슈의 등록자(reported_by)에게 Notification(event: fixed)을 정확히 1건 생성한다. (등록·조치 알림 누락 → 목록을 직접 확인)
-AC5 [이벤트 기반]: 사용자가 fixed 상태의 이슈를 조회하면(GET /qa-issues/{issueId}), QAting은 등록 때 기록된 repro_steps·screen_location·Environment를 함께 반환한다. 재검증을 등록할 때는 재현 절차를 입력받지 않는다. (수정 후 재확인을 처음과 같은 과정으로 반복)
-AC6 [상시 적용]: QAting은 항상 정해진 상태 전이만 허용한다. needs_check → fixed와 needs_recheck → fixed는 PATCH로만, fixed → resolved(pass)와 fixed → needs_recheck(fail)는 재검증 등록으로만 일어난다. 그 밖의 전이 요청은 거부한다(409). 허용된 모든 상태 변경은 status_history에 변경 시각과 변경자를 남긴다. (상태 수동 표기, 관찰 1)
-AC7 [이벤트 기반]: 재검증이 등록되면, QAting은 result가 pass일 때 이슈 상태를 resolved로, fail일 때 needs_recheck로 바꾸고, 그 Verification에 verified_by와 verified_at을 기록한다. (상태 수동 표기, 관찰 1)
-AC8 [예외 대응]: 자유서술 이슈 텍스트에 screen·element·repro_steps에 해당하는 내용이 없으면, QAting은 그 값을 지어내지 않고 비워 둔 채 missing에 빠진 항목 이름을 담아 되묻는다. (재현 정보 부족 → 재질문과 대기)
-AC9 [이벤트 기반]: GET /api/v1/health 요청이 오면, QAting은 200과 {"status":"ok"}를 반환한다. 
-AC10 [이벤트 기반]: 미인증 상태에서 GET /api/v1/auth/me 요청이 오면, QAting은 200과 {"authenticated": false}를 반환한다. 
+- **AC1** [이벤트 기반]: 사용자가 QA 이슈를 등록하면, QAting은 `description`·`screen_location`·`repro_steps`·`platform_scope` 중 하나라도 비어 있을 때 등록을 거부하고(400) 빠진 항목 이름을 반환한다. (재현 정보 부족 → 재질문과 대기)
+- **AC2** [상시 적용]: QAting은 항상 `StyleMismatch`를 `expected_value`와 `actual_value`가 **둘 다** 있을 때만 저장한다. 한쪽만 있으면 거부한다(400). (디자인-구현 차이를 사람이 눈으로 대조)
+- **AC3** [이벤트 기반]: QA 이슈가 등록될 때 `assigned_to`가 지정돼 있거나, 이후 PATCH로 `assigned_to`가 새로 지정되거나 바뀌면, QAting은 그 담당자에게 `Notification`(`event: issue_created`)을 정확히 1건 생성한다. 담당자가 없으면 생성하지 않는다. (등록·조치 알림 누락)
+- **AC4** [이벤트 기반]: 이슈 상태가 `fixed`로 바뀌면, QAting은 그 이슈의 등록자(`reported_by`)에게 `Notification`(`event: fixed`)을 정확히 1건 생성한다. (등록·조치 알림 누락 → 목록을 직접 확인)
+- **AC5** [이벤트 기반]: 사용자가 `fixed` 상태의 이슈를 조회하면(`GET /qa-issues/{issueId}`), QAting은 등록 때 기록된 `repro_steps`·`screen_location`·`Environment`를 함께 반환한다. 재검증을 등록할 때는 재현 절차를 입력받지 않는다. (수정 후 재확인을 처음과 같은 과정으로 반복)
+- **AC6** [상시 적용]: QAting은 항상 정해진 상태 전이만 허용한다. `needs_check → fixed`와 `needs_recheck → fixed`는 PATCH로만, `fixed → resolved`(pass)와 `fixed → needs_recheck`(fail)는 재검증 등록으로만 일어난다. 그 밖의 전이 요청은 거부한다(409). 허용된 모든 상태 변경은 `status_history`에 변경 시각과 변경자를 남긴다. (상태 수동 표기, 관찰 1)
+- **AC7** [이벤트 기반]: 재검증이 등록되면, QAting은 `result`가 `pass`일 때 이슈 상태를 `resolved`로, `fail`일 때 `needs_recheck`로 바꾸고, 그 `Verification`에 `verified_by`와 `verified_at`을 기록한다. (상태 수동 표기, 관찰 1)
+- **AC8** [예외 대응]: 자유서술 이슈 텍스트에 `screen`·`element`·`repro_steps`에 해당하는 내용이 없으면, QAting은 그 값을 지어내지 않고 비워 둔 채 `missing`에 빠진 항목 이름을 담아 되묻는다. (재현 정보 부족 → 재질문과 대기)
+- **AC9** [이벤트 기반]: `GET /api/v1/health` 요청이 오면, QAting은 200과 `{"status":"ok"}`를 반환한다. **(구현됨)**
+- **AC10** [이벤트 기반]: 미인증 상태에서 `GET /api/v1/auth/me` 요청이 오면, QAting은 200과 `{"authenticated": false}`를 반환한다. **(구현됨)** 
 
 > AC1~AC8의 실행 가능한 골든 케이스: `tests/harness/golden_cases.yaml` (강의 5에서 작성). AC8은 `src/qating/prompts/parse_query.md`의 실패 모드 점검표와도 연결된다.

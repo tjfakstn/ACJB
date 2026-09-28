@@ -80,3 +80,16 @@
 - **결정**: 강의 지침("문제 정의, 스펙(SDD), AGENTS 작성 지침")에 맞춰 세 문서를 재작성. 인터뷰 응답 4건에 로그 번호(로그1~14)를 매겨 `docs/research/interviews.md`에 정리하고, `PROBLEM.md`의 증거·반증조건이 전부 로그 번호로 역추적되게 함. `docs/ontology.yaml`을 실제 도메인(Project/FigmaFrame/DesignDiff/QAIssue/TestDataset/VerificationResult)으로 채우고, `AGENTS.md`는 7절 구조(제품맥락/용어집/절대규칙/금지사항/코딩컨벤션/완료의정의/운영정보)로 재구성 — 기존 팀·Git 규칙은 삭제하지 않고 7절(운영정보) 아래로 편입. `tests/harness/golden_cases.yaml`에 AC1~AC8 대응 골든 케이스 초안 7건 추가. `CLAUDE.md`를 신설해 `@AGENTS.md` 임포트만 두는 구조로 분리
 - **왜**: 이전 `PROBLEM.md`/`SPEC.md`는 빈 골격이었고, `AGENTS.md`는 팀 운영 규칙 위주라 "왜/무엇을/상시규칙"의 역할 구분이 없었음. 증거 없는 문제 정의, 테스트 불가능한 AC는 검증할 수 없다는 지침에 따라 전부 인터뷰 로그·실제 스키마에 근거하도록 다시 씀
 - **결정자**: 설만수
+
+## 2026-09-28 오단비의 PROBLEM/SPEC/ontology/openapi 재작성(v0.2)을 채택
+
+- **결정**: 오단비가 인터뷰를 4건→12건(+관찰 1건)으로 확장하고 `main`에 직접 커밋한 재작성본을 그대로 채택. `PROBLEM.md`의 문제 중심이 "반복 수작업(화면 대조·데이터 세팅·재확인)"에서 "**전달·확인의 왕복**(재질문·알림 누락·재확인 반복)"으로 바뀌었고, 그에 따라 `SPEC.md`/`ontology.yaml`/`openapi.yaml`도 전면 개편됨:
+  - **GitHub Issues 연동을 v1에서 제외** (v2 후보) — 응답자들이 쓰는 트래커가 Jira/Notion/엑셀로 제각각이라(interviews.md 로그2,8,11,12), openapi.yaml의 `github-sync` 엔드포인트는 `deprecated: true`로 설계 기록만 남김
+  - **TestDataset(백엔드 테스트 데이터셋 관리) 제외** — ontology.yaml 범위 밖으로 명시
+  - `DesignDiff` → `StyleMismatch`로 개명, 자동 검출(scan)의 MVP 포함 여부는 향후 스파이크 결과로 결정 (지금은 수동 입력 경로만 AC로 확정)
+  - `Notification`(등록 시 담당자·조치완료 시 등록자에게 알림), `IssueReportContext`(자유서술 파싱), `status_history` 신규 도입
+  - AC1이 "디자인 토큰 자동 검출"에서 "**재현정보 미비 시 등록 거부**"로 바뀜(검증 중심)
+  - 이에 맞춰 `src/qating/schemas/`를 갱신(`DesignDiff`→`StyleMismatch`, `VerificationResult`→`Verification`, `Notification`/`IssueReportContext` 신규), `AGENTS.md` 2·3절(용어집·절대규칙)을 새 AC 번호에 맞게 재작성, `tests/harness/golden_cases.yaml`을 새 AC1~10 기준으로 다시 작성, 중복·구버전이 된 `docs/api_spec.md`는 삭제(SPEC.md 5절 + openapi.yaml이 대체)
+- **왜**: 응답자 수가 3배로 늘면서 반증 조건("1차 사용자 중 과반이 겪는가")을 더 신뢰할 수 있는 표본으로 재판정할 수 있게 됐고, 그 결과 원래 가설(자동 대조가 핵심)보다 전달·확인 왕복이 더 우선순위 높은 문제로 확인됨. 근거가 바뀌면 스펙을 바꾸는 것이 이 프로젝트가 따르는 원칙(강의 4 지침)과 일치해 채택함
+- **경고**: 이 결정은 `main`에 직접 커밋된 것을 사후 승인한 것임 — `main` 직접 커밋 금지 규칙(AGENTS.md 4절)을 이번엔 지키지 못했음. 팀 논의 후 반영이었는지 확인 필요, 다음부터는 `server`/`client` 브랜치로 작업하도록 팀 내 재공지 필요
+- **결정자**: 오단비 작성, 설만수 검토 후 dev/server/client 반영

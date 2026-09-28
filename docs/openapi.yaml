@@ -624,6 +624,7 @@ components:
           items: { type: string, format: uri }
         figma_link: { type: string, nullable: true }
         style_mismatch:
+          type: object
           allOf:
             - $ref: '#/components/schemas/StyleMismatch'
           nullable: true

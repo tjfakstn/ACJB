@@ -89,7 +89,7 @@ classes:
       verified_at: {type: datetime, evidence: [로그 8]}
       scope: {type: string, note: "재확인 범위(해당 화면만 / 관련 화면 전체)", evidence: [로그 2, 로그 6, 로그 9, 로그 12]}
     relations:
-      - by: Member
+      - verified_by: Member
         evidence: [로그 1]
 
   Member:
@@ -128,5 +128,6 @@ classes:
 #   - E2E 회귀 테스트 자동화 (로그 2 유지비용, 로그 9 Playwright 기사용 — decision_log 9/9에서 MVP 제외). 재확인은 사람이 하고 기록만 다룬다
 #   - 디자인 변경 전파·토큰 동기화 (로그 1, 2, 10, 11, 12 — 페인은 크지만 로그 11처럼 기존 우회로(Tokens Studio)가 있어 v1 제외, v2 후보)
 #   - 예외 상황 UI 재제작 (로그 7 — 디자인 작업 자체)
+#   - 외부 이슈 트래커(GitHub Issues·Jira 등) 연동 (로그 2, 8, 11, 12 — 쓰는 트래커가 Jira·Notion·엑셀로 제각각, v2 후보)
 # 부정 신호: 로그 4, 9는 Figma-구현 차이가 AI/Figma MCP로 이미 줄었다고 답함 → StyleMismatch 비중은 PROBLEM.md에서 재검토
 # 핵심 흐름: Screen --(대조)--> FigmaFrame → StyleMismatch --(등록)--> QAIssue --(Notification)--> Member --(수정 후)--> Verification

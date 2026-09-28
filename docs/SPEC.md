@@ -20,7 +20,7 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 ## 4. 범위
 
 - **포함**
-  - QA 이슈 등록 — 재현 정보(`screen_location`, `repro_steps`, `platform_scope`, `Environment`) 필수, 스크린샷·Figma 링크 첨부
+  - QA 이슈 등록 — 재현 정보(`screen_location`, `repro_steps`, `platform_scope`, `description`) 필수, `Environment`·스크린샷·Figma 링크 첨부
   - 자유서술 이슈 텍스트 → `IssueReportContext` 파싱과 빠진 항목 되묻기 (강의 3 구조화 출력)
   - 스타일 차이 기록 — `StyleMismatch`(`expected_value`, `actual_value`). 값을 자동으로 추출할지 사람이 입력할지는 스파이크(`docs/spikes/`) 결과로 정한다
   - 이슈 4단계 상태(`needs_check` → `fixed` → `resolved` / `needs_recheck`)와 변경 이력(`status_history`)
@@ -43,14 +43,12 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - `POST /projects/{projectId}/qa-issues/parse` — body `{text}` → `{context: IssueReportContext, missing: string[]}` *(신규)*
 - `POST /projects/{projectId}/qa-issues` — body `{description, screen_location, repro_steps[], platform_scope, environment{platform, device, browser, deploy_stage}, screenshots[], figma_link?, style_mismatch?{property, expected_value, actual_value}, assigned_to?}` → `QAIssue` (`status: "needs_check"`, `reported_by`는 로그인 사용자)
 - `POST /projects/{projectId}/style-mismatches/{mismatchId}/issues` — 기록된 `StyleMismatch`에서 이슈 생성 (자동 비교 경로 — 스파이크 결과에 따라 포함)
-- `PATCH /projects/{projectId}/qa-issues/{issueId}` — body `{status: "fixed", assigned_to?}` → `QAIssue` (허용 전이만, AC6)
+- `PATCH /projects/{projectId}/qa-issues/{issueId}` — body `{status: "fixed", assigned_to?}` → `QAIssue` (허용 전이만, AC6 / 담당자 지정 시 알림, AC3)
 - `GET /projects/{projectId}/qa-issues?status=fixed` — 재확인 대기 이슈 목록
 - `POST /projects/{projectId}/qa-issues/{issueId}/verifications` — body `{result: "pass"|"fail", scope?}` → `{verification: Verification, issue_status, repro_steps[]}` (`verified_by`는 로그인 사용자)
 - `GET /projects/{projectId}/qa-issues/{issueId}/verifications` → `Verification[]`
 
 ## 6. 수용 기준 (테스트로 검증 — Definition of Done)
-
-### 6. 수용 기준 (테스트로 검증 — Definition of Done)
 
 각 AC는 EARS 문형 "[조건]일 때, QAting은 [동작]한다"로 쓰고, 조건 자리의 유형을 [ ]에 표시한다. 괄호 안은 근거가 된 문제 정의서의 증거다.
 
@@ -63,6 +61,6 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - **AC7** [이벤트 기반]: 재검증이 등록되면, QAting은 `result`가 `pass`일 때 이슈 상태를 `resolved`로, `fail`일 때 `needs_recheck`로 바꾸고, 그 `Verification`에 `verified_by`와 `verified_at`을 기록한다. (상태 수동 표기, 관찰 1)
 - **AC8** [예외 대응]: 자유서술 이슈 텍스트에 `screen`·`element`·`repro_steps`에 해당하는 내용이 없으면, QAting은 그 값을 지어내지 않고 비워 둔 채 `missing`에 빠진 항목 이름을 담아 되묻는다. (재현 정보 부족 → 재질문과 대기)
 - **AC9** [이벤트 기반]: `GET /api/v1/health` 요청이 오면, QAting은 200과 `{"status":"ok"}`를 반환한다. **(구현됨)**
-- **AC10** [이벤트 기반]: 미인증 상태에서 `GET /api/v1/auth/me` 요청이 오면, QAting은 200과 `{"authenticated": false}`를 반환한다. **(구현됨)** 
+- **AC10** [이벤트 기반]: 미인증 상태에서 `GET /api/v1/auth/me` 요청이 오면, QAting은 200과 `{"authenticated": false}`를 반환한다. **(구현됨)**
 
-> AC1~AC8의 실행 가능한 골든 케이스: `tests/harness/golden_cases.yaml` (강의 5에서 작성). AC8은 `src/qating/prompts/parse_query.md`의 실패 모드 점검표와도 연결된다.
+> AC1~AC8을 실행할 수 있는 골든 케이스는 `tests/harness/golden_cases.yaml`에 둔다(강의 5에서 작성). AC8은 `src/qating/prompts/parse_query.md`의 실패 모드 점검표와도 연결된다. [상시 적용] AC(AC2, AC6)는 `AGENTS.md` 절대 규칙에도 같은 내용으로 둔다.

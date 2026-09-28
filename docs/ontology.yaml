@@ -1,106 +1,132 @@
-# 미니 온톨로지
-# 도메인 구조의 정본. AGENTS.md 2절(도메인 용어집)은 이 파일에서 대표어와 필드명만 발췌한다 —
-# description/evidence/관계는 여기에만 두고 AGENTS.md에 복제하지 않는다.
+# QAting 미니 도메인 온톨로지 (강의 2 산출물)
+# 작성: AI가 후보를 뽑고, 대표어·경계·범위 밖·evidence는 사람이 로그 원문과 대조해 승인했다.
+# 검토: 오단비 / 2026-09-28
+# evidence: 는 docs/research/interviews.md B절 로그 번호(1~12)와 C절 관찰 번호. 역추적되지 않는 항목은 두지 않는다.
+# 규칙: relations의 대상은 반드시 이 파일에 정의된 클래스여야 한다(미정의 클래스 참조 금지).
+#
+# 어휘 추출 (로그에서 반복된 말 → 대표어)
+#   명사: 이슈 = 티켓 = QA 리스트 항목 = 버그 리포트 → QAIssue
+#         배포 화면 = 실제 화면 = 구현 화면 → Screen
+#         Figma 시안 = 피그마 화면 = 프레임 → FigmaFrame
+#         색상 코드·굵기·radius 차이 = 토큰 값 차이(Gray 80 vs 90) → StyleMismatch
+#         기기 = OS = 브라우저 = 배포 환경 → Environment
+#         재확인 = 재검수 → Verification / 노티 = 알림 → Notification
+#         개발자·디자이너·기획자 = 보고자·담당자 → Member
+#   동사: 대조한다, 등록한다, 알린다, 수정한다, 재확인한다
 
-entities:
-  - name: User
-    description: 구글 로그인으로 인증된 사용자. 역할 구분(기획/개발/디자인)은 지금은 프로젝트 멤버십으로만 다룬다.
-    fields:
-      id: string
-      name: string
-      email: string
-      google_id: string
-
-  - name: Project
-    description: 하나의 Figma 파일 + 하나의 GitHub 저장소를 연결하는 작업 단위.
-    fields:
-      id: string
-      name: string
-      figma_file_key: string
-      github_repo: string (owner/repo)
-
-  - name: FigmaFrame
-    description: Figma에서 동기화해 온 화면/컴포넌트 단위. Design Diff 비교의 기준(expected) 쪽.
-    fields:
-      frame_id: string
-      name: string
-      figma_node_url: string
-      last_synced_at: datetime
-
-  - name: DesignDiff
-    description: >-
-      FigmaFrame과 실제 배포 화면(target_url)을 대조해 발견된 스타일/레이아웃 차이 하나.
-      근거: 로그3(색상/폰트 재비교), 로그7(뱃지 줄바꿈·색상 불일치), 로그10(bold/radius/shadow 등 속성 차이는 개발자가 발견하기 어려움).
-    fields:
-      id: string
-      frame_id: string
-      diff_type: enum(color, typography, spacing, radius, shadow, layout, text_content, other)
-      property: string (예 background-color, font-weight)
-      expected_value: string (Figma 기준값)
-      actual_value: string (실제 구현 값)
-      severity: enum(critical, major, minor)
-      status: enum(open, ignored, resolved)
-      detected_by: enum(auto, manual)
+version: 1
+classes:
+  QAIssue:
+    description: QA 중 발견되어 등록·전달되는 수정 요청 한 건
+    evidence: [로그 1, 로그 2, 로그 8, 로그 11, 로그 12, 관찰 1]
+    attributes:
+      description: {type: string, note: "자유서술. 텍스트만으로는 재현이 안 되는 경우가 많다", evidence: [로그 1, 로그 9, 로그 11]}
+      screen_location: {type: string, note: "어느 화면의 어느 요소인지", evidence: [로그 2, 로그 11]}
+      repro_steps: {type: list, evidence: [로그 1, 로그 6, 로그 9]}
+      screenshots: {type: list, evidence: [로그 2, 로그 10, 관찰 1]}
+      figma_link: {type: string, evidence: [관찰 1]}
+      platform_scope: {type: enum, values: [common, aos, ios], note: "이슈 분류용(공통=AOS·iOS 모두). 실제 발생 환경은 Environment", evidence: [로그 8, 관찰 1]}
+      status: {type: enum, values: [needs_check, fixed, needs_recheck, resolved], note: "확인 필요 → 조치 완료 → (재확인 pass) 해결 완료 / (fail) 재확인 필요 → 조치 완료. fixed로 바뀔 때 Notification(event=fixed) 발생", evidence: [로그 8, 관찰 1]}
+      status_history: {type: list, note: "상태 변경 시각·변경자", evidence: [로그 8, 관찰 1]}
     relations:
-      - FigmaFrame(1) 대조 DesignDiff(N) — 하나의 프레임에서 여러 diff가 나올 수 있음
-      - DesignDiff(0..1) 생성 QAIssue(0..1) — diff가 이슈로 전환될 수도, 안 될 수도 있음(status: ignored)
+      - about: Screen
+        evidence: [로그 2, 로그 11, 관찰 1]
+      - occurs_in: Environment
+        evidence: [로그 1, 로그 8, 로그 9, 관찰 1]
+      - reported_by: Member
+        evidence: [로그 11, 로그 12]
+      - assigned_to: Member
+        evidence: [관찰 1]
+      - originates_from: StyleMismatch
+        evidence: [로그 8, 관찰 1]
+      - checked_by: Verification
+        evidence: [로그 1, 로그 2, 로그 8, 관찰 1]
 
-  - name: QAIssue
-    description: >-
-      구조화된 QA 이슈. DesignDiff에서 자동 생성되거나 수동 등록됨. 재현 정보를 필수로 담는 이유:
-      로그1·로그8(재현 정보 부족 → 재질문에 30분~하루 소요).
-    fields:
-      id: string
-      project_id: string
-      design_diff_id: string | null
-      type: enum(bug, design_mismatch, feature)
-      title: string
-      description: string
-      repro_steps: string[]
-      environment: { device, browser, url }
-      screenshots: string[]
-      priority: enum(high, medium, low)
-      status: enum(open, in_progress, resolved, closed, wontfix)
-      github_issue_url: string | null
-      github_issue_number: integer | null
+  Screen:
+    description: 배포된 앱·웹의 실제 구현 화면
+    evidence: [로그 1, 로그 2, 로그 8, 관찰 1]
+    attributes:
+      name: {type: string, evidence: [로그 2, 관찰 1]}
+      entry_condition: {type: string, note: "조건을 달성해야 보이는 화면의 진입 조건", evidence: [로그 8, 관찰 1]}
     relations:
-      - QAIssue(1) 연동 GitHubIssue(0..1) — 외부 시스템, 우리 DB에는 URL/번호만 저장
-      - QAIssue(1) 갖음 VerificationResult(N) — 재검증할 때마다 이력이 쌓임
+      - implements: FigmaFrame
+        evidence: [로그 1, 로그 2, 관찰 1]
 
-  - name: TestDataset
-    description: >-
-      QA에 필요한 데이터를 시나리오 단위로 저장해 재사용하는 프리셋.
-      근거: 로그11(테스트셋을 QA마다 직접 세팅), 로그14(더미 데이터가 외부 서비스와 싱크 안 맞아 발생하는 오류).
-    fields:
-      id: string
-      project_id: string
-      name: string (시나리오명, 예 "핀 등록 정상 케이스")
-      seed_spec: string (무엇을 어떻게 채우는지에 대한 설명/스크립트 참조)
-      depends_on_external: boolean (외부 서비스 의존 여부 — true면 싱크 이슈 위험 표시)
-      created_by: User.id
+  FigmaFrame:
+    description: 디자인 기준이 되는 Figma 시안 화면
+    evidence: [로그 1, 로그 2, 로그 3, 로그 8, 관찰 1]
+    attributes:
+      name: {type: string, evidence: [관찰 1]}
+      frame_url: {type: string, evidence: [관찰 1]}
 
-  - name: VerificationResult
-    description: >-
-      QAIssue 수정 후 재검증 결과. 최초 등록된 repro_steps를 그대로 재사용해 재현하는 것이 핵심 —
-      근거: 로그6(확인→재현→수정→배포→재확인 반복이 가장 번거로움), 로그9(작은 수정마다 화면 전체 수동 재확인).
-    fields:
-      id: string
-      qa_issue_id: string
-      result: enum(pass, fail)
-      verified_by: string (사람 또는 AI)
-      verified_at: datetime
-      evidence_url: string | null
+  StyleMismatch:
+    description: Figma 기준값과 구현 값이 다른 스타일 차이 한 건
+    evidence: [로그 1, 로그 2, 로그 3, 로그 8, 로그 10, 로그 11, 관찰 1]
+    attributes:
+      property: {type: enum, values: [color, font_weight, font_family, radius, shadow, spacing, text], evidence: [로그 3, 로그 8, 로그 9, 로그 10, 로그 11]}
+      expected_value: {type: string, note: "Figma 기준값(토큰 이름 포함 가능, 예 Gray 80). actual_value와 혼동 금지", evidence: [로그 8, 로그 11, 관찰 1]}
+      actual_value: {type: string, note: "구현 화면에 실제 적용된 값(개발자 모드로 확인)", evidence: [로그 8, 로그 11, 관찰 1]}
+    relations:
+      - compares: FigmaFrame
+        evidence: [로그 2, 로그 8, 관찰 1]
+      - compares: Screen
+        evidence: [로그 2, 로그 8, 관찰 1]
 
-relations:
-  - Project(1) 보유 FigmaFrame(N)
-  - Project(1) 보유 TestDataset(N)
-  - User(1) reporter로 작성 QAIssue(N)
-  - User(1) verified_by로 수행 VerificationResult(N)
+  Environment:
+    description: 이슈가 발생·확인된 기기, OS, 브라우저, 배포 단계
+    evidence: [로그 1, 로그 6, 로그 8, 로그 9, 로그 11, 로그 12]
+    attributes:
+      platform: {type: enum, values: [aos, ios, web], evidence: [로그 1, 로그 8, 로그 11]}
+      device: {type: string, note: "기종·화면 크기", evidence: [로그 1, 로그 6, 로그 12]}
+      browser: {type: string, evidence: [로그 1]}
+      deploy_stage: {type: enum, values: [local, staging, production], evidence: [로그 9, 로그 11]}
 
-# 범위 밖 (스펙 4절 "비포함"과 반드시 일치시킬 것)
-out_of_scope:
-  - 결제/과금
-  - 모바일 네이티브 앱 QA (지금은 웹 화면만 대상)
-  - 성능/부하 테스트
-  - 리뷰·텍스트 기반 AI 자동 분류 (우리 도메인에 해당 없음 — Figma 값 vs 실제 값의 구조적 대조가 핵심이라 자유 텍스트 분류 문제가 아님)
-  - 다국어 지원
+  Verification:
+    description: 수정 후 재확인 1회
+    evidence: [로그 1, 로그 2, 로그 6, 로그 8, 로그 9, 로그 12, 관찰 1]
+    attributes:
+      result: {type: enum, values: [pass, fail], note: "fail이면 QAIssue.status = needs_recheck", evidence: [로그 8, 관찰 1]}
+      verified_at: {type: datetime, evidence: [로그 8]}
+      scope: {type: string, note: "재확인 범위(해당 화면만 / 관련 화면 전체)", evidence: [로그 2, 로그 6, 로그 9, 로그 12]}
+    relations:
+      - by: Member
+        evidence: [로그 1]
+
+  Member:
+    description: QA에 참여하는 팀원
+    evidence: [로그 2, 로그 3, 로그 11, 로그 12]
+    attributes:
+      role: {type: enum, values: [designer, developer, planner], evidence: [로그 3, 로그 11]}
+
+  Notification:
+    description: 이슈 등록·조치 사실을 상대에게 알리는 일
+    evidence: [로그 2, 로그 8, 로그 11, 로그 12, 관찰 1]
+    attributes:
+      event: {type: enum, values: [issue_created, fixed], evidence: [로그 2, 로그 8, 로그 11, 관찰 1]}
+      channel: {type: string, examples: [email, discord, slack], evidence: [로그 8, 로그 12, 관찰 1]}
+    relations:
+      - about: QAIssue
+        evidence: [로그 2, 로그 8]
+      - to: Member
+        evidence: [로그 11, 관찰 1]
+
+  IssueReportContext:
+    description: 자유서술 이슈 텍스트를 파싱한 구조화 결과(강의 3 구조화 출력 대상)
+    evidence: [로그 1, 로그 9, 로그 11]
+    attributes:
+      screen: {type: string, evidence: [로그 2, 로그 11]}
+      element: {type: string, evidence: [로그 11]}
+      symptom: {type: string, evidence: [로그 9]}
+      repro_steps: {type: list, evidence: [로그 1, 로그 6]}
+      platform_scope: {type: enum, values: [common, aos, ios], evidence: [로그 8]}
+    relations:
+      - becomes: QAIssue
+        evidence: [로그 1, 로그 11]
+
+# 범위 밖(명시 — SPEC.md 4절 "비포함"과 일치시킬 것):
+#   - 테스트 데이터 세팅·초기화 (로그 4, 5 — 반복되지만 이슈 전달·재확인 흐름과 별개)
+#   - E2E 회귀 테스트 자동화 (로그 2 유지비용, 로그 9 Playwright 기사용 — decision_log 9/9에서 MVP 제외). 재확인은 사람이 하고 기록만 다룬다
+#   - 디자인 변경 전파·토큰 동기화 (로그 1, 2, 10, 11, 12 — 페인은 크지만 로그 11처럼 기존 우회로(Tokens Studio)가 있어 v1 제외, v2 후보)
+#   - 예외 상황 UI 재제작 (로그 7 — 디자인 작업 자체)
+# 부정 신호: 로그 4, 9는 Figma-구현 차이가 AI/Figma MCP로 이미 줄었다고 답함 → StyleMismatch 비중은 PROBLEM.md에서 재검토
+# 핵심 흐름: Screen --(대조)--> FigmaFrame → StyleMismatch --(등록)--> QAIssue --(Notification)--> Member --(수정 후)--> Verification

@@ -16,24 +16,24 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 
 어휘 층 발췌 — 전체 구조·관계·근거는 `docs/ontology.yaml`.
 
-- **QAIssue**: `description`, `screen_location`, `repro_steps`, `platform_scope`(common/aos/ios — 이슈 분류용), `status`(needs_check/fixed/needs_recheck/resolved), `status_history`, `assigned_to`, `reported_by`
+- **QAIssue**: `description`, `screen_location`, `repro_steps`, `platform_scope`(common/aos/ios — 이슈 분류용), `screenshots`, `figma_link`, `status`(needs_check/fixed/needs_recheck/resolved), `status_history`, `assigned_to`, `reported_by`
 - **StyleMismatch**: `property`(color/font_weight/font_family/radius/shadow/spacing/text), `expected_value`(Figma 기준값), `actual_value`(구현 값) — 둘 다 있어야 저장(↔ AC2). QAIssue에 연결되면 `style_mismatch` 필드. 자동 추출(scan) 포함 여부는 스파이크 결과로 결정
 - **Verification**: `result`(pass/fail), `scope`, `verified_by`, `verified_at` — `qa_issue_id`로 QAIssue에 종속. `pass`→`resolved`, `fail`→`needs_recheck`
 - **Notification**: `event`(issue_created/fixed), `channel` — 등록 시 담당자에게, 조치 완료(`fixed`) 시 등록자에게 정확히 1건씩
 - **IssueReportContext**: 자유서술 텍스트 파싱 결과 — `screen`, `element`, `symptom`, `repro_steps`, `platform_scope`. 텍스트에 없는 값은 지어내지 않고 비워 `missing`에 담아 되물음
 - **Environment**: `platform`(aos/ios/web), `device`, `browser`, `deploy_stage`(local/staging/production) — QAIssue의 실제 발생 환경
-- **FigmaFrame** / **Screen**: 각각 디자인 기준 화면 / 배포된 실제 구현 화면. `StyleMismatch`가 이 둘을 비교
+- **FigmaFrame**(`name`, `frame_url`) / **Screen**(`name`, `entry_condition`): 각각 디자인 기준 화면 / 배포된 실제 구현 화면. `StyleMismatch`가 이 둘을 비교
+- **Member**: QA에 참여하는 팀원 — `role`(designer/developer/planner)
 
-혼동 주의: `QAIssue.platform_scope`(이슈 분류용, common 포함)와 `Environment.platform`(실제 발생 환경, aos/ios/web만)은 다른 값 집합이다 — 혼용하지 말 것. GitHub 연동(`github_issue_url` 등)은 v1 비포함(`docs/openapi.yaml`에 `deprecated: true`로 설계만 남음) — 새로 만들지 말 것.
+혼동 주의: `QAIssue.platform_scope`(이슈 분류용, common 포함)와 `Environment.platform`(실제 발생 환경, aos/ios/web만)은 다른 값 집합이다 — 혼용하지 말 것. `IssueReportContext.screen`(파싱 결과, 화면 이름만)과 `QAIssue.screen_location`(자유 텍스트, screen+element가 합쳐진 값)도 다른 필드다 — 파싱 응답을 그대로 DB 컬럼에 넣지 않는다(`src/qating/prompts/parse_query.md` 필드 매핑 표 참고). GitHub 연동(`github_issue_url` 등)은 v1 비포함(`docs/openapi.yaml`에 `deprecated: true`로 설계만 남음) — 새로 만들지 말 것.
 
 ## 3. 절대 규칙 (위반한 결과물은 수용하지 않는다)
 
 1. QA 이슈 등록 시 `description`·`screen_location`·`repro_steps`·`platform_scope` 중 하나라도 비어 있으면 등록을 거부(400)한다 — 빠진 항목을 지어내지 않는다. (↔ SPEC.md AC1)
 2. `StyleMismatch`는 `expected_value`와 `actual_value`가 **둘 다** 있을 때만 저장한다 — 근거 없이 "다름"만 저장하지 않는다. (↔ AC2)
-3. QA 이슈가 등록되면 담당자에게, 상태가 `fixed`로 바뀌면 등록자에게 `Notification`을 **정확히 1건** 생성한다 — 중복 생성하거나 누락하지 않는다. (↔ AC3, AC4)
+3. QA 이슈가 등록될 때 담당자(`assigned_to`)가 지정돼 있거나 이후 PATCH로 담당자가 새로 지정·변경되면, 그 담당자에게 `Notification`(`issue_created`)을 **정확히 1건** 생성한다(담당자가 없으면 생성하지 않는다). 상태가 `fixed`로 바뀌면 등록자에게 `Notification`(`fixed`)을 정확히 1건 생성한다 — 중복 생성하거나 누락하지 않는다. (↔ AC3, AC4)
 4. 정해진 상태 전이만 허용한다: `needs_check`/`needs_recheck` → `fixed`는 PATCH로만, `fixed` → `resolved`/`needs_recheck`는 재검증 등록으로만 일어난다. 그 외 요청은 거부(409)하고, 허용된 모든 변경은 `status_history`에 남긴다. (↔ AC6)
 5. 재검증을 조회·등록할 때는 최초 등록된 재현 절차(`repro_steps`)를 그대로 반환한다 — 재입력을 요구하지 않는다. (↔ AC5)
-6. 시크릿(Google Client Secret, DB 비밀번호 등)을 코드나 로그에 남기지 않는다.
 
 ## 4. 금지 사항 (에이전트에게 위임할 때 항상 걸린다)
 
@@ -43,6 +43,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 4. 요청하지 않은 범위까지 임의로 수정하지 않는다.
 5. 확인되지 않은 API 스펙을 추측해서 구현하지 않는다 — 모르면 물어본다.
 6. `main` 브랜치에 직접 커밋하지 않는다 (7절 Git 규칙 참고).
+7. 시크릿(Google Client Secret, DB 비밀번호 등)을 코드나 로그에 남기지 않는다.
 
 **모호할 때**: 추측해서 진행하지 말고, 확인이 필요한 지점을 명시하고 멈춘다.
 
@@ -52,8 +53,9 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 - Backend: Java, Spring Boot 컨벤션(Controller/Config 패키지 분리)
 - 상수: UPPER_SNAKE_CASE
 - 주석은 "무엇"보다 "왜"를 남긴다
-- 외부 API(Figma, GitHub) 응답은 반드시 타입/스키마로 검증한 뒤 사용한다
+- 외부 API(Figma) 응답은 반드시 타입/스키마로 검증한 뒤 사용한다
 - **목록을 반환하는 API는 정렬 기준을 명시적으로 고정한다**(예: `created_at desc`). 같은 조건에 순서가 흔들리면 골든 케이스가 성립하지 않는다.
+- **LLM 구조화 출력은 수신 후 반드시 JSON Schema로 검증한다.** `parse_query.md`가 반환한 JSON은 `IssueReportContext.schema.json`(특히 `required`·`additionalProperties: false`)으로 검증하고, 스키마를 벗어나면 파싱 실패로 처리한다 — LLM 출력을 검증 없이 그대로 신뢰하지 않는다.
 
 ## 6. 완료의 정의
 
@@ -88,7 +90,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 | Backend | Spring Boot(Java 21) | |
 | DB | TODO | |
 | 인증 | Google OAuth2 (구현됨) | |
-| 외부 연동 | Figma API, GitHub API | |
+| 외부 연동 | Figma API | GitHub 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
 | 인프라 / 배포 | TODO | |
 
 결정 배경: [docs/decision_log.md](docs/decision_log.md)
@@ -131,7 +133,7 @@ npm run build
 
 - 실제 값은 `.env`에 두고 절대 커밋하지 않는다 (`backend/.env`는 gitignore 처리됨)
 - 새 환경 변수를 추가하면 `.env.example`에 키와 설명을 함께 추가한다
-- Figma / GitHub / Google 토큰은 로컬에서만 사용하고 로그에 출력하지 않는다
+- Figma / Google 토큰은 로컬에서만 사용하고 로그에 출력하지 않는다
 
 ### 7.5 Git & 협업 규칙
 

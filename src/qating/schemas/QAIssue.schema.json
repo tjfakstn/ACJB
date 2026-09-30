@@ -6,9 +6,9 @@
   "properties": {
     "id": { "type": "string" },
     "project_id": { "type": "string" },
-    "description": { "type": "string", "description": "자유서술. 텍스트만으로는 재현이 안 되는 경우가 많아 아래 필드들이 필수" },
-    "screen_location": { "type": "string", "description": "어느 화면의 어느 요소인지" },
-    "repro_steps": { "type": "array", "items": { "type": "string" } },
+    "description": { "type": "string", "minLength": 1, "description": "자유서술. 텍스트만으로는 재현이 안 되는 경우가 많아 아래 필드들이 필수" },
+    "screen_location": { "type": "string", "minLength": 1, "description": "어느 화면의 어느 요소인지" },
+    "repro_steps": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
     "platform_scope": { "type": "string", "enum": ["common", "aos", "ios"], "description": "이슈 분류용(common=AOS·iOS 모두). 실제 발생 환경은 environment" },
     "environment": {
       "type": "object",

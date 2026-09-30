@@ -10,5 +10,6 @@
     "repro_steps": { "type": "array", "items": { "type": "string" } },
     "platform_scope": { "type": ["string", "null"], "enum": ["common", "aos", "ios", null] }
   },
+  "required": ["screen", "element", "symptom", "repro_steps", "platform_scope"],
   "additionalProperties": false
 }

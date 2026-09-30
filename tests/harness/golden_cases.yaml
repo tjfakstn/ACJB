@@ -14,6 +14,7 @@ cases:
       status: 400
       body: { success: false }
       body_has: [error.code, error.message]
+      error_message_contains: "screen_location"
 
   - id: qi-002
     ac: AC1
@@ -146,7 +147,51 @@ cases:
     expected:
       status: 200
       body_has: [data.context, data.missing]
+      body: { data: { context: { screen: null } } }
       missing_contains: ["repro_steps"]
+
+  - id: nt-003
+    ac: AC3
+    description: 담당자가 없던 이슈에 PATCH로 assigned_to를 새로 지정하면 그 담당자에게 Notification(issue_created)이 정확히 1건 생성된다
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      precondition: 이슈에 assigned_to가 없음(null)
+      body: { assigned_to: "member-3" }
+    expected:
+      status: 200
+      body: { data: { assigned_to: "member-3" } }
+      followup:
+        description: assigned_to(member-3)에게 생성된 Notification 수를 센다
+        expected_notification_count_for_assignee: 1
+        expected_notification_event: "issue_created"
+
+  - id: nt-004
+    ac: AC3
+    description: 담당자를 지정하지 않고 이슈를 등록하면 Notification이 생성되지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues
+      body:
+        description: "텍스트가 잘려요"
+        screen_location: "결제 화면 총액"
+        repro_steps: ["결제 화면 진입"]
+        platform_scope: "ios"
+        # assigned_to 없음
+    expected:
+      status: 201
+      followup:
+        description: 이 이슈에 대해 생성된 Notification 총 개수를 센다
+        expected_notification_count_total: 0
+
+  - id: st-003
+    ac: AC6
+    description: needs_check 상태에서 PATCH로 status를 resolved로 직접 바꾸려 하면 거부된다(resolved는 재검증 등록으로만 전이 가능)
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      precondition: 이슈 status가 needs_check
+      body: { status: "resolved" }
+    expected:
+      status: 409
+      body: { success: false }
 
   - id: health-001
     ac: AC9

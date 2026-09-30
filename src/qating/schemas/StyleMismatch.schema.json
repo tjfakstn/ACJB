@@ -8,8 +8,8 @@
     "frame_id": { "type": ["string", "null"], "description": "기준이 된 FigmaFrame" },
     "screen": { "type": ["string", "null"], "description": "비교한 Screen(배포 화면)" },
     "property": { "type": "string", "enum": ["color", "font_weight", "font_family", "radius", "shadow", "spacing", "text"] },
-    "expected_value": { "type": "string", "description": "Figma 기준값(토큰 이름 포함 가능, 예 Gray 80)" },
-    "actual_value": { "type": "string", "description": "구현 화면에 실제 적용된 값(개발자 모드로 확인)" }
+    "expected_value": { "type": "string", "minLength": 1, "description": "Figma 기준값(토큰 이름 포함 가능, 예 Gray 80)" },
+    "actual_value": { "type": "string", "minLength": 1, "description": "구현 화면에 실제 적용된 값(개발자 모드로 확인)" }
   },
   "required": ["property", "expected_value", "actual_value"]
 }

@@ -93,3 +93,16 @@
 - **왜**: 응답자 수가 3배로 늘면서 반증 조건("1차 사용자 중 과반이 겪는가")을 더 신뢰할 수 있는 표본으로 재판정할 수 있게 됐고, 그 결과 원래 가설(자동 대조가 핵심)보다 전달·확인 왕복이 더 우선순위 높은 문제로 확인됨. 근거가 바뀌면 스펙을 바꾸는 것이 이 프로젝트가 따르는 원칙(강의 4 지침)과 일치해 채택함
 - **경고**: 이 결정은 `main`에 직접 커밋된 것을 사후 승인한 것임 — `main` 직접 커밋 금지 규칙(AGENTS.md 4절)을 이번엔 지키지 못했음. 팀 논의 후 반영이었는지 확인 필요, 다음부터는 `server`/`client` 브랜치로 작업하도록 팀 내 재공지 필요
 - **결정자**: 오단비 작성, 설만수 검토 후 dev/server/client 반영
+
+## 2026-09-30 강의 3/4 체크리스트 2차 감사 반영
+
+- **결정**: 오단비의 2차 감사(강의 3/4 체크리스트 기준, 항목별 ✅/🟡/🔴 판정)에서 나온 지적을 전부 반영:
+  - `AGENTS.md`: GitHub 흔적 3곳(5절 코딩 컨벤션, 7.2 기술 스택, 7.4 환경 변수) 제거, 절대 규칙 6(시크릿)을 AC 대응이 없다는 이유로 4절 금지 사항으로 이동, 절대 규칙 3을 AC3 전체(PATCH로 담당자 신규 지정 시 알림 포함)에 맞게 재작성, 용어집에 `Member`(role) 클래스·QAIssue의 `screenshots`/`figma_link`·FigmaFrame/Screen 필드명(`name`/`frame_url`/`entry_condition`) 추가, `IssueReportContext.screen`과 `QAIssue.screen_location`이 다른 필드라는 혼동 방지 메모 추가, 5절에 "LLM 구조화 출력은 수신 후 스키마로 검증" 규칙 추가
+  - `README.md`: "Figma와 GitHub를 연결해 AI가 자동 검증"이라는 옛 문구를 현재 SPEC.md(재현 정보 등록 → 알림 → 재검증)에 맞게 재작성
+  - `docs/spikes/2026-09-28_style-mismatch-auto-extraction.md`: 성공 조건·방법·결과 표에서 제각각이던 property 목록(color/font_weight/font_family/spacing 등)을 `color`/`font_weight`/`radius` 3개로 통일, 건별 판정 규칙(정규화·허용 오차) 표 추가, "이 가정을 먼저 검증하는 이유" 단락 추가, 평가 데이터 출처(Figma 파일 키·프론트 커밋)는 실행 시 채우는 자리로 명시. 실험 결과·판정은 여전히 TBD(다음 세션에 실제 실행)
+  - 스키마: `QAIssue.description`/`screen_location`에 `minLength: 1`, `repro_steps`에 `minItems: 1` 추가(AC1의 "비어 있으면 거부"를 스키마 레벨에서도 보장), `StyleMismatch.expected_value`/`actual_value`에 `minLength: 1` 추가(AC2), `IssueReportContext`에 5개 필드 전부 `required` 추가(키 누락과 값 null을 구분)
+  - `parse_query.md`: platform_scope 규칙에서 "플랫폼 구분 없이 말함"과 "언급 자체가 없음"이 같은 결과(null)로 뭉뚱그려지던 모호성을 조건 분기로 명확화, `<issue_text>` 태그 구분자 도입(프롬프트 인젝션 방어 규칙 포함), few-shot 예시 2개 추가, 실행 모델(`claude-sonnet-5`)·실행 일시 기록, 실패 모드 점검표에 "모호"/"범위 위반" 유형 추가해 지침이 요구하는 5유형을 모두 커버(7개 입력으로 확장)
+  - `tests/harness/golden_cases.yaml`: `qi-001`에 `error_message_contains: "screen_location"` 추가(빠진 항목 이름이 실제로 반환되는지 검증), `pc-001`에 `context.screen`이 null인지 확인하는 키 추가(AC8의 핵심인 "지어내지 않음" 검증), AC3에 `nt-003`(PATCH로 담당자 신규 지정 시 알림)·`nt-004`(담당자 없으면 알림 0건) 추가, AC6에 `st-003`(PATCH로 resolved 직접 요청 → 409) 추가
+- **작동 확인**: 이 대화 세션에서 시스템이 `CLAUDE.md`와 `AGENTS.md` 내용을 자동으로 로드해 보여줌 — `@AGENTS.md` 임포트 정상 확인. 용어집 대표어(`screen_location`, `platform_scope`, `repro_steps` 등)를 이번 세션 전체 응답과 수정본에서 변형 없이 그대로 사용했음을 직접 확인(예: AGENTS.md 용어집 수정 시에도 ontology.yaml의 필드명을 그대로 복사)
+- **왜**: 1차 감사(2026-09-28, `parse_query.md`/스파이크 문서/`IssueReportContext.schema.json` 갭)에 이어, 강의 3/4 체크리스트를 항목별로 재대조한 2차 감사가 더 세밀한 불일치(AC-규칙 매핑 누락, 스키마가 빈 값을 막지 못하는 문제, 프롬프트 규칙의 모호성 등)를 찾아냈고, 지침이 "규칙마다 AC 번호 대응, 하나라도 비면 검증되지 않음"을 명시적으로 요구하기 때문
+- **결정자**: 오단비 감사, 설만수 반영

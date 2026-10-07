@@ -122,7 +122,13 @@ classes:
     relations:
       - becomes: QAIssue
         evidence: [로그 1, 로그 11]
-
+        
+# 범위 안(QAting이 직접 생성·관리): QAIssue, StyleMismatch, Verification, Notification, IssueReportContext, Member
+# 외부 참조(다른 시스템이 관리, QAting은 식별자·링크·값만 기록):
+#   - FigmaFrame — Figma가 원본. frame_url과 이름만 참조 (값 자동 추출 여부는 docs/spikes/ 스파이크 결과로 결정)
+#   - Screen — 팀의 배포 앱·웹. 화면 이름과 진입 조건만 기록
+#   - Environment — 기기·OS·브라우저·배포 단계는 사용자가 입력한 값을 기록만 함
+#   - Notification.channel — 이메일·Slack 등 외부 채널로 전달만 함
 # 범위 밖(명시 — SPEC.md 4절 "비포함"과 일치시킬 것):
 #   - 테스트 데이터 세팅·초기화 (로그 4, 5 — 반복되지만 이슈 전달·재확인 흐름과 별개)
 #   - E2E 회귀 테스트 자동화 (로그 2 유지비용, 로그 9 Playwright 기사용 — decision_log 9/9에서 MVP 제외). 재확인은 사람이 하고 기록만 다룬다

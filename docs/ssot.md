@@ -2,7 +2,7 @@
 
 지금 시점의 프로젝트 상태를 한눈에 보기 위한 요약 문서입니다. 세부 내용은 각 문서가 원본(source)이고, 이 문서는 그 값들의 스냅샷 + 링크입니다. **여기와 다른 문서의 내용이 어긋나면, 방금 바뀐 쪽이 맞을 확률이 높으니 이 문서를 먼저 갱신하세요.**
 
-최종 수정: 2026-09-09
+최종 수정: 2026-09-28
 
 ---
 
@@ -10,8 +10,8 @@
 
 - **팀명**: 안캡잘부 (아주대학교 소프트웨어학과 26-2 캡스톤디자인)
 - **프로젝트명**: QAting
-- **한 줄 정의**: Figma와 GitHub를 연결해 디자인과 실제 구현의 차이를 AI가 자동으로 검증하고, QA 이슈 발견부터 수정 후 재검증까지 지원하는 개발 QA 자동화 서비스
-- 상세: [docs/PROBLEM.md](PROBLEM.md) — 인터뷰 로그 기반 문제 정의 완료
+- **한 줄 정의**: QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나면 등록자에게 바로 알리고, 등록 때의 재현 절차를 그대로 불러와 재검증하는 QA 자동화 서비스
+- 상세: [docs/PROBLEM.md](PROBLEM.md) — 인터뷰 12건 기반 문제 정의 완료 (2026-09-28 오단비가 4건 → 12건으로 재검증·재작성, 배경: [decision_log.md](decision_log.md))
 
 ## 팀 & 역할
 
@@ -23,20 +23,21 @@
 
 ## 핵심 목표
 
-1. Figma 디자인과 배포된 실제 구현의 차이를 확인할 수 있게 한다
-2. 발견된 이슈를 구조화된 형태로 정리한다
-3. 수정이 필요한 지점을 빠르게 찾아 GitHub 흐름(이슈/PR)으로 연결한다
+1. QA 이슈를 재현 정보(화면 위치·재현 절차·플랫폼 범위)와 함께 등록하게 한다 — 정보가 비면 등록을 거부한다
+2. 조치가 끝나면 등록자에게, 이슈가 새로 등록되면 담당자에게 바로 알린다
+3. 재검증 시 최초 등록된 재현 절차를 그대로 불러와 재입력 없이 확인하게 한다
 
-## 현재 MVP 방향 (검증 중)
+## 현재 MVP 방향 (v0.2, 2026-09-28)
 
-인터뷰 조사(2026-09-09) 기반 우선순위:
+인터뷰 조사 12건 + 관찰 1건 기반 우선순위 (배경: [decision_log.md](decision_log.md)):
 
-1. **Figma-실제 구현 스타일 값 자동 대조** — 색상/폰트/간격 등 디자인 토큰과 실제 배포 화면의 차이를 자동 검출
-2. **구조화된 QA 이슈 → GitHub 연결** — 발견된 diff를 재현정보(스크린샷·환경) 포함해 바로 GitHub Issue로 전환
+1. **재현 정보 필수 QA 이슈 등록** — description/screen_location/repro_steps/platform_scope 중 하나라도 비면 거부
+2. **상태 변경 알림(Notification)** — 등록 시 담당자에게, `fixed` 전환 시 등록자에게 정확히 1건
+3. **재검증(Verification)** — 최초 재현 절차 재사용, pass/fail에 따라 상태 자동 전환
 
-범위 밖(당장 안 함): 회귀 테스트 자동화(E2E) — 페인포인트는 크지만 스코프 과다
+범위 밖(v1 비포함, v2 후보): **GitHub Issues 연동**(팀마다 트래커가 제각각), 테스트 데이터셋 세팅, E2E 회귀 자동화, 디자인 토큰 자동 동기화. Figma-구현 스타일 자동 대조(`StyleMismatch` scan)는 포함 여부를 스파이크 결과로 결정.
 
-근거/전체 맥락: [decision_log.md](decision_log.md)
+> 이전 버전(2026-09-09~09-23, 설만수 초안): Figma-구현 자동 대조 + GitHub 연동을 MVP 핵심으로 잡았었음. 응답자 12명 기준 재검증 결과 "전달·확인 왕복"이 더 우선순위 높은 문제로 확인되어 위 방향으로 대체됨.
 
 ## 기술 스택
 
@@ -45,41 +46,42 @@
 | Frontend | React + Vite + TypeScript (Tailwind CSS 예정) |
 | Backend | Spring (Spring Boot) |
 | DB | TODO |
-| AI | TODO — `src/qating/`에 QAIssue · DesignDiff · VerificationResult 스키마 골격 있음 |
+| AI | TODO — `src/qating/`에 QAIssue · StyleMismatch · Verification · Notification · IssueReportContext 스키마 있음 |
 | 외부 연동 | Figma API, GitHub API |
 | 인프라/배포 | TODO |
 
 원본: [AGENTS.md #3](../AGENTS.md)
 
-## 저장소 구조 (2026-09-09 기준)
+## 저장소 구조 (2026-09-28 기준)
 
 ```
 .
 ├── AGENTS.md          # AI 에이전트용 가이드
+├── CLAUDE.md          # Claude Code 진입점 (@AGENTS.md 임포트만)
 ├── CONTRIBUTING.md    # 사람용 기여 가이드
 ├── README.md          # 팀/제품 소개
 ├── .github/           # PR/이슈 템플릿
+├── backend/           # Spring Boot 프로젝트 (구글 로그인 구현됨)
+├── frontend/          # React + Vite 프로젝트 (랜딩/로그인 화면 구현됨)
 ├── config/            # 설정 (예: rag.yaml)
 ├── data/
-├── docs/              # 기획·설계 문서, decision_log, ssot
+├── docs/              # PROBLEM/SPEC/ontology/openapi/decision_log/ssot/research
 ├── evals/             # AI 파이프라인 평가 (judge_prompt, evalset 등)
-├── src/qating/        # 핵심 로직 — schemas(QAIssue/DesignDiff/VerificationResult), prompts, tools
-└── tests/
+├── src/qating/        # 스키마(QAIssue/StyleMismatch/Verification/Notification/IssueReportContext), prompts
+└── tests/harness/     # 골든 케이스
 ```
-
-프론트엔드(React) 앱 디렉터리는 아직 생성 전 — 추가되면 이 구조도 갱신 필요.
 
 ## 협업 규칙 원본 위치
 
 - Git/브랜치/커밋/PR 규칙: [AGENTS.md #7](../AGENTS.md)
 - 이슈/PR 템플릿: [.github/](../.github/)
 - 결정 이력: [decision_log.md](decision_log.md)
-- API 명세(초안): [api_spec.md](api_spec.md) / [openapi.yaml](openapi.yaml), 데이터 모델: [src/qating/schemas/](../src/qating/schemas/)
+- API 명세: [SPEC.md](SPEC.md)(정본) / [openapi.yaml](openapi.yaml)(기계가 읽는 버전), 데이터 모델: [src/qating/schemas/](../src/qating/schemas/)
 
 ## 아직 안 정해진 것 (TODO)
 
-- 서비스 이름
 - DB / AI 모델 / 인프라·배포 스택
 - 라벨 체계, 브랜치 보호 규칙 (보류 중, 이슈 쌓이면 재논의)
-- `docs/ARCHITECTURE.md` — 골격만 있고 내용 비어있음 (PROBLEM.md/SPEC.md는 작성 완료)
-- API 인증 방식, 에러 코드 표준 (api_spec.md 참고 — v0.1 초안이라 확정 아님)
+- `docs/ARCHITECTURE.md` — 골격만 있고 내용 비어있음
+- API 인증 방식, 에러 코드 표준 (구글 로그인은 구현됨. 그 외 QA 도메인 API의 인증 방식은 미정)
+- `StyleMismatch` 자동 추출(scan)의 포함 여부 — 스파이크(`docs/spikes/`) 결과로 결정 예정, 아직 스파이크 미착수

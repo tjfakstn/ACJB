@@ -1,37 +1,51 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "QAIssue",
-  "description": "구조화된 QA 이슈 — Design Diff에서 자동 생성되거나 수동으로 등록됨 (초안 v0.1)",
+  "description": "QA 중 발견되어 등록·전달되는 수정 요청 한 건 (docs/ontology.yaml QAIssue, docs/SPEC.md v0.2)",
   "type": "object",
   "properties": {
     "id": { "type": "string" },
     "project_id": { "type": "string" },
-    "design_diff_id": { "type": ["string", "null"], "description": "연결된 Design Diff. 수동 등록이면 null" },
-    "type": { "type": "string", "enum": ["bug", "design_mismatch", "feature"] },
-    "title": { "type": "string" },
-    "description": { "type": "string" },
-    "repro_steps": { "type": "array", "items": { "type": "string" } },
+    "description": { "type": "string", "minLength": 1, "description": "자유서술. 텍스트만으로는 재현이 안 되는 경우가 많아 아래 필드들이 필수" },
+    "screen_location": { "type": "string", "minLength": 1, "description": "어느 화면의 어느 요소인지" },
+    "repro_steps": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "platform_scope": { "type": "string", "enum": ["common", "aos", "ios"], "description": "이슈 분류용(common=AOS·iOS 모두). 실제 발생 환경은 environment" },
     "environment": {
       "type": "object",
       "properties": {
+        "platform": { "type": "string", "enum": ["aos", "ios", "web"] },
         "device": { "type": "string" },
         "browser": { "type": "string" },
-        "url": { "type": "string" }
+        "deploy_stage": { "type": "string", "enum": ["local", "staging", "production"] }
       }
     },
     "screenshots": { "type": "array", "items": { "type": "string" } },
-    "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+    "figma_link": { "type": ["string", "null"] },
+    "style_mismatch": {
+      "oneOf": [{ "$ref": "StyleMismatch.schema.json" }, { "type": "null" }],
+      "description": "연결된 스타일 차이. 수동 등록이면 null"
+    },
     "status": {
       "type": "string",
-      "enum": ["open", "in_progress", "resolved", "closed", "wontfix"],
-      "default": "open"
+      "enum": ["needs_check", "fixed", "needs_recheck", "resolved"],
+      "default": "needs_check",
+      "description": "확인 필요 → 조치 완료 → (재검증 pass) 해결 완료 / (fail) 재확인 필요 → 조치 완료"
     },
-    "assignee": { "type": ["string", "null"] },
-    "reporter": { "type": "string" },
-    "github_issue_url": { "type": ["string", "null"] },
-    "github_issue_number": { "type": ["integer", "null"] },
+    "status_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["needs_check", "fixed", "needs_recheck", "resolved"] },
+          "changed_by": { "type": "string" },
+          "changed_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "assigned_to": { "type": ["string", "null"] },
+    "reported_by": { "type": "string" },
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": "string", "format": "date-time" }
   },
-  "required": ["id", "project_id", "type", "title", "priority", "status", "reporter", "created_at"]
+  "required": ["id", "project_id", "description", "screen_location", "repro_steps", "platform_scope", "status", "reported_by", "created_at"]
 }

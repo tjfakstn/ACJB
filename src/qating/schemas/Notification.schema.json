@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Notification",
+  "description": "이슈 등록·조치 사실을 상대에게 알리는 일 (docs/ontology.yaml Notification). SPEC.md AC3(등록 시 담당자에게), AC4(조치 완료 시 등록자에게)에서 정확히 1건씩 생성됨",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "qa_issue_id": { "type": "string" },
+    "event": { "type": "string", "enum": ["issue_created", "fixed"] },
+    "channel": { "type": "string", "description": "예: email, discord, slack" },
+    "to_member_id": { "type": "string", "description": "알림을 받는 팀원" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "qa_issue_id", "event", "to_member_id", "created_at"]
+}

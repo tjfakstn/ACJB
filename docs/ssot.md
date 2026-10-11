@@ -84,4 +84,4 @@
 - 라벨 체계, 브랜치 보호 규칙 (보류 중, 이슈 쌓이면 재논의)
 - `docs/ARCHITECTURE.md` — 골격만 있고 내용 비어있음
 - API 인증 방식, 에러 코드 표준 (구글 로그인은 구현됨. 그 외 QA 도메인 API의 인증 방식은 미정)
-- `StyleMismatch` 자동 추출(scan)의 포함 여부 — 스파이크(`docs/spikes/`) 결과로 결정 예정, 아직 스파이크 미착수
+- `StyleMismatch` 자동 추출(scan)의 포함 여부 — 스파이크(`docs/spikes/`) 결과로 결정 예정. 스파이크는 2026-10-07 실행 완료(웹·버튼 1종·color/font_weight/radius 한정, 6/6 통과 — 가정 기각 안 됨). v1 포함 여부 결정은 오단비 대기

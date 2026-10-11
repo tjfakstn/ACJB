@@ -19,7 +19,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 - **QAIssue**: `description`, `screen_location`, `repro_steps`, `platform_scope`(common/aos/ios — 이슈 분류용), `screenshots`, `figma_link`, `status`(needs_check/fixed/needs_recheck/resolved), `status_history`, `assigned_to`, `reported_by`
 - **StyleMismatch**: `property`(color/font_weight/font_family/radius/shadow/spacing/text), `expected_value`(Figma 기준값), `actual_value`(구현 값) — 둘 다 있어야 저장(↔ AC2). QAIssue에 연결되면 `style_mismatch` 필드. 자동 추출(scan) 포함 여부는 스파이크 결과로 결정
 - **Verification**: `result`(pass/fail), `scope`, `verified_by`, `verified_at` — `qa_issue_id`로 QAIssue에 종속. `pass`→`resolved`, `fail`→`needs_recheck`
-- **Notification**: `event`(issue_created/fixed), `channel` — 등록 시 담당자에게, 조치 완료(`fixed`) 시 등록자에게 정확히 1건씩
+- **Notification**: `event`(issue_created/fixed/recheck_failed), `channel` — 등록 시 담당자에게, 조치 완료(`fixed`) 시 등록자에게, 재검증 `fail` 시 담당자에게 정확히 1건씩
 - **IssueReportContext**: 자유서술 텍스트 파싱 결과 — `screen`, `element`, `symptom`, `repro_steps`, `platform_scope`. 텍스트에 없는 값은 지어내지 않고 비워 `missing`에 담아 되물음
 - **Environment**: `platform`(aos/ios/web), `device`, `browser`, `deploy_stage`(local/staging/production) — QAIssue의 실제 발생 환경
 - **FigmaFrame**(`name`, `frame_url`) / **Screen**(`name`, `entry_condition`): 각각 디자인 기준 화면 / 배포된 실제 구현 화면. `StyleMismatch`가 이 둘을 비교
@@ -31,9 +31,11 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 
 1. QA 이슈 등록 시 `description`·`screen_location`·`repro_steps`·`platform_scope` 중 하나라도 비어 있으면 등록을 거부(400)한다 — 빠진 항목을 지어내지 않는다. (↔ SPEC.md AC1)
 2. `StyleMismatch`는 `expected_value`와 `actual_value`가 **둘 다** 있을 때만 저장한다 — 근거 없이 "다름"만 저장하지 않는다. (↔ AC2)
-3. QA 이슈가 등록될 때 담당자(`assigned_to`)가 지정돼 있거나 이후 PATCH로 담당자가 새로 지정·변경되면, 그 담당자에게 `Notification`(`issue_created`)을 **정확히 1건** 생성한다(담당자가 없으면 생성하지 않는다). 상태가 `fixed`로 바뀌면 등록자에게 `Notification`(`fixed`)을 정확히 1건 생성한다 — 중복 생성하거나 누락하지 않는다. (↔ AC3, AC4)
+3. QA 이슈가 등록될 때 담당자(`assigned_to`)가 지정돼 있거나 이후 PATCH로 담당자가 새로 지정·변경되면, 그 담당자에게 `Notification`(`issue_created`)을 **정확히 1건** 생성한다(담당자가 없으면 생성하지 않는다). 상태가 `fixed`로 바뀌면 등록자에게 `Notification`(`fixed`)을, 재검증 `fail`로 `needs_recheck`가 되면 담당자에게 `Notification`(`recheck_failed`)을 정확히 1건 생성한다 — 중복 생성하거나 누락하지 않는다. (↔ AC3, AC4, AC11)
 4. 정해진 상태 전이만 허용한다: `needs_check`/`needs_recheck` → `fixed`는 PATCH로만, `fixed` → `resolved`/`needs_recheck`는 재검증 등록으로만 일어난다. 그 외 요청은 거부(409)하고, 허용된 모든 변경은 `status_history`에 남긴다. (↔ AC6)
 5. 재검증을 조회·등록할 때는 최초 등록된 재현 절차(`repro_steps`)를 그대로 반환한다 — 재입력을 요구하지 않는다. (↔ AC5)
+6. `/projects/{projectId}/**`는 로그인한 그 프로젝트 멤버만 호출한다(미인증 401, 비멤버 403). (↔ AC12)
+7. `fixed` 처리는 그 이슈의 담당자만, 재검증 등록은 그 이슈의 등록자만 할 수 있다(그 외 403). 권한 검사를 상태 전이 검사보다 먼저 하고, 거부된 요청은 아무 데이터도 바꾸지 않는다. (↔ AC13)
 
 ## 4. 금지 사항 (에이전트에게 위임할 때 항상 걸린다)
 
@@ -44,6 +46,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 5. 확인되지 않은 API 스펙을 추측해서 구현하지 않는다 — 모르면 물어본다.
 6. `main` 브랜치에 직접 커밋하지 않는다 (7절 Git 규칙 참고).
 7. 시크릿(Google Client Secret, DB 비밀번호 등)을 코드나 로그에 남기지 않는다.
+8. `docs/SPEC.md` 6.1절 금지 기준(N1~N13)을 어기지 않는다 — 값을 지어내 채우거나, 일부만 저장하거나, 정해지지 않은 상태·알림·엔드포인트를 만들지 않는다.
 
 **모호할 때**: 추측해서 진행하지 말고, 확인이 필요한 지점을 명시하고 멈춘다.
 

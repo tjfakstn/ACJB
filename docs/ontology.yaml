@@ -102,7 +102,7 @@ classes:
     description: 이슈 등록·조치 사실을 상대에게 알리는 일
     evidence: [로그 2, 로그 8, 로그 11, 로그 12, 관찰 1]
     attributes:
-      event: {type: enum, values: [issue_created, fixed], evidence: [로그 2, 로그 8, 로그 11, 관찰 1]}
+      event: {type: enum, values: [issue_created, fixed, recheck_failed], evidence: [로그 2, 로그 8, 로그 11, 관찰 1]}
       channel: {type: string, examples: [email, discord, slack], evidence: [로그 8, 로그 12, 관찰 1]}
     relations:
       - about: QAIssue

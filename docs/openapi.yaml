@@ -420,6 +420,7 @@ paths:
         PATCH로 허용되는 상태 전이는 needs_check → fixed, needs_recheck → fixed 뿐이다(AC6).
         fixed → resolved / needs_recheck는 재검증 등록으로만 바뀐다. 그 밖의 전이는 409.
         fixed로 바뀌면 등록자에게 Notification(event: fixed)이 생성된다(AC4).
+        status: fixed는 그 이슈의 assigned_to만 요청할 수 있다(그 외 403, AC13). 권한 검사가 전이 검사보다 먼저다.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/IssueId'
@@ -445,6 +446,8 @@ paths:
                 $ref: '#/components/schemas/QAIssueResponse'
         '404':
           $ref: '#/components/responses/NotFound'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
 
@@ -487,6 +490,7 @@ paths:
       description: >-
         상태가 fixed인 이슈에만 등록할 수 있다(그 외 409). pass면 이슈를 resolved로, fail이면 needs_recheck로 바꾸고
         status_history에 남긴다(AC7). 응답에 이슈의 최초 repro_steps를 그대로 담아 재입력 없이 쓰게 한다(AC5).
+        그 이슈의 reported_by만 등록할 수 있다(그 외 403, AC13). fail이면 담당자에게 Notification(event: recheck_failed)이 생성된다(AC11).
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/IssueId'
@@ -514,6 +518,8 @@ paths:
                 $ref: '#/components/schemas/VerificationCreateResponse'
         '404':
           $ref: '#/components/responses/NotFound'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
     get:
@@ -569,6 +575,12 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     NotFound:
       description: 리소스를 찾을 수 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: 프로젝트 멤버가 아니거나, 이 상태 변경을 할 권한이 없음 (SPEC AC12·AC13)
       content:
         application/json:
           schema:

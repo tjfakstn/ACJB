@@ -1,6 +1,8 @@
 # 골든 케이스 (데이터)
 # 구현 전 단계라 입출력 "형태"만 먼저 고정한 초안. 각 케이스는 docs/SPEC.md v0.2의 AC 번호와 대응한다.
 # 판정 규칙: expected에 명시된 키가 응답에 존재하고 조건을 만족하면 통과. 명시 안 된 키는 판정에 안 씀.
+# actor: 요청자. 생략하면 그 프로젝트 멤버로 로그인한 사용자. AC12·AC13 케이스는 actor를 명시한다.
+# ng-* 케이스는 SPEC.md 6.1절 금지 기준(N번호)에 대응한다.
 
 cases:
   - id: qi-001
@@ -71,6 +73,7 @@ cases:
     description: 이슈 상태를 fixed로 바꾸면 등록자에게 Notification(fixed)이 정확히 1건 생성된다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      actor: 이슈의 assigned_to  # AC13
       body: { status: "fixed" }
     expected:
       status: 200
@@ -96,6 +99,7 @@ cases:
     description: needs_check 상태에서 재검증(verifications)을 바로 등록하려 하면 거부된다 (fixed만 재검증 가능)
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
+      actor: 이슈의 reported_by  # AC13
       precondition: 이슈 status가 needs_check
       body: { result: "pass" }
     expected:
@@ -107,6 +111,7 @@ cases:
     description: 허용된 상태 전이(needs_check → fixed)는 성공하고 status_history에 남는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      actor: 이슈의 assigned_to  # AC13
       precondition: 이슈 status가 needs_check
       body: { status: "fixed" }
     expected:
@@ -119,6 +124,7 @@ cases:
     description: 재검증 result가 pass면 이슈 상태가 resolved로 바뀌고 Verification 기록이 남는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
+      actor: 이슈의 reported_by  # AC13
       precondition: 이슈 status가 fixed
       body: { result: "pass" }
     expected:
@@ -131,6 +137,7 @@ cases:
     description: 재검증 result가 fail이면 이슈 상태가 needs_recheck로 바뀐다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
+      actor: 이슈의 reported_by  # AC13
       precondition: 이슈 status가 fixed
       body: { result: "fail" }
     expected:
@@ -211,3 +218,261 @@ cases:
     expected:
       status: 200
       body: { authenticated: false }
+
+  # --- AC11: 재검증 fail 알림 ---
+  - id: nt-005
+    ac: AC11
+    description: 재검증이 fail로 등록되면 담당자에게 Notification(recheck_failed)이 정확히 1건 생성된다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
+      precondition: 이슈 status가 fixed, assigned_to가 member-2, reported_by가 member-1
+      actor: member-1
+      body: { result: "fail" }
+    expected:
+      status: 201
+      body: { data: { issue_status: "needs_recheck" } }
+      followup:
+        description: assigned_to(member-2)에게 생성된 recheck_failed Notification 수를 센다
+        expected_notification_count_for_assignee: 1
+        expected_notification_event: "recheck_failed"
+
+  - id: nt-006
+    ac: AC11
+    description: 재검증이 pass면 recheck_failed 알림은 생성되지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
+      precondition: 이슈 status가 fixed, assigned_to가 member-2, reported_by가 member-1
+      actor: member-1
+      body: { result: "pass" }
+    expected:
+      status: 201
+      followup:
+        description: 이 요청으로 생성된 recheck_failed Notification 수를 센다
+        expected_notification_count_by_event: { recheck_failed: 0 }
+
+  # --- AC12: 프로젝트 접근 ---
+  - id: au-001
+    ac: AC12
+    description: 미인증으로 프로젝트 하위 경로를 호출하면 401
+    input:
+      endpoint: GET /projects/{projectId}/qa-issues
+      authenticated: false
+    expected:
+      status: 401
+      body: { success: false }
+
+  - id: au-002
+    ac: AC12
+    description: 로그인했지만 그 프로젝트 멤버가 아니면 403이고 이슈 데이터를 담지 않는다
+    input:
+      endpoint: GET /projects/{projectId}/qa-issues
+      actor: member-9 (다른 프로젝트 멤버)
+    expected:
+      status: 403
+      body: { success: false }
+      body_not_has: [data]
+
+  # --- AC13: 역할별 권한 ---
+  - id: au-003
+    ac: AC13
+    description: 담당자가 아닌 멤버가 fixed로 바꾸려 하면 403이고 상태·이력·알림이 바뀌지 않는다
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      precondition: 이슈 status가 needs_check, assigned_to가 member-2
+      actor: member-3
+      body: { status: "fixed" }
+    expected:
+      status: 403
+      body: { success: false }
+      followup:
+        description: 이슈를 다시 조회하고 Notification 수를 센다
+        expected_issue_status: "needs_check"
+        status_history_length_unchanged: true
+        expected_notification_count_total_delta: 0
+
+  - id: au-004
+    ac: AC13
+    description: 담당자가 없는 이슈는 누구도 fixed로 바꿀 수 없다
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      precondition: 이슈 status가 needs_check, assigned_to가 null
+      actor: member-1
+      body: { status: "fixed" }
+    expected:
+      status: 403
+      body: { success: false }
+
+  - id: au-005
+    ac: AC13
+    description: 등록자가 아닌 멤버가 재검증을 등록하면 403이고 Verification이 생기지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
+      precondition: 이슈 status가 fixed, reported_by가 member-1
+      actor: member-2
+      body: { result: "pass" }
+    expected:
+      status: 403
+      body: { success: false }
+      followup:
+        description: 이슈 상태와 Verification 수를 확인한다
+        expected_issue_status: "fixed"
+        expected_verification_count_delta: 0
+
+  - id: au-006
+    ac: AC13
+    description: 권한 검사가 전이 검사보다 먼저다 — 권한 없는 사람이 허용되지 않은 전이를 요청하면 409가 아니라 403
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      precondition: 이슈 status가 needs_check, assigned_to가 member-2
+      actor: member-3
+      body: { status: "resolved" }
+    expected:
+      status: 403
+
+  - id: au-007
+    ac: AC13
+    description: 프로젝트 멤버가 아닌 사람을 담당자로 지정하면 400이고 알림이 생기지 않는다
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      body: { assigned_to: "member-9" }
+      # member-9는 이 프로젝트 멤버가 아님
+    expected:
+      status: 400
+      body: { success: false }
+      followup:
+        expected_notification_count_total_delta: 0
+
+  # --- SPEC 6.1 금지 기준 ---
+  - id: ng-001
+    ac: AC1
+    rule: N1
+    description: 공백만 있는 description은 빈 값으로 보고 거부하며 이슈를 저장하지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues
+      body: { description: "   ", screen_location: "홈 화면", repro_steps: ["홈 진입"], platform_scope: "common" }
+    expected:
+      status: 400
+      error_message_contains: "description"
+      followup:
+        expected_issue_count_delta: 0
+
+  - id: ng-002
+    ac: AC2
+    rule: N2
+    description: style_mismatch가 잘못된 요청은 이슈도 저장하지 않는다(부분 저장 금지)
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues
+      body:
+        description: "버튼 색이 달라요"
+        screen_location: "로그인 화면 버튼"
+        repro_steps: ["로그인 화면 진입"]
+        platform_scope: "common"
+        assigned_to: "member-2"
+        style_mismatch: { property: "color", actual_value: "#333333" }
+        # expected_value 누락
+    expected:
+      status: 400
+      followup:
+        expected_issue_count_delta: 0
+        expected_style_mismatch_count_delta: 0
+        expected_notification_count_total_delta: 0
+
+  - id: ng-003
+    ac: AC2
+    rule: N4
+    description: scan의 v1 포함이 SPEC 4절에서 확정되기 전에는 scan 엔드포인트가 없다 (포함이 확정되면 이 케이스를 사람이 갱신)
+    input:
+      endpoint: POST /projects/{projectId}/style-mismatches/scan
+    expected:
+      status: 404
+
+  - id: ng-004
+    ac: AC3
+    rule: N5
+    description: 이미 같은 담당자인데 다시 지정하면 알림을 만들지 않는다
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      precondition: 이슈 assigned_to가 member-2
+      body: { assigned_to: "member-2" }
+    expected:
+      status: 200
+      followup:
+        expected_notification_count_total_delta: 0
+
+  - id: ng-005
+    ac: AC5
+    rule: N6
+    description: PATCH로 repro_steps를 바꾸려 하면 400이고 원본이 그대로다
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      body: { repro_steps: ["다른 절차"] }
+    expected:
+      status: 400
+      followup:
+        repro_steps_match_original: true
+
+  - id: ng-006
+    ac: AC5
+    rule: N6
+    description: 재검증 요청에 repro_steps가 들어와도 원본을 덮어쓰지 않고 원본을 반환한다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
+      precondition: 이슈 status가 fixed
+      actor: 이슈의 reported_by
+      body: { result: "pass", repro_steps: ["바꾼 절차"] }
+    expected:
+      repro_steps_match_original: true
+
+  - id: ng-007
+    ac: AC6
+    rule: N7
+    description: 같은 상태로의 전이(fixed → fixed)는 409이고 status_history가 늘지 않는다
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      precondition: 이슈 status가 fixed
+      actor: 이슈의 assigned_to
+      body: { status: "fixed" }
+    expected:
+      status: 409
+      followup:
+        status_history_length_unchanged: true
+        expected_notification_count_total_delta: 0
+
+  - id: ng-008
+    ac: AC6
+    rule: N8
+    description: body에 reported_by를 넣어도 무시하고 로그인 사용자로 기록한다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues
+      actor: member-1
+      body:
+        description: "아이콘이 너무 커요"
+        screen_location: "홈 화면 상단 알림 아이콘"
+        repro_steps: ["홈 진입"]
+        platform_scope: "aos"
+        reported_by: "member-5"
+    expected:
+      body: { data: { reported_by: "member-1" } }
+
+  - id: ng-009
+    ac: AC8
+    rule: N9
+    description: 파싱 API는 이슈를 만들지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/parse
+      body: { text: "로그인 화면에서 버튼 누르면 앱이 꺼져요. 안드로이드만 그래요" }
+    expected:
+      status: 200
+      followup:
+        expected_issue_count_delta: 0
+
+  - id: ng-010
+    ac: AC12
+    rule: N10
+    description: 내 프로젝트 경로에 다른 프로젝트의 issueId를 넣어도 그 이슈 데이터를 반환하지 않는다
+    input:
+      endpoint: GET /projects/{projectId}/qa-issues/{issueId}
+      precondition: issueId는 다른 프로젝트 소속, actor는 projectId의 멤버
+    expected:
+      status_in: [403, 404]
+      body_not_has: [data]

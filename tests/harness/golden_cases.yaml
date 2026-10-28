@@ -380,11 +380,14 @@ cases:
   - id: ng-003
     ac: AC2
     rule: N4
-    description: scan의 v1 포함이 SPEC 4절에서 확정되기 전에는 scan 엔드포인트가 없다 (포함이 확정되면 이 케이스를 사람이 갱신)
+    description: scan은 v1에 포함돼(2026-10-28 확정, 설만수 승인) 유효한 요청(frame_id·target_url)이면 비동기 작업이 큐에 들어가 202와 scan_id를 반환한다
     input:
       endpoint: POST /projects/{projectId}/style-mismatches/scan
+      body: { frame_id: "84:759", target_url: "http://localhost:5173" }
     expected:
-      status: 404
+      status: 202
+      body_has: [scan_id, status]
+      body: { data: { status: "queued" } }
 
   - id: ng-004
     ac: AC3

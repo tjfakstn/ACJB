@@ -2,7 +2,7 @@
 
 지금 시점의 프로젝트 상태를 한눈에 보기 위한 요약 문서입니다. 세부 내용은 각 문서가 원본(source)이고, 이 문서는 그 값들의 스냅샷 + 링크입니다. **여기와 다른 문서의 내용이 어긋나면, 방금 바뀐 쪽이 맞을 확률이 높으니 이 문서를 먼저 갱신하세요.**
 
-최종 수정: 2026-09-28
+최종 수정: 2026-10-28
 
 ---
 
@@ -34,8 +34,12 @@
 1. **재현 정보 필수 QA 이슈 등록** — description/screen_location/repro_steps/platform_scope 중 하나라도 비면 거부
 2. **상태 변경 알림(Notification)** — 등록 시 담당자에게, `fixed` 전환 시 등록자에게 정확히 1건
 3. **재검증(Verification)** — 최초 재현 절차 재사용, pass/fail에 따라 상태 자동 전환
+4. **재검증 실패 알림 + 권한 (AC11~AC13, 2026-10-11)** — 재검증 `fail`이면 담당자에게 `recheck_failed` 알림 1건. `/projects/{projectId}/**`는 그 프로젝트 멤버만(미인증 401·비멤버 403). `fixed` 처리는 담당자만, 재검증 등록은 등록자만(그 외 403, 담당자가 없으면 `fixed` 불가). 대리 재검증은 v1 제외, 프로젝트 멤버는 시드 데이터로 시작(2026-10-28 확인)
+5. **Figma-구현 스타일 자동 대조(`StyleMismatch` scan) — v1 포함 (2026-10-28 확정)** — 범위는 웹 화면·단일 컴포넌트·`color`/`font_weight`/`radius`로 한정. 스파이크(2026-10-07, 6/6 통과)가 검증한 범위가 이것뿐이다. 그 밖의 property·앱 화면은 사람이 입력한다
 
-범위 밖(v1 비포함, v2 후보): **GitHub Issues 연동**(팀마다 트래커가 제각각), 테스트 데이터셋 세팅, E2E 회귀 자동화, 디자인 토큰 자동 동기화. Figma-구현 스타일 자동 대조(`StyleMismatch` scan)는 포함 여부를 스파이크 결과로 결정.
+범위 밖(v1 비포함, v2 후보): **GitHub Issues 연동**(팀마다 트래커가 제각각), 테스트 데이터셋 세팅, E2E 회귀 자동화, 디자인 토큰 자동 동기화.
+
+구현 규칙은 SPEC.md 6.1절 금지 기준(N1~N13)을 따른다.
 
 > 이전 버전(2026-09-09~09-23, 설만수 초안): Figma-구현 자동 대조 + GitHub 연동을 MVP 핵심으로 잡았었음. 응답자 12명 기준 재검증 결과 "전달·확인 왕복"이 더 우선순위 높은 문제로 확인되어 위 방향으로 대체됨.
 
@@ -45,9 +49,9 @@
 |---|---|
 | Frontend | React + Vite + TypeScript (Tailwind CSS 예정) |
 | Backend | Spring (Spring Boot) |
-| DB | TODO |
+| DB | MySQL (개발 단계부터 사용, 배포 때 바꾸지 않음 — 2026-10-28 결정) |
 | AI | TODO — `src/qating/`에 QAIssue · StyleMismatch · Verification · Notification · IssueReportContext 스키마 있음 |
-| 외부 연동 | Figma API, GitHub API |
+| 외부 연동 | Figma API (scan, v1 포함). GitHub 연동은 v1 비포함 |
 | 인프라/배포 | TODO |
 
 원본: [AGENTS.md #3](../AGENTS.md)
@@ -80,8 +84,8 @@
 
 ## 아직 안 정해진 것 (TODO)
 
-- DB / AI 모델 / 인프라·배포 스택
+- AI 모델 / 인프라·배포 스택 (DB는 MySQL로 확정). 로컬 MySQL 실행 방식과 테스트용 DB 분리 방법
 - 라벨 체계, 브랜치 보호 규칙 (보류 중, 이슈 쌓이면 재논의)
 - `docs/ARCHITECTURE.md` — 골격만 있고 내용 비어있음
 - API 인증 방식, 에러 코드 표준 (구글 로그인은 구현됨. 그 외 QA 도메인 API의 인증 방식은 미정)
-- `StyleMismatch` 자동 추출(scan)의 포함 여부 — 스파이크(`docs/spikes/`) 결과로 결정 예정. 스파이크는 2026-10-07 실행 완료(웹·버튼 1종·color/font_weight/radius 한정, 6/6 통과 — 가정 기각 안 됨). v1 포함 여부 결정은 오단비 대기
+- scan 구현 시 확인할 것: 실제 화면 기준 일치 샘플로 오탐률 측정(스파이크의 일치 샘플 3건은 직접 만든 것이라 오탐률을 모름), Figma 토큰 보관, 범위 밖 property를 거부하는 골든 케이스 추가(사람 승인 필요)

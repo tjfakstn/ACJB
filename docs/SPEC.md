@@ -22,7 +22,9 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - **포함**
   - QA 이슈 등록 — 재현 정보(`screen_location`, `repro_steps`, `platform_scope`, `description`) 필수, `Environment`·스크린샷·Figma 링크 첨부
   - 자유서술 이슈 텍스트 → `IssueReportContext` 파싱과 빠진 항목 되묻기 (강의 3 구조화 출력)
-  - 스타일 차이 기록 — `StyleMismatch`(`expected_value`, `actual_value`). 값을 자동으로 추출할지 사람이 입력할지는 스파이크(`docs/spikes/`) 결과로 정한다
+  - 스타일 차이 기록 — `StyleMismatch`(`expected_value`, `actual_value`). 사람이 입력하는 경로와, Figma 시안과 배포된 웹 화면의 값을 자동으로 추출해 비교하는 경로(scan)를 모두 둔다 (2026-10-28 v1 포함 확정, 스파이크 `docs/spikes/` 통과)
+    - scan 범위: **웹 화면, 단일 컴포넌트, `color`·`font_weight`·`radius` 3개 property**로 한정한다. 스파이크로 검증된 범위가 이것뿐이다
+    - 범위 밖(앱 AOS/iOS 화면, `font_family`·`shadow`·`spacing`·`text`, alpha·그라디언트·hover 등 상태)은 scan 대상이 아니며 사람이 입력해 기록한다
   - 이슈 4단계 상태(`needs_check` → `fixed` → `resolved` / `needs_recheck`)와 변경 이력(`status_history`)
   - 상태 알림(`Notification`) — 이슈 등록 시 담당자에게, 조치 완료 시 등록자에게, 재검증 실패 시 담당자에게
   - 권한 — 프로젝트 멤버만 접근, `fixed` 처리는 담당자만, 재검증 등록은 등록자만
@@ -44,7 +46,8 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - `GET /auth/me` → `{authenticated, name, email, picture}` / 미인증 `{authenticated: false}` **(구현됨)**
 - `POST /projects/{projectId}/qa-issues/parse` — body `{text}` → `{context: IssueReportContext, missing: string[]}` *(신규)*
 - `POST /projects/{projectId}/qa-issues` — body `{description, screen_location, repro_steps[], platform_scope, environment{platform, device, browser, deploy_stage}, screenshots[], figma_link?, style_mismatch?{property, expected_value, actual_value}, assigned_to?}` → `QAIssue` (`status: "needs_check"`, `reported_by`는 로그인 사용자)
-- `POST /projects/{projectId}/style-mismatches/{mismatchId}/issues` — 기록된 `StyleMismatch`에서 이슈 생성 (자동 비교 경로 — 스파이크 결과에 따라 포함)
+- `POST /projects/{projectId}/style-mismatches/scan` — body `{frame_id, target_url}` → 202 `{scan_id, status: "queued"}` (비동기. 4절의 scan 범위만 처리) / `GET /projects/{projectId}/style-mismatches/scans/{scanId}` → 작업 상태
+- `POST /projects/{projectId}/style-mismatches/{mismatchId}/issues` — 기록된 `StyleMismatch`에서 이슈 생성 (자동 비교 경로)
 - `PATCH /projects/{projectId}/qa-issues/{issueId}` — body `{status: "fixed", assigned_to?}` → `QAIssue` (허용 전이만, AC6 / 담당자 지정 시 알림, AC3 / `status: fixed`는 담당자만, AC13)
 - `GET /projects/{projectId}/qa-issues?status=fixed` — 재확인 대기 이슈 목록
 - `POST /projects/{projectId}/qa-issues/{issueId}/verifications` — body `{result: "pass"|"fail", scope?}` → `{verification: Verification, issue_status, repro_steps[]}` (`verified_by`는 로그인 사용자, 등록자만 가능 — AC13 / `fail`이면 담당자에게 알림 — AC11)
@@ -78,8 +81,8 @@ AC를 구현하면서 에이전트가 "편의상" 범위를 넓히거나 값을 
 |---|---|---|---|
 | N1 | AC1 | 필수 항목이 비었을 때 `"미입력"`·`"N/A"`·`["-"]` 같은 기본값으로 채워 저장하지 않는다. 공백만 있는 문자열도 빈 값으로 본다 | `ng-001` |
 | N2 | AC1·AC2 | 400으로 거부한 요청을 일부만 저장하지 않는다(예: `style_mismatch`만 빼고 이슈 저장) | `ng-002` |
-| N3 | AC2 | `StyleMismatch`의 빠진 값을 추론하거나 Figma에서 가져와 채우지 않는다 | `sm-001` |
-| N4 | AC2 | 자동 추출(scan)의 v1 포함이 4절에서 확정되기 전에는 `style-mismatches/scan` 엔드포인트와 Figma API 호출 코드를 만들지 않는다(스파이크는 2026-10-07 통과, 포함 결정은 대기 중) | `ng-003` |
+| N3 | AC2 | 사람이 입력한 `StyleMismatch`에서 빠진 값을 추론하거나 Figma에서 가져와 채우지 않는다. scan 경로도 Figma와 구현 양쪽 값을 실제로 추출했을 때만 저장하고, 한쪽 추출에 실패하면 저장하지 않는다 | `sm-001` |
+| N4 | AC2 | scan은 4절에 적힌 범위(웹 화면, 단일 컴포넌트, `color`·`font_weight`·`radius`)만 처리한다. 범위 밖 property·앱 화면을 추정해 채우지 않는다. (2026-10-28 scan v1 포함 확정으로 "만들지 않는다"에서 "범위 한정"으로 바뀜) | `ng-003` |
 | N5 | AC3·AC4·AC11 | 실제 변화가 없는 요청(같은 담당자 재지정 등)으로 알림을 만들지 않는다. 정해진 3개(`issue_created`·`fixed`·`recheck_failed`) 외의 알림 종류를 만들지 않는다 | `ng-004` |
 | N6 | AC5 | 등록 후 `repro_steps`·`screen_location`·`environment`를 바꾸지 않는다. PATCH는 `status`·`assigned_to`만 받고 다른 필드가 오면 400. 재검증 요청에 재현 절차가 들어와도 원본을 덮어쓰지 않는다 | `ng-005`, `ng-006` |
 | N7 | AC6 | `status_history`를 수정·삭제하는 경로를 만들지 않는다. 409로 거부된 요청은 `status_history`를 늘리지 않는다. 같은 상태로의 전이(예: `fixed`→`fixed`)도 409 | `ng-007` |

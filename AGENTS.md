@@ -17,7 +17,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 어휘 층 발췌 — 전체 구조·관계·근거는 `docs/ontology.yaml`.
 
 - **QAIssue**: `description`, `screen_location`, `repro_steps`, `platform_scope`(common/aos/ios — 이슈 분류용), `screenshots`, `figma_link`, `status`(needs_check/fixed/needs_recheck/resolved), `status_history`, `assigned_to`, `reported_by`
-- **StyleMismatch**: `property`(color/font_weight/font_family/radius/shadow/spacing/text), `expected_value`(Figma 기준값), `actual_value`(구현 값) — 둘 다 있어야 저장(↔ AC2). QAIssue에 연결되면 `style_mismatch` 필드. 자동 추출(scan) 포함 여부는 스파이크 결과로 결정
+- **StyleMismatch**: `property`(color/font_weight/font_family/radius/shadow/spacing/text), `expected_value`(Figma 기준값), `actual_value`(구현 값) — 둘 다 있어야 저장(↔ AC2). QAIssue에 연결되면 `style_mismatch` 필드. 자동 추출(scan)은 v1 포함(웹 화면·단일 컴포넌트·color/font_weight/radius 한정, 2026-10-28 확정 — `docs/SPEC.md` 4절)
 - **Verification**: `result`(pass/fail), `scope`, `verified_by`, `verified_at` — `qa_issue_id`로 QAIssue에 종속. `pass`→`resolved`, `fail`→`needs_recheck`
 - **Notification**: `event`(issue_created/fixed/recheck_failed), `channel` — 등록 시 담당자에게, 조치 완료(`fixed`) 시 등록자에게, 재검증 `fail` 시 담당자에게 정확히 1건씩
 - **IssueReportContext**: 자유서술 텍스트 파싱 결과 — `screen`, `element`, `symptom`, `repro_steps`, `platform_scope`. 텍스트에 없는 값은 지어내지 않고 비워 `missing`에 담아 되물음
@@ -91,7 +91,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 | --- | --- | --- |
 | Frontend | React + Vite + TypeScript + Tailwind CSS | Spring API를 호출하는 순수 SPA |
 | Backend | Spring Boot(Java 21) | |
-| DB | TODO | |
+| DB | MySQL | 개발 단계부터 MySQL 사용(2026-10-28 결정 — 배포 때 DB를 바꾸지 않는다). 접속 정보는 `.env`, 키는 `.env.example`에 추가 |
 | 인증 | Google OAuth2 (구현됨) | |
 | 외부 연동 | Figma API | GitHub 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
 | 인프라 / 배포 | TODO | |

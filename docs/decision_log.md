@@ -130,3 +130,15 @@
   - MySQL: 배포 시 DB를 바꾸면 쿼리·방언 차이를 한 번 더 검증해야 해서 번거롭다. 처음부터 같은 DB로 간다
 - **남은 일**: 로컬 MySQL 실행 방식(예: docker compose)과 `./gradlew test`용 테스트 DB 분리 방법 확정, scan 범위 밖 property를 거부하는 골든 케이스 추가(사람 승인 필요), 이 결정에 대한 오단비 확인(제품 스펙 담당)
 - **결정자**: 설만수
+
+## 2026-10-28 구현에 빠져 있던 API 명세 보강 (알림 조회, 프로젝트·멤버 조회, CSRF, scan 동작 방식)
+
+- **결정**: 구현하려면 명세에 있어야 하는 엔드포인트·규칙을 `SPEC.md`와 `openapi.yaml`에 추가했다.
+  - **알림 조회**: `GET /projects/{projectId}/notifications` — 내게 온 앱 내 알림만, `created_at desc`. 읽음 처리·이메일·Slack은 v2 (AC14 신설)
+  - **프로젝트·멤버 조회**: `GET /projects`, `GET /projects/{projectId}/members` — 내가 속한 프로젝트와 담당자 선택용 멤버 목록. 멤버를 가리키는 값(`assigned_to`·`reported_by`·`verified_by`)은 멤버 id로 통일 (AC15 신설)
+  - **인증·CSRF**: `openapi.yaml`의 `X-API-Key`를 실제 방식인 구글 세션 쿠키로 정정하고, POST·PATCH는 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더에 실어 보내도록 명시
+  - **PATCH 규칙**: `assigned_to`를 null로 비우는 요청과 `status`·`assigned_to` 외 필드는 400
+  - **scan 동작 방식(제안)**: 요청을 `{frame_id, node_id, target_url, selector}`로 확장. 서버가 Figma REST API로 `node_id` 값을 읽고(토큰은 서버 환경변수), 헤드리스 브라우저로 `target_url`의 `selector` 요소 computed style을 읽어 비교. SPEC 5절에 누락돼 있던 `figma/sync`·`figma/frames`·`style-mismatches` 조회·이슈 상세 조회도 나열
+- **왜**: 알림은 생성만 정의돼 있고 사용자가 받을 경로가 없어 핵심 가치("알림으로 왕복을 줄인다")가 비어 있었다. 프론트가 `projectId`와 담당자 후보를 알아낼 방법이 없었고, `assigned_to`가 무엇을 가리키는지 정해지지 않았다. 세션 쿠키 인증에서는 CSRF 보호가 켜져 있어 토큰 규칙 없이는 POST·PATCH가 403이 난다. scan은 요청만으로 Figma 노드와 화면 요소를 짝지을 수 없었고, 스파이크가 개발자 도구로 값을 읽은 것을 서버가 자동으로 하려면 헤드리스 브라우저가 필요하다
+- **남은 일**: AC14·AC15 골든 케이스 추가(사람 승인 필요), scan 동작 방식(헤드리스 브라우저 사용, Figma 토큰 서버 보관)에 대한 오단비 확인
+- **결정자**: 설만수 (scan 동작 방식은 제안 상태)

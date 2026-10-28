@@ -1,0 +1,30 @@
+# 로컬 개발용 MySQL. `docker compose up -d` (backend/ 에서 실행)
+# 접속 정보는 backend/.env 에서 읽는다 (.env.example 참고). 개발 DB(DB_NAME)와
+# 테스트 DB(qating_test)는 같은 서버의 별도 스키마라서 ./gradlew test가 개발 데이터를 지우지 않는다.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: qating-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?backend/.env 에 DB_ROOT_PASSWORD 를 채우세요}
+      MYSQL_DATABASE: ${DB_NAME:-qating}
+      MYSQL_USER: ${DB_USER:-qating}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?backend/.env 에 DB_PASSWORD 를 채우세요}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - qating-mysql-data:/var/lib/mysql
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DB_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  qating-mysql-data:

@@ -1,0 +1,5 @@
+# 프로젝트 멤버 시드 (AC12 — 프로젝트 멤버만 API를 호출할 수 있다). 형식: email,name,role  (role: designer|developer|planner)
+# 여기 값은 예시다. 실제 구글 로그인 이메일은 같은 형식의 data/seed/members.local.csv 에 적는다 (커밋되지 않고, 있으면 이 파일 대신 읽는다)
+dev@example.com,개발자 예시,developer
+designer@example.com,디자이너 예시,designer
+planner@example.com,기획자 예시,planner

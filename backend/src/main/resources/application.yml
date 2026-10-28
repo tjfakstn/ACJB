@@ -6,6 +6,18 @@ spring:
   config:
     import: optional:file:.env[.properties]
 
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:qating}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${DB_USER:qating}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    # 스키마 마이그레이션 도구(Flyway 등)는 아직 도입하지 않아서 개발 중에는 엔티티 기준으로 맞춘다.
+    # TODO: 배포 전에 마이그레이션 도구로 전환하고 update를 validate로 바꿀 것
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
   security:
     oauth2:
       client:

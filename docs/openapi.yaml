@@ -18,21 +18,90 @@ servers:
 tags:
   - name: Auth
     description: >-
-      구글 소셜로그인(OAuth2). 실제로 구현/동작 중인 유일한 태그 — 나머지 태그(Figma/StyleMismatch/
+      구글 소셜로그인(OAuth2). 구현/동작 중인 태그 — 나머지 태그(Project/Notification/Figma/StyleMismatch/
       QAIssue/Verification)는 아직 설계만 된 상태
+  - name: Project
+    description: 로그인한 사용자가 속한 프로젝트와 멤버 조회 (담당자 선택용). 프로젝트·멤버 등록 API는 v1에 없고 시드 데이터로 넣는다
+  - name: Notification
+    description: 내게 온 앱 내 알림 조회 (SPEC AC14). 이메일·Slack 등 외부 채널은 v2
   - name: Figma
     description: Figma 프레임/디자인 토큰 동기화
   - name: StyleMismatch
-    description: Figma 기준값과 구현 값의 스타일 차이 — 자동 추출·비교의 포함 여부는 스파이크 결과로 정한다
+    description: Figma 기준값과 구현 값의 스타일 차이 — 사람 입력 경로와 자동 추출·비교(scan, v1 포함·웹·color/font_weight/radius 한정) 경로
   - name: QAIssue
     description: 재현 정보가 담긴 QA 이슈 등록·상태·알림 (MVP 핵심). GitHub 연동은 v1 비포함
   - name: Verification
     description: 수정 후 재검증 — 재현 절차 재사용 (MVP 핵심)
 
 security:
-  - ApiKeyAuth: []
+  - SessionCookie: []
+    CsrfHeader: []
 
 paths:
+  /projects:
+    get:
+      tags: [Project]
+      summary: 내가 속한 프로젝트 목록 (SPEC AC15)
+      description: >-
+        로그인한 사용자가 멤버인 프로젝트만 반환한다. 속하지 않은 프로젝트는 존재 여부도 알려 주지 않는다.
+        정렬은 name asc, id asc로 고정한다. 미인증이면 401.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /projects/{projectId}/members:
+    get:
+      tags: [Project]
+      summary: 프로젝트 멤버 목록 (담당자 선택용, SPEC AC15)
+      description: >-
+        그 프로젝트의 멤버만 호출할 수 있다(미인증 401, 비멤버 403 — AC12). 정렬은 name asc, id asc로 고정한다.
+        `assigned_to`·`reported_by`·`verified_by` 등 멤버를 가리키는 값은 모두 여기 나오는 `id`다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /projects/{projectId}/notifications:
+    get:
+      tags: [Notification]
+      summary: 내게 온 알림 목록 (SPEC AC14)
+      description: >-
+        요청자 본인이 받는 알림(to_member_id = 요청자)만 반환한다. 다른 멤버의 알림은 담지 않는다.
+        정렬은 created_at desc, id desc로 고정한다. 읽음 처리·삭제는 v1에 없다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: event
+          in: query
+          schema:
+            type: string
+            enum: [issue_created, fixed, recheck_failed]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /auth/login/google:
     get:
       tags: [Auth]
@@ -179,7 +248,12 @@ paths:
   /projects/{projectId}/style-mismatches/scan:
     post:
       tags: [StyleMismatch]
-      summary: Figma 프레임 vs 배포 화면 스타일 자동 비교 실행 — 포함 여부는 스파이크 결과로 결정 (SPEC.md 4절)
+      summary: Figma 프레임 vs 배포 화면 스타일 자동 비교 실행 (v1 포함, SPEC.md 4절)
+      description: >-
+        범위는 웹 화면의 단일 컴포넌트, color·font_weight·radius 3개 property로 한정한다. 한쪽 값 추출에 실패하면
+        그 property는 저장하지 않는다(AC2). 동작 방식(2026-10-28 제안, 구현 전 확인 필요): 서버가 Figma REST API로
+        `node_id`의 값을 읽고(토큰은 서버 환경변수 `FIGMA_ACCESS_TOKEN`), 헤드리스 브라우저로 `target_url`을 열어
+        `selector`가 가리키는 요소의 getComputedStyle을 읽어 비교한다. `frame_id`는 figma/sync로 가져온 프레임이어야 한다.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
       requestBody:
@@ -188,14 +262,20 @@ paths:
           application/json:
             schema:
               type: object
-              required: [frame_id, target_url]
+              required: [frame_id, node_id, target_url, selector]
               properties:
                 frame_id:
                   type: string
-                  description: 비교 기준 FigmaFrame
+                  description: 비교 기준 FigmaFrame (figma/sync로 동기화된 프레임)
+                node_id:
+                  type: string
+                  description: frame_id 안에서 비교할 컴포넌트의 Figma 노드 ID (예 84:759)
                 target_url:
                   type: string
                   description: 비교 대상 Screen의 배포 URL
+                selector:
+                  type: string
+                  description: target_url 화면에서 node_id와 짝지을 요소의 CSS selector
       responses:
         '202':
           description: 비교 작업이 큐에 들어감 (비동기)
@@ -365,7 +445,7 @@ paths:
                 figma_link: { type: string, nullable: true }
                 style_mismatch:
                   $ref: '#/components/schemas/StyleMismatch'
-                assigned_to: { type: string, nullable: true }
+                assigned_to: { type: string, nullable: true, description: 담당자의 멤버 id. 프로젝트 멤버가 아니면 400 }
       responses:
         '201':
           description: Created (status = needs_check)
@@ -421,6 +501,8 @@ paths:
         fixed → resolved / needs_recheck는 재검증 등록으로만 바뀐다. 그 밖의 전이는 409.
         fixed로 바뀌면 등록자에게 Notification(event: fixed)이 생성된다(AC4).
         status: fixed는 그 이슈의 assigned_to만 요청할 수 있다(그 외 403, AC13). 권한 검사가 전이 검사보다 먼저다.
+        `assigned_to`는 `GET /projects/{projectId}/members`의 멤버 id다. 프로젝트 멤버가 아니면 400,
+        null로 담당자를 비우는 요청도 400이다(담당자는 지정·변경만 가능). body에 status·assigned_to 외의 필드가 오면 400(N6).
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/IssueId'
@@ -436,7 +518,7 @@ paths:
                   enum: [fixed]
                 assigned_to:
                   type: string
-                  nullable: true
+                  description: 멤버 id. null 불가
       responses:
         '200':
           description: OK
@@ -444,6 +526,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QAIssueResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
         '403':
@@ -538,13 +622,20 @@ paths:
 
 components:
   securitySchemes:
-    ApiKeyAuth:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: >-
+        구글 로그인(OAuth2) 성공 후 서버가 내려주는 세션 쿠키. 프론트는 fetch에 `credentials: 'include'`를 쓴다.
+        로그인한 구글 이메일이 `Member`와 일치해야 프로젝트 API를 쓸 수 있다(AC12).
+    CsrfHeader:
       type: apiKey
       in: header
-      name: X-API-Key
+      name: X-XSRF-TOKEN
       description: >-
-        TODO — DB/Auth 스택 미확정. 초안 단계 가정일 뿐이며 실제로는 구글 로그인(OAuth2, backend/
-        참고) 세션 쿠키 방식으로 바뀔 가능성이 높음.
+        상태를 바꾸는 요청(POST·PATCH)에 필요. 서버가 `XSRF-TOKEN` 쿠키로 내려주는 값을 이 헤더에 그대로 실어 보낸다.
+        없거나 틀리면 403. GET은 필요 없다.
 
   parameters:
     ProjectId:
@@ -579,8 +670,14 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: 로그인하지 않음 (SPEC AC12)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     Forbidden:
-      description: 프로젝트 멤버가 아니거나, 이 상태 변경을 할 권한이 없음 (SPEC AC12·AC13)
+      description: 프로젝트 멤버가 아니거나, 이 상태 변경을 할 권한이 없거나, CSRF 토큰이 없음 (SPEC AC12·AC13)
       content:
         application/json:
           schema:
@@ -653,8 +750,8 @@ components:
               status: { type: string, enum: [needs_check, fixed, needs_recheck, resolved] }
               changed_by: { type: string }
               changed_at: { type: string, format: date-time }
-        assigned_to: { type: string, nullable: true }
-        reported_by: { type: string }
+        assigned_to: { type: string, nullable: true, description: 담당자(고치는 사람)의 멤버 id }
+        reported_by: { type: string, description: 등록자(등록한 사람)의 멤버 id. 로그인 사용자로 서버가 기록 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -703,6 +800,35 @@ components:
         verified_by: { type: string }
         verified_at: { type: string, format: date-time }
 
+    Project:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+
+    Member:
+      type: object
+      description: QA에 참여하는 팀원 (docs/ontology.yaml Member). 구글 로그인 이메일로 식별한다
+      required: [id, name, email, role]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [designer, developer, planner] }
+
+    Notification:
+      type: object
+      description: 앱 내 알림 한 건 (정본 스키마는 src/qating/schemas/Notification.schema.json)
+      required: [id, qa_issue_id, event, to_member_id, created_at]
+      properties:
+        id: { type: string }
+        qa_issue_id: { type: string }
+        event: { type: string, enum: [issue_created, fixed, recheck_failed] }
+        channel: { type: string, example: in_app }
+        to_member_id: { type: string }
+        created_at: { type: string, format: date-time }
+
     FigmaFrame:
       type: object
       properties:
@@ -712,6 +838,46 @@ components:
         last_synced_at: { type: string, format: date-time }
 
     # --- 응답 envelope (성공 시 success:true 고정, data만 다름) ---
+    ProjectListResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Project'
+        error: { type: object, nullable: true, example: null }
+
+    MemberListResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Member'
+        error: { type: object, nullable: true, example: null }
+
+    NotificationListResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Notification'
+            total: { type: integer }
+        error: { type: object, nullable: true, example: null }
+
     FigmaSyncResponse:
       type: object
       properties:

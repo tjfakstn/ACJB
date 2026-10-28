@@ -22,9 +22,12 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - **포함**
   - QA 이슈 등록 — 재현 정보(`screen_location`, `repro_steps`, `platform_scope`, `description`) 필수, `Environment`·스크린샷·Figma 링크 첨부
   - 자유서술 이슈 텍스트 → `IssueReportContext` 파싱과 빠진 항목 되묻기 (강의 3 구조화 출력)
-  - 스타일 차이 기록 — `StyleMismatch`(`expected_value`, `actual_value`). 값을 자동으로 추출할지 사람이 입력할지는 스파이크(`docs/spikes/`) 결과로 정한다
+  - 스타일 차이 기록 — `StyleMismatch`(`expected_value`, `actual_value`). 사람이 입력하는 경로와, Figma 시안과 배포된 웹 화면의 값을 자동으로 추출해 비교하는 경로(scan)를 모두 둔다 (2026-10-28 v1 포함 확정, 스파이크 `docs/spikes/` 통과)
+    - scan 범위: **웹 화면, 단일 컴포넌트, `color`·`font_weight`·`radius` 3개 property**로 한정한다. 스파이크로 검증된 범위가 이것뿐이다
+    - 범위 밖(앱 AOS/iOS 화면, `font_family`·`shadow`·`spacing`·`text`, alpha·그라디언트·hover 등 상태)은 scan 대상이 아니며 사람이 입력해 기록한다
   - 이슈 4단계 상태(`needs_check` → `fixed` → `resolved` / `needs_recheck`)와 변경 이력(`status_history`)
-  - 상태 알림(`Notification`) — 이슈 등록 시 담당자에게, 조치 완료 시 등록자에게
+  - 상태 알림(`Notification`) — 이슈 등록 시 담당자에게, 조치 완료 시 등록자에게, 재검증 실패 시 담당자에게
+  - 권한 — 프로젝트 멤버만 접근, `fixed` 처리는 담당자만, 재검증 등록은 등록자만
   - 재검증 기록(`Verification`) — 최초 재현 절차 재사용, 결과에 따라 상태 자동 전환
   - 구글 로그인 (구현됨)
 - **비포함** (`ontology.yaml`의 범위 밖과 동일)
@@ -37,15 +40,17 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 ## 5. 인터페이스
 
 전체 명세: `docs/openapi.yaml` v0.2 (base `/api/v1`). 핵심만 발췌. 두 문서가 어긋나면 이 스펙이 정본이다.
+`/projects/{projectId}/**` 경로는 모두 로그인한 그 프로젝트의 `Member`만 호출할 수 있다(미인증 401, 비멤버 403 — AC12).
 
 - `GET /health` → `{status: "ok"}` **(구현됨)**
 - `GET /auth/me` → `{authenticated, name, email, picture}` / 미인증 `{authenticated: false}` **(구현됨)**
 - `POST /projects/{projectId}/qa-issues/parse` — body `{text}` → `{context: IssueReportContext, missing: string[]}` *(신규)*
 - `POST /projects/{projectId}/qa-issues` — body `{description, screen_location, repro_steps[], platform_scope, environment{platform, device, browser, deploy_stage}, screenshots[], figma_link?, style_mismatch?{property, expected_value, actual_value}, assigned_to?}` → `QAIssue` (`status: "needs_check"`, `reported_by`는 로그인 사용자)
-- `POST /projects/{projectId}/style-mismatches/{mismatchId}/issues` — 기록된 `StyleMismatch`에서 이슈 생성 (자동 비교 경로 — 스파이크 결과에 따라 포함)
-- `PATCH /projects/{projectId}/qa-issues/{issueId}` — body `{status: "fixed", assigned_to?}` → `QAIssue` (허용 전이만, AC6 / 담당자 지정 시 알림, AC3)
+- `POST /projects/{projectId}/style-mismatches/scan` — body `{frame_id, target_url}` → 202 `{scan_id, status: "queued"}` (비동기. 4절의 scan 범위만 처리) / `GET /projects/{projectId}/style-mismatches/scans/{scanId}` → 작업 상태
+- `POST /projects/{projectId}/style-mismatches/{mismatchId}/issues` — 기록된 `StyleMismatch`에서 이슈 생성 (자동 비교 경로)
+- `PATCH /projects/{projectId}/qa-issues/{issueId}` — body `{status: "fixed", assigned_to?}` → `QAIssue` (허용 전이만, AC6 / 담당자 지정 시 알림, AC3 / `status: fixed`는 담당자만, AC13)
 - `GET /projects/{projectId}/qa-issues?status=fixed` — 재확인 대기 이슈 목록
-- `POST /projects/{projectId}/qa-issues/{issueId}/verifications` — body `{result: "pass"|"fail", scope?}` → `{verification: Verification, issue_status, repro_steps[]}` (`verified_by`는 로그인 사용자)
+- `POST /projects/{projectId}/qa-issues/{issueId}/verifications` — body `{result: "pass"|"fail", scope?}` → `{verification: Verification, issue_status, repro_steps[]}` (`verified_by`는 로그인 사용자, 등록자만 가능 — AC13 / `fail`이면 담당자에게 알림 — AC11)
 - `GET /projects/{projectId}/qa-issues/{issueId}/verifications` → `Verification[]`
 
 ## 6. 수용 기준 (테스트로 검증 — Definition of Done)
@@ -62,5 +67,28 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - **AC8** [예외 대응]: 자유서술 이슈 텍스트에 `screen`·`element`·`repro_steps`에 해당하는 내용이 없으면, QAting은 그 값을 지어내지 않고 비워 둔 채 `missing`에 빠진 항목 이름을 담아 되묻는다. (재현 정보 부족 → 재질문과 대기)
 - **AC9** [이벤트 기반]: `GET /api/v1/health` 요청이 오면, QAting은 200과 `{"status":"ok"}`를 반환한다. **(구현됨)**
 - **AC10** [이벤트 기반]: 미인증 상태에서 `GET /api/v1/auth/me` 요청이 오면, QAting은 200과 `{"authenticated": false}`를 반환한다. **(구현됨)**
+- **AC11** [이벤트 기반]: 재검증이 `fail`로 등록돼 이슈 상태가 `needs_recheck`로 바뀌면, QAting은 그 이슈의 담당자(`assigned_to`)에게 `Notification`(`event: recheck_failed`)을 정확히 1건 생성한다. 담당자가 없으면 생성하지 않는다. `pass`일 때는 생성하지 않는다. (등록·조치 알림 누락 → 재작업 요청이 다시 구두·메신저로 돌아감)
+- **AC12** [상시 적용]: QAting은 항상 `/projects/{projectId}/**` 요청을 로그인한 그 프로젝트의 `Member`에게만 허용한다. 미인증이면 401, 로그인했지만 그 프로젝트 멤버가 아니면 403을 반환하고, 다른 프로젝트의 이슈·알림 데이터를 응답에 담지 않는다.
+- **AC13** [상시 적용]: QAting은 항상 역할이 정해진 상태 변경을 정해진 사람에게만 허용한다. `status: fixed` PATCH는 요청자가 그 이슈의 `assigned_to`일 때만(담당자가 없으면 누구도 불가), 재검증 등록은 요청자가 그 이슈의 `reported_by`일 때만 허용하고, 그 밖에는 403을 반환한다. `assigned_to` 지정·변경은 프로젝트 멤버 누구나 할 수 있으나 그 프로젝트 멤버가 아닌 사람을 지정하면 400을 반환한다. 권한 검사는 상태 전이 검사(AC6)보다 먼저 하며, 403으로 거부된 요청은 상태·`status_history`·`Notification`을 바꾸지 않는다.
 
-> AC1~AC8을 실행할 수 있는 골든 케이스는 `tests/harness/golden_cases.yaml`에 둔다(강의 5에서 작성). AC8은 `src/qating/prompts/parse_query.md`의 실패 모드 점검표와도 연결된다. [상시 적용] AC(AC2, AC6)는 `AGENTS.md` 절대 규칙에도 같은 내용으로 둔다.
+> AC1~AC8을 실행할 수 있는 골든 케이스는 `tests/harness/golden_cases.yaml`에 둔다(강의 5에서 작성). AC11~AC13과 6.1절 금지 기준의 골든 케이스도 같은 파일에 둔다(2026-10-11 설만수 승인 후 추가). AC8은 `src/qating/prompts/parse_query.md`의 실패 모드 점검표와도 연결된다. [상시 적용] AC(AC2, AC6, AC12, AC13)는 `AGENTS.md` 절대 규칙에도 같은 내용으로 둔다.
+
+### 6.1 금지 기준 (구현 중 이탈 방지)
+
+AC를 구현하면서 에이전트가 "편의상" 범위를 넓히거나 값을 지어내는 것을 막는 최소 금지 목록이다. 모두 "QAting은 ~하지 않는다"로 읽고, AC와 같은 무게로 검증한다(위반하면 그 AC도 통과하지 않은 것으로 본다). 골든 케이스는 `ng-` 접두사로 `tests/harness/golden_cases.yaml`에 둔다.
+
+| ID | 관련 AC | 금지 내용 | 검증 |
+|---|---|---|---|
+| N1 | AC1 | 필수 항목이 비었을 때 `"미입력"`·`"N/A"`·`["-"]` 같은 기본값으로 채워 저장하지 않는다. 공백만 있는 문자열도 빈 값으로 본다 | `ng-001` |
+| N2 | AC1·AC2 | 400으로 거부한 요청을 일부만 저장하지 않는다(예: `style_mismatch`만 빼고 이슈 저장) | `ng-002` |
+| N3 | AC2 | 사람이 입력한 `StyleMismatch`에서 빠진 값을 추론하거나 Figma에서 가져와 채우지 않는다. scan 경로도 Figma와 구현 양쪽 값을 실제로 추출했을 때만 저장하고, 한쪽 추출에 실패하면 저장하지 않는다 | `sm-001` |
+| N4 | AC2 | scan은 4절에 적힌 범위(웹 화면, 단일 컴포넌트, `color`·`font_weight`·`radius`)만 처리한다. 범위 밖 property·앱 화면을 추정해 채우지 않는다. (2026-10-28 scan v1 포함 확정으로 "만들지 않는다"에서 "범위 한정"으로 바뀜) | `ng-003` |
+| N5 | AC3·AC4·AC11 | 실제 변화가 없는 요청(같은 담당자 재지정 등)으로 알림을 만들지 않는다. 정해진 3개(`issue_created`·`fixed`·`recheck_failed`) 외의 알림 종류를 만들지 않는다 | `ng-004` |
+| N6 | AC5 | 등록 후 `repro_steps`·`screen_location`·`environment`를 바꾸지 않는다. PATCH는 `status`·`assigned_to`만 받고 다른 필드가 오면 400. 재검증 요청에 재현 절차가 들어와도 원본을 덮어쓰지 않는다 | `ng-005`, `ng-006` |
+| N7 | AC6 | `status_history`를 수정·삭제하는 경로를 만들지 않는다. 409로 거부된 요청은 `status_history`를 늘리지 않는다. 같은 상태로의 전이(예: `fixed`→`fixed`)도 409 | `ng-007` |
+| N8 | AC6·AC7 | `reported_by`·`verified_by`·`changed_by`와 각 시각을 요청 body에서 받지 않는다 — 항상 로그인 사용자와 서버 시각을 쓴다 | `ng-008` |
+| N9 | AC8 | 파싱 API는 DB에 아무것도 쓰지 않는다(이슈 자동 등록 금지). 스키마 검증에 실패하면 원문을 넣거나 재시도로 값을 만들어 내지 않고 실패로 응답한다 | `ng-009` |
+| N10 | AC12·AC13 | 다른 프로젝트의 `issueId`로 요청해도 그 데이터를 반환하지 않는다. 테스트용 인증 우회(특정 헤더·플래그)를 운영 코드에 넣지 않는다 | `ng-010` |
+| N11 | 전체 | `ontology.yaml`에 없는 상태값·알림 종류·필드를 추가하지 않는다(예: `in_progress`, `closed`) | 스키마 검증 |
+| N12 | 전체 | 응답 형태(`{success, data, error}`)와 구현된 AC9·AC10의 응답을 임의로 바꾸지 않는다 | 기존 골든 케이스 |
+| N13 | 4절 | 4절 비포함 기능(외부 트래커 연동, E2E 자동화, 토큰 동기화)을 구현하지 않는다 | PR 리뷰 |

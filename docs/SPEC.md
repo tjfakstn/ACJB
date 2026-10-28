@@ -28,6 +28,9 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
   - 이슈 4단계 상태(`needs_check` → `fixed` → `resolved` / `needs_recheck`)와 변경 이력(`status_history`)
   - 상태 알림(`Notification`) — 이슈 등록 시 담당자에게, 조치 완료 시 등록자에게, 재검증 실패 시 담당자에게
   - 권한 — 프로젝트 멤버만 접근, `fixed` 처리는 담당자만, 재검증 등록은 등록자만
+  - 프로젝트·멤버 조회 — 내가 속한 프로젝트와 그 멤버(담당자 선택용). 프로젝트·멤버 등록 API는 없고 시드 데이터로 넣는다
+  - 알림 조회 — 내게 온 앱 내 알림만. 읽음 처리와 이메일·Slack 등 외부 채널은 v2
+  - 인증 — 구글 로그인 세션 쿠키 + 상태 변경 요청의 CSRF 토큰(`X-XSRF-TOKEN` 헤더)
   - 재검증 기록(`Verification`) — 최초 재현 절차 재사용, 결과에 따라 상태 자동 전환
   - 구글 로그인 (구현됨)
 - **비포함** (`ontology.yaml`의 범위 밖과 동일)
@@ -41,14 +44,21 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 
 전체 명세: `docs/openapi.yaml` v0.2 (base `/api/v1`). 핵심만 발췌. 두 문서가 어긋나면 이 스펙이 정본이다.
 `/projects/{projectId}/**` 경로는 모두 로그인한 그 프로젝트의 `Member`만 호출할 수 있다(미인증 401, 비멤버 403 — AC12).
+인증은 구글 로그인 세션 쿠키다. POST·PATCH는 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더에 실어 보내야 하고, 없거나 틀리면 403이다. 멤버를 가리키는 값(`assigned_to`, `reported_by`, `verified_by` 등)은 모두 멤버 id다.
 
 - `GET /health` → `{status: "ok"}` **(구현됨)**
 - `GET /auth/me` → `{authenticated, name, email, picture}` / 미인증 `{authenticated: false}` **(구현됨)**
+- `GET /projects` → `Project[]` — 내가 속한 프로젝트만 (AC15)
+- `GET /projects/{projectId}/members` → `Member[]` — 담당자 선택용 (AC15)
+- `GET /projects/{projectId}/notifications?event?` → `Notification[]` — 내게 온 알림만, `created_at desc` (AC14)
 - `POST /projects/{projectId}/qa-issues/parse` — body `{text}` → `{context: IssueReportContext, missing: string[]}` *(신규)*
 - `POST /projects/{projectId}/qa-issues` — body `{description, screen_location, repro_steps[], platform_scope, environment{platform, device, browser, deploy_stage}, screenshots[], figma_link?, style_mismatch?{property, expected_value, actual_value}, assigned_to?}` → `QAIssue` (`status: "needs_check"`, `reported_by`는 로그인 사용자)
-- `POST /projects/{projectId}/style-mismatches/scan` — body `{frame_id, target_url}` → 202 `{scan_id, status: "queued"}` (비동기. 4절의 scan 범위만 처리) / `GET /projects/{projectId}/style-mismatches/scans/{scanId}` → 작업 상태
+- `POST /projects/{projectId}/figma/sync` — body `{figma_file_key, frame_ids?}` → 202 `{sync_id, status: "queued"}` (비동기) / `GET .../figma/sync/{syncId}` → 작업 상태 / `GET .../figma/frames` → `FigmaFrame[]`
+- `POST /projects/{projectId}/style-mismatches/scan` — body `{frame_id, node_id, target_url, selector}` → 202 `{scan_id, status: "queued"}` (비동기. 4절의 scan 범위만 처리. 서버가 Figma 값과 `target_url`의 `selector` 요소 computed style을 비교 — 동작 방식은 openapi 설명 참고) / `GET /projects/{projectId}/style-mismatches/scans/{scanId}` → 작업 상태
+- `GET /projects/{projectId}/style-mismatches?frame_id?&property?` → `StyleMismatch[]` / `GET .../style-mismatches/{mismatchId}` → `StyleMismatch`
+- `GET /projects/{projectId}/qa-issues/{issueId}` → `QAIssue` (재현 정보와 `status_history` 포함 — AC5)
 - `POST /projects/{projectId}/style-mismatches/{mismatchId}/issues` — 기록된 `StyleMismatch`에서 이슈 생성 (자동 비교 경로)
-- `PATCH /projects/{projectId}/qa-issues/{issueId}` — body `{status: "fixed", assigned_to?}` → `QAIssue` (허용 전이만, AC6 / 담당자 지정 시 알림, AC3 / `status: fixed`는 담당자만, AC13)
+- `PATCH /projects/{projectId}/qa-issues/{issueId}` — body `{status: "fixed", assigned_to?}` → `QAIssue` (허용 전이만, AC6 / 담당자 지정 시 알림, AC3 / `status: fixed`는 담당자만, AC13 / `assigned_to`는 멤버 id이고 null로 비우는 요청과 status·assigned_to 외의 필드는 400)
 - `GET /projects/{projectId}/qa-issues?status=fixed` — 재확인 대기 이슈 목록
 - `POST /projects/{projectId}/qa-issues/{issueId}/verifications` — body `{result: "pass"|"fail", scope?}` → `{verification: Verification, issue_status, repro_steps[]}` (`verified_by`는 로그인 사용자, 등록자만 가능 — AC13 / `fail`이면 담당자에게 알림 — AC11)
 - `GET /projects/{projectId}/qa-issues/{issueId}/verifications` → `Verification[]`
@@ -71,7 +81,10 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - **AC12** [상시 적용]: QAting은 항상 `/projects/{projectId}/**` 요청을 로그인한 그 프로젝트의 `Member`에게만 허용한다. 미인증이면 401, 로그인했지만 그 프로젝트 멤버가 아니면 403을 반환하고, 다른 프로젝트의 이슈·알림 데이터를 응답에 담지 않는다.
 - **AC13** [상시 적용]: QAting은 항상 역할이 정해진 상태 변경을 정해진 사람에게만 허용한다. `status: fixed` PATCH는 요청자가 그 이슈의 `assigned_to`일 때만(담당자가 없으면 누구도 불가), 재검증 등록은 요청자가 그 이슈의 `reported_by`일 때만 허용하고, 그 밖에는 403을 반환한다. `assigned_to` 지정·변경은 프로젝트 멤버 누구나 할 수 있으나 그 프로젝트 멤버가 아닌 사람을 지정하면 400을 반환한다. 권한 검사는 상태 전이 검사(AC6)보다 먼저 하며, 403으로 거부된 요청은 상태·`status_history`·`Notification`을 바꾸지 않는다.
 
-> AC1~AC8을 실행할 수 있는 골든 케이스는 `tests/harness/golden_cases.yaml`에 둔다(강의 5에서 작성). AC11~AC13과 6.1절 금지 기준의 골든 케이스도 같은 파일에 둔다(2026-10-11 설만수 승인 후 추가). AC8은 `src/qating/prompts/parse_query.md`의 실패 모드 점검표와도 연결된다. [상시 적용] AC(AC2, AC6, AC12, AC13)는 `AGENTS.md` 절대 규칙에도 같은 내용으로 둔다.
+- **AC14** [이벤트 기반]: 프로젝트 멤버가 `GET /projects/{projectId}/notifications`를 호출하면, QAting은 그 요청자가 받는 `Notification`(`to_member_id`가 요청자)만 `created_at desc, id desc` 순으로 반환하고, 다른 멤버의 알림은 담지 않는다. (등록·조치 알림 누락 → 알림을 받을 곳이 없으면 목록을 직접 확인하게 된다)
+- **AC15** [이벤트 기반]: 로그인한 사용자가 `GET /projects`를 호출하면, QAting은 그 사용자가 `Member`인 프로젝트만 `name asc, id asc` 순으로 반환한다. `GET /projects/{projectId}/members`는 그 프로젝트의 멤버(AC12)에게만 그 프로젝트 멤버 목록을 반환한다. (재현 정보 부족 → 담당자와 프로젝트를 고를 수단이 없으면 `assigned_to`를 채울 수 없다)
+
+> AC1~AC8을 실행할 수 있는 골든 케이스는 `tests/harness/golden_cases.yaml`에 둔다(강의 5에서 작성). AC11~AC13과 6.1절 금지 기준의 골든 케이스도 같은 파일에 둔다(2026-10-11 설만수 승인 후 추가). AC14·AC15의 골든 케이스는 아직 없다(2026-10-28 AC 추가, 사람 승인 후 추가). AC8은 `src/qating/prompts/parse_query.md`의 실패 모드 점검표와도 연결된다. [상시 적용] AC(AC2, AC6, AC12, AC13)는 `AGENTS.md` 절대 규칙에도 같은 내용으로 둔다.
 
 ### 6.1 금지 기준 (구현 중 이탈 방지)
 

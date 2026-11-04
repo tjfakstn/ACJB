@@ -9,11 +9,13 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.acjb.server.auth.CsrfCookieFilter;
 import com.acjb.server.auth.JsonErrorResponder;
 import com.acjb.server.auth.ProjectMemberAuthorizationManager;
 
@@ -28,9 +30,8 @@ import com.acjb.server.auth.ProjectMemberAuthorizationManager;
  * ⚠️ 콜백 경로를 바꿨기 때문에 Google Cloud Console에 등록된 리디렉션 URI도
  * http://localhost:8080/api/v1/auth/callback/google 로 갱신해야 로그인이 동작함.
  *
- * 지금은 세션 기반 로그인만 붙어있는 상태 — SPA(React) + 별도 API(Spring) 구조에서
- * 쿠키 기반 세션을 계속 쓸지, 로그인 성공 후 우리 쪽 JWT를 발급해서 넘길지는
- * 아직 팀 확정 전이라 TODO로 남겨둠 (docs/api_spec.md 6장, docs/openapi.yaml Auth 태그 참고).
+ * 인증은 구글 로그인 세션 쿠키 + 상태 변경 요청의 CSRF 토큰(X-XSRF-TOKEN)으로 확정
+ * (2026-10-28, docs/SPEC.md 5절 · docs/openapi.yaml securitySchemes).
  */
 @Configuration
 @EnableWebSecurity
@@ -61,6 +62,11 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            // 세션 쿠키 인증이라 상태 변경 요청(POST·PATCH)에 CSRF 토큰을 요구한다(SPEC 5절).
+            // spa(): 토큰을 JS가 읽을 수 있는 XSRF-TOKEN 쿠키로 내려주고, 요청 헤더 X-XSRF-TOKEN 값과 대조한다.
+            // GET은 검사하지 않는다. 토큰이 없거나 틀리면 AccessDeniedHandler(JsonErrorResponder.forbidden)로 403.
+            .csrf(csrf -> csrf.spa())
+            .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     "/", "/error", "/api/v1/health",

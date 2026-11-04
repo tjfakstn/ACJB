@@ -40,6 +40,11 @@ server:
   port: 8080
 
 app:
+  # parse(AC8) — 모델은 parse_query.md 실패 모드 점검표를 검증한 모델과 맞춘다(2026-11-04 설만수 결정)
+  parse:
+    model: claude-sonnet-5
+    api-key: ${ANTHROPIC_API_KEY:}
+    timeout: 30s
   # 프론트(client) 로컬 개발 origin — frontend/ 스캐폴딩 완료로 확정 (Vite 기본 포트 5173)
   cors:
     allowed-origins:

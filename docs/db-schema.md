@@ -10,6 +10,9 @@
 erDiagram
     projects ||--o{ project_members : has
     members  ||--o{ project_members : joins
+    members  ||--o{ projects : owns
+    projects ||--o{ invitations : has
+    members  ||--o{ invitations : "invited_by"
     projects ||--o{ qa_issues : has
     projects ||--o{ figma_syncs : has
     projects ||--o{ figma_frames : has
@@ -26,13 +29,14 @@ erDiagram
     members ||--o{ notifications : receives
 ```
 
-## 2. 테이블 요약 (13개)
+## 2. 테이블 요약 (14개)
 
 | 테이블 | 역할 | 관련 API / AC |
 | --- | --- | --- |
 | `projects` | 프로젝트 | `GET /projects` · AC15 |
 | `members` | 팀원(구글 이메일로 식별) | 로그인 매핑 · AC12 |
-| `project_members` | 프로젝트-멤버 N:M | `GET /projects/{id}/members` · AC12, AC15 |
+| `project_members` | 프로젝트-멤버 N:M + 프로젝트별 역할 | `GET /projects/{id}/members` · AC12, AC15, AC19 |
+| `invitations` | 구글 이메일 초대 | `/projects/{id}/invitations`, `/invitations/**` · AC17, AC18 |
 | `qa_issues` | QA 이슈 본체 | 이슈 CRUD · AC1, AC6, AC11, AC13 |
 | `qa_issue_repro_steps` | 재현 절차(순서 있음) | AC1, AC5 |
 | `qa_issue_screenshots` | 스크린샷 URL | 이슈 등록 |
@@ -52,7 +56,8 @@ erDiagram
 | 컬럼 | 타입 | 제약 | 비고 |
 | --- | --- | --- | --- |
 | id | BIGINT | PK | |
-| name | VARCHAR(100) | NOT NULL | |
+| name | VARCHAR(100) | NOT NULL | 사용자가 만드는 이름이라 UNIQUE를 두지 않는다(2026-11-04) |
+| owner_id | BIGINT | FK→members, NOT NULL | 소유자. 만든 사람(AC16). 멤버 제거는 소유자만(AC19) |
 | created_at | DATETIME(6) | NOT NULL | |
 
 ### members
@@ -60,9 +65,10 @@ erDiagram
 | --- | --- | --- | --- |
 | id | BIGINT | PK | |
 | email | VARCHAR(255) | NOT NULL, **UNIQUE** | 구글 로그인 이메일 |
-| name | VARCHAR(50) | NOT NULL | |
-| role | VARCHAR(20) | NOT NULL | designer / developer / planner |
-| created_at | DATETIME(6) | NOT NULL | |
+| name | VARCHAR(50) | NOT NULL | 구글 계정 이름 |
+| created_at | DATETIME(6) | NOT NULL | 처음 로그인한 시각 |
+
+`role`은 2026-11-04부터 `project_members`로 옮겼다 — 같은 사람이 프로젝트마다 다른 역할일 수 있다.
 
 ### project_members
 | 컬럼 | 타입 | 제약 | 비고 |
@@ -70,7 +76,27 @@ erDiagram
 | id | BIGINT | PK | |
 | project_id | BIGINT | FK→projects, NOT NULL | |
 | member_id | BIGINT | FK→members, NOT NULL | |
+| role | VARCHAR(20) | NOT NULL | designer / developer / planner — 이 프로젝트에서의 역할. 만들 때·수락할 때 본인이 고른다 |
+| joined_at | DATETIME(6) | NOT NULL | |
 | | | **UNIQUE(project_id, member_id)** | 중복 가입 방지 |
+
+멤버를 제거하면 이 행을 지운다(AC19). 그 사람이 남긴 이슈·이력·알림·재검증은 지우지 않는다(N15).
+
+### invitations
+| 컬럼 | 타입 | 제약 | 비고 |
+| --- | --- | --- | --- |
+| id | BIGINT | PK | |
+| project_id | BIGINT | FK→projects, NOT NULL | |
+| email | VARCHAR(255) | NOT NULL | 초대받은 구글 이메일(소문자). 수락할 때 로그인 이메일과 같아야 한다(AC18) |
+| token_hash | CHAR(64) | NOT NULL, **UNIQUE** | 수락 링크 토큰의 SHA-256. 원문 토큰은 메일에만 있고 DB·로그·응답에 남기지 않는다(N14) |
+| status | VARCHAR(10) | NOT NULL | pending / accepted / canceled / expired |
+| invited_by_id | BIGINT | FK→members, NOT NULL | |
+| expires_at | DATETIME(6) | NOT NULL | 만든 시각 + 7일 |
+| created_at | DATETIME(6) | NOT NULL | |
+| accepted_at | DATETIME(6) | NULL | |
+| accepted_member_id | BIGINT | FK→members, NULL | 수락한 멤버 |
+
+만료는 조회·수락할 때 `expires_at`으로 판정한다(배치 작업 없이). 같은 이메일로 다시 초대하면 이전 pending 행을 canceled로 바꾸고 새 행을 만든다(AC17).
 
 ### qa_issues
 | 컬럼 | 타입 | 제약 | 비고 |
@@ -208,6 +234,9 @@ erDiagram
 | style_mismatches | (project_id, created_at DESC, id DESC), (project_id, frame_id), (project_id, property) | 목록 + 필터 |
 | figma_frames | UNIQUE(project_id, frame_id) | upsert |
 | project_members | UNIQUE(project_id, member_id) | AC12 멤버 확인 |
+| invitations | UNIQUE(token_hash) | 수락 링크로 찾기 |
+| invitations | (project_id, status, created_at DESC, id DESC) | 프로젝트의 대기 초대 목록 |
+| invitations | (email, status) | `GET /invitations/mine`, 같은 이메일 재초대 |
 
 ## 5. 엔티티 반영 상태
 
@@ -224,14 +253,24 @@ erDiagram
 구현 메모:
 
 - **enum은 `VARCHAR`로 고정한다.** Hibernate는 `@Enumerated(EnumType.STRING)`을 MySQL에서 native `ENUM` 타입으로 만든다. 그러면 값을 추가할 때마다 `ALTER`가 필요하고 `ddl-auto: update`는 이를 반영하지 않으므로, enum 필드마다 `@JdbcTypeCode(SqlTypes.VARCHAR)`를 붙인다. 새 enum 필드를 추가할 때도 같이 붙일 것.
-- **`ddl-auto: update`는 컬럼을 지우지 않는다.** 이번 변경 전 스키마로 만든 로컬 개발 DB에는 옛 컬럼(`mismatch_*`, `platform`·`device` 등)이 남는다. 로컬 `qating` 스키마의 테이블을 지우고 앱을 다시 띄우면 시드와 함께 새로 만들어진다. 배포 전 마이그레이션 도구 전환 TODO는 그대로다.
-- **`projects.name` UNIQUE**: 3절 표에는 없지만 시드 로더가 이름으로 프로젝트를 찾아 엔티티에 남겨 두었다. 3절 표에 반영할지는 미정.
+- **`ddl-auto: update`는 컬럼을 지우지 않는다.** 이번 변경 전 스키마로 만든 로컬 개발 DB에는 옛 컬럼(`mismatch_*`, `platform`·`device` 등)이 남는다. 로컬 `qating` 스키마의 테이블을 지우고 앱을 다시 띄우면 새로 만들어진다(시드는 2026-11-04 폐기 — 프로젝트·멤버는 앱에서 만든다). 배포 전 마이그레이션 도구 전환 TODO는 그대로다.
+- **`projects.name` UNIQUE**: 시드 로더가 이름으로 프로젝트를 찾느라 엔티티에 남겨 두었으나, 2026-11-04 시드 폐기·사용자 생성 프로젝트로 바뀌어 제거 대상이다(아래 추가 목표 1번).
 - **`GET /figma/frames` 목록 정렬**: `openapi.yaml`에 정렬 기준이 없어 목록 조회 메서드는 아직 만들지 않았다(AGENTS.md 5절). 구현 전에 정렬 기준을 정해야 한다.
+
+### 2026-11-04 추가 목표 (아직 엔티티 미반영)
+
+프로젝트 생성·초대 결정(decision_log 2026-11-04)으로 다음을 엔티티에 반영해야 한다.
+
+1. `projects.owner_id` 추가, `projects.name`의 UNIQUE 제거
+2. `members.role` 제거 → `project_members.role`·`joined_at` 추가
+3. `invitations` 테이블 신규
+4. CSV 시드 로더(`SeedLoader`)와 `data/seed/members*.csv` 제거 — Member는 처음 로그인할 때 만든다
 
 ## 6. 의도적으로 두지 않은 것
 
 - 알림 읽음 상태, 이메일·Slack 채널 — v2
 - GitHub 연동 컬럼 — v1 비포함
 - Screen 테이블 — scan이 `target_url`·`selector`를 직접 받으므로 불필요(`style_mismatches.screen`에 문자열로 보관)
+- 초대 거절 기록 — v1은 수락만 다룬다(거절하면 그냥 두고 7일 뒤 만료)
 - 세션·토큰 테이블 — 세션은 서버 메모리. 배포 시 다중 인스턴스가 되면 그때 Spring Session 도입 검토
 - 감사 로그 별도 테이블 — `status_histories`가 상태 변경의 감사 로그 역할

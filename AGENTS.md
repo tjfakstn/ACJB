@@ -17,13 +17,15 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 어휘 층 발췌 — 전체 구조·관계·근거는 `docs/ontology.yaml`.
 
 - **QAIssue**: `description`, `screen_location`, `repro_steps`, `platform_scope`(common/aos/ios — 이슈 분류용), `screenshots`, `figma_link`, `status`(needs_check/fixed/needs_recheck/resolved), `status_history`, `assigned_to`, `reported_by`
-- **StyleMismatch**: `property`(color/font_weight/font_family/radius/shadow/spacing/text), `expected_value`(Figma 기준값), `actual_value`(구현 값) — 둘 다 있어야 저장(↔ AC2). QAIssue에 연결되면 `style_mismatch` 필드. 자동 추출(scan)은 v1 포함(웹 화면·단일 컴포넌트·color/font_weight/radius 한정, 2026-10-28 확정 — `docs/SPEC.md` 4절)
+- **StyleMismatch**: `property`(color/font_weight/font_family/radius/shadow/spacing/text), `expected_value`(Figma 기준값), `actual_value`(구현 값) — 둘 다 있어야 저장(↔ AC2). QAIssue에 연결되면 `style_mismatch` 필드. 자동 추출(scan)은 v1 포함: 프로젝트 초기에는 전체 비교로 점검 후보·의심점을 제안하고(짝 추정에 LLM 사용, 제안만 — 자동 저장 금지), 이후에는 단일 컴포넌트 scan(웹·color/font_weight/radius 한정) — `docs/SPEC.md` 4절, 2026-11-04
 - **Verification**: `result`(pass/fail), `scope`, `verified_by`, `verified_at` — `qa_issue_id`로 QAIssue에 종속. `pass`→`resolved`, `fail`→`needs_recheck`
 - **Notification**: `event`(issue_created/fixed/recheck_failed), `channel` — 등록 시 담당자에게, 조치 완료(`fixed`) 시 등록자에게, 재검증 `fail` 시 담당자에게 정확히 1건씩
 - **IssueReportContext**: 자유서술 텍스트 파싱 결과 — `screen`, `element`, `symptom`, `repro_steps`, `platform_scope`. 텍스트에 없는 값은 지어내지 않고 비워 `missing`에 담아 되물음
 - **Environment**: `platform`(aos/ios/web), `device`, `browser`, `deploy_stage`(local/staging/production) — QAIssue의 실제 발생 환경
 - **FigmaFrame**(`name`, `frame_url`) / **Screen**(`name`, `entry_condition`): 각각 디자인 기준 화면 / 배포된 실제 구현 화면. `StyleMismatch`가 이 둘을 비교
-- **Member**: QA에 참여하는 팀원 — `role`(designer/developer/planner)
+- **Member**: QA에 참여하는 팀원 — 구글 로그인 이메일로 식별, 처음 로그인할 때 생성. `role`(designer/developer/planner)은 **프로젝트마다** 따로 있다(수락할 때 본인이 고름)
+- **Project**: QA 단위 — 로그인한 사용자 누구나 만들고, 만든 사람이 소유자(owner). 멤버 제거는 소유자만
+- **Invitation**: 멤버가 구글 이메일로 보낸 초대 — `status`(pending/accepted/canceled/expired), 7일 만료. 같은 구글 계정으로 로그인해 수락해야 멤버가 된다. 시드 데이터로 멤버를 넣던 방식은 폐기(2026-11-04)
 
 혼동 주의: `QAIssue.platform_scope`(이슈 분류용, common 포함)와 `Environment.platform`(실제 발생 환경, aos/ios/web만)은 다른 값 집합이다 — 혼용하지 말 것. `IssueReportContext.screen`(파싱 결과, 화면 이름만)과 `QAIssue.screen_location`(자유 텍스트, screen+element가 합쳐진 값)도 다른 필드다 — 파싱 응답을 그대로 DB 컬럼에 넣지 않는다(`src/qating/prompts/parse_query.md` 필드 매핑 표 참고). GitHub 연동(`github_issue_url` 등)은 v1 비포함(`docs/openapi.yaml`에 `deprecated: true`로 설계만 남음) — 새로 만들지 말 것.
 
@@ -46,7 +48,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 5. 확인되지 않은 API 스펙을 추측해서 구현하지 않는다 — 모르면 물어본다.
 6. `main` 브랜치에 직접 커밋하지 않는다 (7절 Git 규칙 참고).
 7. 시크릿(Google Client Secret, DB 비밀번호 등)을 코드나 로그에 남기지 않는다.
-8. `docs/SPEC.md` 6.1절 금지 기준(N1~N13)을 어기지 않는다 — 값을 지어내 채우거나, 일부만 저장하거나, 정해지지 않은 상태·알림·엔드포인트를 만들지 않는다.
+8. `docs/SPEC.md` 6.1절 금지 기준(N1~N16)을 어기지 않는다 — 값을 지어내 채우거나, 일부만 저장하거나, 정해지지 않은 상태·알림·엔드포인트를 만들지 않는다.
 
 **모호할 때**: 추측해서 진행하지 말고, 확인이 필요한 지점을 명시하고 멈춘다.
 
@@ -93,7 +95,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 | Backend | Spring Boot(Java 21) | |
 | DB | MySQL | 개발 단계부터 MySQL 사용(2026-10-28 결정 — 배포 때 DB를 바꾸지 않는다). 접속 정보는 `.env`, 키는 `.env.example`에 추가 |
 | 인증 | Google OAuth2 (구현됨) | |
-| 외부 연동 | Figma API | GitHub 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
+| 외부 연동 | Figma API, Claude API(parse·초기 전체 비교·이력 기반 점검 후보), Gmail SMTP(초대 메일) | GitHub 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
 | 인프라 / 배포 | TODO | |
 
 결정 배경: [docs/decision_log.md](docs/decision_log.md)

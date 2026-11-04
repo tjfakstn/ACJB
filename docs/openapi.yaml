@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.2.0
+  version: 0.3.0
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -21,7 +21,13 @@ tags:
       구글 소셜로그인(OAuth2). 구현/동작 중인 태그 — 나머지 태그(Project/Notification/Figma/StyleMismatch/
       QAIssue/Verification)는 아직 설계만 된 상태
   - name: Project
-    description: 로그인한 사용자가 속한 프로젝트와 멤버 조회 (담당자 선택용). 프로젝트·멤버 등록 API는 v1에 없고 시드 데이터로 넣는다
+    description: >-
+      프로젝트 생성·멤버 조회·멤버 제거 (SPEC AC15·AC16·AC19). 로그인한 사용자 누구나 프로젝트를 만들고 만든 사람이 소유자다.
+      시드 데이터로 멤버를 넣던 방식은 폐기(2026-11-04)
+  - name: Invitation
+    description: >-
+      구글 이메일 초대와 수락 (SPEC AC17·AC18). 초대 메일의 수락 링크에 토큰이 담기고, 같은 구글 계정으로 로그인해 수락해야 멤버가 된다.
+      /invitations/** 는 로그인만 필요하다(아직 그 프로젝트 멤버가 아니므로 AC12 대상 아님)
   - name: Notification
     description: 내게 온 앱 내 알림 조회 (SPEC AC14). 이메일·Slack 등 외부 채널은 v2
   - name: Figma
@@ -39,6 +45,33 @@ security:
 
 paths:
   /projects:
+    post:
+      tags: [Project]
+      summary: 프로젝트 만들기 (SPEC AC16)
+      description: >-
+        요청자가 소유자(owner)이자 고른 role의 첫 멤버가 된다. name이 비었거나 role이 정해진 값이 아니면 400이고 아무것도 만들지 않는다.
+        처음 로그인한 구글 계정은 이때(또는 다른 첫 요청 때) Member로 만들어진다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, role]
+              properties:
+                name: { type: string, maxLength: 100 }
+                role: { type: string, enum: [designer, developer, planner], description: 이 프로젝트에서 내 역할 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     get:
       tags: [Project]
       summary: 내가 속한 프로젝트 목록 (SPEC AC15)
@@ -75,6 +108,195 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /projects/{projectId}/members/{memberId}:
+    delete:
+      tags: [Project]
+      summary: 멤버 제거 (SPEC AC19)
+      description: >-
+        소유자만 할 수 있다(그 외 403). 소유자 자신은 제거할 수 없다(409). 제거된 멤버가 담당자인 미해결(resolved가 아닌) 이슈는
+        assigned_to가 비워지고, 상태·status_history·알림·재검증 기록은 그대로 둔다(N15).
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: memberId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: 제거됨
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{projectId}/invitations:
+    post:
+      tags: [Invitation]
+      summary: 구글 이메일로 초대 (SPEC AC17)
+      description: >-
+        프로젝트 멤버 누구나 초대할 수 있다. 7일 뒤 만료되는 pending 초대를 1건 만들고 그 이메일로 초대 메일을 1통 보낸다.
+        이미 멤버인 이메일이면 409. 같은 이메일에 pending 초대가 있으면 그 초대를 canceled로 바꾸고 새로 만든다(재발송).
+        메일 발송이 실패해도 초대는 남는다(초대받은 사람은 로그인 후 GET /invitations/mine으로 수락 가능).
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [Invitation]
+      summary: 이 프로젝트의 대기 중인 초대 목록
+      description: 프로젝트 멤버만(AC12). 정렬은 created_at desc, id desc로 고정한다. 토큰은 담지 않는다(N14).
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationListResponse'
+
+  /projects/{projectId}/invitations/{invitationId}:
+    delete:
+      tags: [Invitation]
+      summary: 초대 취소
+      description: 초대한 사람 또는 소유자만(그 외 403). pending이 아니면 409.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: invitationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: 취소됨
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /invitations/mine:
+    get:
+      tags: [Invitation]
+      summary: 내게 온 대기 중인 초대 (앱 안 초대함)
+      description: 로그인한 구글 이메일로 온 pending·만료 전 초대만. 정렬 created_at desc, id desc. 수락은 각 항목의 id로 POST /invitations/mine/{invitationId}/accept.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /invitations/mine/{invitationId}/accept:
+    post:
+      tags: [Invitation]
+      summary: 앱 안 초대함에서 수락 (SPEC AC18)
+      description: 메일 링크 수락과 같은 규칙이다 — 로그인 이메일이 초대 이메일과 같아야 하고(403), pending·만료 전이어야 한다(409).
+      parameters:
+        - name: invitationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitationRequest'
+      responses:
+        '200':
+          description: 멤버가 됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /invitations/{token}:
+    get:
+      tags: [Invitation]
+      summary: 초대 미리보기 (메일의 수락 링크로 들어왔을 때)
+      description: 로그인만 필요. 프로젝트 이름·초대한 사람·초대받은 이메일·상태·만료 시각을 보여준다. 없는 토큰은 404.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreviewResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /invitations/{token}/accept:
+    post:
+      tags: [Invitation]
+      summary: 메일 링크로 수락 (SPEC AC18)
+      description: >-
+        로그인한 구글 이메일이 초대받은 이메일과 같지 않으면 403, 초대가 만료·취소·이미 수락됨이면 409, role이 정해진 값이 아니면 400.
+        그 밖에는 고른 role의 멤버가 되고 초대는 accepted가 된다. 거부된 요청은 멤버를 만들지 않는다(N14).
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitationRequest'
+      responses:
+        '200':
+          description: 멤버가 됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /projects/{projectId}/notifications:
     get:
@@ -802,14 +1024,38 @@ components:
 
     Project:
       type: object
-      required: [id, name]
+      required: [id, name, owner_id]
       properties:
         id: { type: string }
         name: { type: string }
+        owner_id: { type: string, description: 소유자의 멤버 id (멤버 제거 버튼을 보여줄지 판단용) }
+
+    Invitation:
+      type: object
+      description: 프로젝트 초대 한 건. 토큰은 담지 않는다(초대 메일의 수락 링크에만 있다, N14)
+      required: [id, project_id, project_name, email, status, invited_by, expires_at, created_at]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        project_name: { type: string }
+        email: { type: string }
+        status: { type: string, enum: [pending, accepted, canceled, expired] }
+        invited_by: { type: string, description: 초대한 멤버 id }
+        invited_by_name: { type: string }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    AcceptInvitationRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [designer, developer, planner], description: 이 프로젝트에서 내 역할 }
 
     Member:
       type: object
-      description: QA에 참여하는 팀원 (docs/ontology.yaml Member). 구글 로그인 이메일로 식별한다
+      description: >-
+        QA에 참여하는 팀원 (docs/ontology.yaml Member). 구글 로그인 이메일로 식별한다.
+        role은 이 프로젝트에서의 역할이다(프로젝트마다 다를 수 있음, 2026-11-04)
       required: [id, name, email, role]
       properties:
         id: { type: string }
@@ -849,6 +1095,49 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/Project'
+        error: { type: object, nullable: true, example: null }
+
+    ProjectResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          $ref: '#/components/schemas/Project'
+        error: { type: object, nullable: true, example: null }
+
+    InvitationResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          $ref: '#/components/schemas/Invitation'
+        error: { type: object, nullable: true, example: null }
+
+    InvitationListResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Invitation'
+        error: { type: object, nullable: true, example: null }
+
+    InvitationPreviewResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            project_name: { type: string }
+            invited_by_name: { type: string }
+            email: { type: string }
+            status: { type: string, enum: [pending, accepted, canceled, expired] }
+            expires_at: { type: string, format: date-time }
         error: { type: object, nullable: true, example: null }
 
     MemberListResponse:

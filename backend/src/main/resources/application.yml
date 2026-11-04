@@ -17,6 +17,9 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+    properties:
+      # 이슈 목록에서 repro_steps·screenshots·style_mismatch를 이슈마다 따로 읽는 N+1을 묶음 조회로 줄인다
+      hibernate.default_batch_fetch_size: 100
 
   security:
     oauth2:

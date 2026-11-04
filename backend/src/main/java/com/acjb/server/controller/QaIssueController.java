@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.acjb.server.auth.CurrentMember;
 import com.acjb.server.common.ApiResponses;
 import com.acjb.server.dto.CreateQaIssueRequest;
+import com.acjb.server.dto.ParseRequest;
+import com.acjb.server.service.ParseService;
 import com.acjb.server.service.QaIssuePatchService;
 import com.acjb.server.service.QaIssueService;
 
@@ -30,11 +32,14 @@ public class QaIssueController {
 
     private final QaIssueService service;
     private final QaIssuePatchService patchService;
+    private final ParseService parseService;
     private final CurrentMember currentMember;
 
-    public QaIssueController(QaIssueService service, QaIssuePatchService patchService, CurrentMember currentMember) {
+    public QaIssueController(QaIssueService service, QaIssuePatchService patchService, ParseService parseService,
+                             CurrentMember currentMember) {
         this.service = service;
         this.patchService = patchService;
+        this.parseService = parseService;
         this.currentMember = currentMember;
     }
 
@@ -62,5 +67,11 @@ public class QaIssueController {
     public Map<String, Object> patch(@PathVariable Long projectId, @PathVariable String issueId, @RequestBody JsonNode body,
                                      @AuthenticationPrincipal OAuth2User principal) {
         return ApiResponses.ok(patchService.patch(projectId, issueId, body, currentMember.require(principal)));
+    }
+
+    /** 자유서술 텍스트 → IssueReportContext 초안(AC8). 이슈를 만들지 않는다(N9) */
+    @PostMapping("/parse")
+    public Map<String, Object> parse(@PathVariable Long projectId, @RequestBody ParseRequest request) {
+        return ApiResponses.ok(parseService.parse(request == null ? null : request.text()));
     }
 }

@@ -26,6 +26,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
+	// parse(AC8): Claude API 호출과 LLM 출력의 JSON Schema 검증(AGENTS.md 5절)
+	implementation 'com.anthropic:anthropic-java:3.2.0'
+	implementation 'com.networknt:json-schema-validator:1.5.6'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
@@ -38,4 +41,13 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// 파싱 프롬프트와 IssueReportContext 스키마의 정본은 저장소 루트 src/qating/ 에 있다.
+// 복사본을 두지 않고 빌드 때 classpath(qating/...)로 가져와 정본 하나만 고치면 되게 한다.
+processResources {
+	from('../src/qating') {
+		include 'prompts/parse_query.md', 'schemas/IssueReportContext.schema.json'
+		into 'qating'
+	}
 }

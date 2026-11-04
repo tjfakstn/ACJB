@@ -17,6 +17,8 @@ public final class ErrorCodes {
     public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
     /** parse: LLM 호출 실패·거절·스키마 위반(N9) */
     public static final String PARSE_FAILED = "PARSE_FAILED";
+    /** Figma 연동이 설정되지 않음(FIGMA_ACCESS_TOKEN 없음) */
+    public static final String FIGMA_UNAVAILABLE = "FIGMA_UNAVAILABLE";
 
     private ErrorCodes() {
     }

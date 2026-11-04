@@ -41,6 +41,11 @@ server:
 
 app:
   # parse(AC8) — 모델은 parse_query.md 실패 모드 점검표를 검증한 모델과 맞춘다(2026-11-04 설만수 결정)
+  # Figma 동기화 — 토큰은 backend/.env의 FIGMA_ACCESS_TOKEN(로그에 남기지 않는다)
+  figma:
+    access-token: ${FIGMA_ACCESS_TOKEN:}
+    base-url: https://api.figma.com
+    timeout: 30s
   parse:
     model: claude-sonnet-5
     api-key: ${ANTHROPIC_API_KEY:}

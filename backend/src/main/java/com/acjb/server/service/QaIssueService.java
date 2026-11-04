@@ -21,6 +21,7 @@ import com.acjb.server.domain.QAIssue;
 import com.acjb.server.domain.StatusHistory;
 import com.acjb.server.domain.StyleMismatch;
 import com.acjb.server.domain.StyleProperty;
+import com.acjb.server.dto.CreateIssueFromMismatchRequest;
 import com.acjb.server.dto.CreateQaIssueRequest;
 import com.acjb.server.dto.CreateQaIssueRequest.EnvironmentInput;
 import com.acjb.server.dto.CreateQaIssueRequest.StyleMismatchInput;
@@ -75,6 +76,27 @@ public class QaIssueService {
 
     @Transactional
     public QaIssueResponse create(Long projectId, CreateQaIssueRequest req, Member reporter) {
+        return createInternal(projectId, req, reporter, null);
+    }
+
+    /**
+     * POST /style-mismatches/{mismatchId}/issues — 이미 기록된 StyleMismatch를 연결해 이슈를 만든다.
+     * 재현 정보는 요청에서 받고(AC1, description도 SPEC AC1대로 필수), 검사·저장 규칙은 일반 등록과 같다.
+     * 명세 body에 없는 assigned_to·screenshots·figma_link는 받지 않는다 — 담당자는 등록 후 PATCH로 지정한다.
+     */
+    @Transactional
+    public QaIssueResponse createFromMismatch(Long projectId, String mismatchId, CreateIssueFromMismatchRequest req, Member reporter) {
+        CreateQaIssueRequest asIssue = new CreateQaIssueRequest(req.description(), req.screenLocation(), req.reproSteps(),
+            req.platformScope(), req.environment(), null, null, null, null);
+        Long id = parseIdOrNull(mismatchId);
+        if (id == null) {
+            throw ApiException.notFound("스타일 차이를 찾을 수 없습니다.");
+        }
+        return createInternal(projectId, asIssue, reporter, id);
+    }
+
+    /** existingMismatchId가 있으면 style_mismatch 입력 대신 그 행을 연결한다(다른 프로젝트 것이면 404, N10) */
+    private QaIssueResponse createInternal(Long projectId, CreateQaIssueRequest req, Member reporter, Long existingMismatchId) {
         // AC1: 필수 4개 중 빠진 것을 전부 모아 이름을 돌려준다. 공백만 있는 값도 빈 값이다(N1)
         List<String> missing = new ArrayList<>();
         if (isBlank(req.description())) missing.add("description");
@@ -100,8 +122,12 @@ public class QaIssueService {
             .orElseThrow(() -> ApiException.notFound("프로젝트를 찾을 수 없습니다."));
         Member assignee = resolveAssignee(projectId, req.assignedTo());
 
+        StyleMismatch existing = existingMismatchId == null ? null
+            : mismatches.findByIdAndProjectId(existingMismatchId, projectId)
+                .orElseThrow(() -> ApiException.notFound("스타일 차이를 찾을 수 없습니다."));
+
         // 여기부터 저장. 위 검사를 모두 통과했을 때만 도달한다(N2)
-        StyleMismatch mismatch = mismatchInput == null ? null : mismatches.save(StyleMismatch.manual(project,
+        StyleMismatch mismatch = existing != null ? existing : mismatchInput == null ? null : mismatches.save(StyleMismatch.manual(project,
             blankToNull(mismatchInput.frameId()), blankToNull(mismatchInput.screen()),
             parseEnum(StyleProperty.class, mismatchInput.property(), "style_mismatch.property"),
             mismatchInput.expectedValue(), mismatchInput.actualValue()));

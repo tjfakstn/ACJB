@@ -11,7 +11,7 @@ export function HomePage() {
   useEffect(() => {
     fetchMe().then((result) => {
       if (!result.authenticated) {
-        navigate('/', { replace: true })
+        navigate('/login', { replace: true })
       } else {
         setMe(result)
       }

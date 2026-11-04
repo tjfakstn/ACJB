@@ -2,6 +2,9 @@ package com.acjb.server.domain;
 
 import java.time.Instant;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -10,6 +13,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
@@ -20,7 +24,10 @@ import lombok.NoArgsConstructor;
 
 /** 이슈 등록·조치·재검증 실패를 상대에게 알리는 일 한 건. 같은 사건에 정확히 1건만 만든다(AC3·AC4·AC11) */
 @Entity
-@Table(name = "notifications")
+@Table(name = "notifications", indexes = {
+    // AC14: 내 알림 created_at desc, id desc
+    @Index(name = "idx_notifications_recipient_created", columnList = "recipient_id, created_at DESC, id DESC")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Notification {
@@ -34,7 +41,9 @@ public class Notification {
     private QAIssue issue;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, updatable = false)
+
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 20, updatable = false)
     private NotificationEvent event;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -42,10 +51,10 @@ public class Notification {
     private Member recipient;
 
     /** 앱 내 알림이면 "in_app". 이메일·Slack 같은 외부 채널은 아직 연동하지 않았다 */
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false, length = 20, updatable = false)
     private String channel;
 
-    @Column(nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     public Notification(QAIssue issue, NotificationEvent event, Member recipient, String channel) {

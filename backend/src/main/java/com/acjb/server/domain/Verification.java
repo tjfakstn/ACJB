@@ -2,6 +2,9 @@ package com.acjb.server.domain;
 
 import java.time.Instant;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -10,6 +13,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
@@ -20,7 +24,9 @@ import lombok.NoArgsConstructor;
 
 /** 수정 후 재확인 1회. verified_by·verified_at은 요청에서 받지 않고 로그인 사용자와 서버 시각을 쓴다(N8) */
 @Entity
-@Table(name = "verifications")
+@Table(name = "verifications", indexes = {
+    @Index(name = "idx_verifications_issue_verified", columnList = "qa_issue_id, verified_at DESC, id DESC")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Verification {
@@ -34,7 +40,9 @@ public class Verification {
     private QAIssue issue;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, updatable = false)
+
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 10, updatable = false)
     private VerificationResult result;
 
     private String scope;
@@ -43,7 +51,7 @@ public class Verification {
     @JoinColumn(name = "verified_by_id", updatable = false)
     private Member verifiedBy;
 
-    @Column(nullable = false, updatable = false)
+    @Column(name = "verified_at", nullable = false, updatable = false)
     private Instant verifiedAt;
 
     public Verification(QAIssue issue, VerificationResult result, String scope, Member verifiedBy) {

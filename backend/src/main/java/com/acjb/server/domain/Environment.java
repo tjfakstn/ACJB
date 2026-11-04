@@ -1,5 +1,8 @@
 package com.acjb.server.domain;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -14,6 +17,8 @@ import lombok.NoArgsConstructor;
 public class Environment {
 
     @Enumerated(EnumType.STRING)
+
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     private EnvPlatform platform;
 
     private String device;
@@ -21,6 +26,8 @@ public class Environment {
     private String browser;
 
     @Enumerated(EnumType.STRING)
+
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     private DeployStage deployStage;
 
     public Environment(EnvPlatform platform, String device, String browser, DeployStage deployStage) {

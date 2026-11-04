@@ -74,7 +74,8 @@ public class QaIssuePatchService {
 
         // 2) 이슈 — 다른 프로젝트 이슈는 404로 숨긴다(N10)
         Long id = parseIdOrNull(issueId);
-        QAIssue issue = id == null ? null : issues.findByIdAndProjectId(id, projectId).orElse(null);
+        // 쓰기 잠금으로 읽는다 — 동시 요청은 여기서 차례를 기다린다
+        QAIssue issue = id == null ? null : issues.findForUpdate(id, projectId).orElse(null);
         if (issue == null) {
             throw ApiException.notFound("이슈를 찾을 수 없습니다.");
         }

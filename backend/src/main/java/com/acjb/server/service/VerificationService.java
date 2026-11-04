@@ -61,7 +61,8 @@ public class VerificationService {
         }
 
         // 2) 이슈 — 다른 프로젝트 이슈는 404(N10)
-        QAIssue issue = findIssue(projectId, issueId);
+        // 쓰기 잠금으로 읽는다 — 같은 이슈에 재검증이 동시에 와도(버튼 두 번) 하나만 fixed를 보고 진행한다
+        QAIssue issue = findIssue(projectId, issueId, true);
 
         // 3) 권한(AC13) — 재검증은 그 이슈의 등록자만. 전이 검사보다 먼저
         if (!issue.getReportedBy().getId().equals(actor.getId())) {
@@ -90,19 +91,20 @@ public class VerificationService {
     /** 최신순(verified_at desc, id desc)으로 고정 */
     @Transactional(readOnly = true)
     public VerificationListResponse list(Long projectId, String issueId) {
-        QAIssue issue = findIssue(projectId, issueId);
+        QAIssue issue = findIssue(projectId, issueId, false);
         return new VerificationListResponse(verifications.findByIssueIdOrderByVerifiedAtDescIdDesc(issue.getId()).stream()
             .map(VerificationResponse::of).toList());
     }
 
-    private QAIssue findIssue(Long projectId, String issueId) {
+    private QAIssue findIssue(Long projectId, String issueId, boolean forUpdate) {
         Long id;
         try {
             id = issueId == null ? null : Long.valueOf(issueId.trim());
         } catch (NumberFormatException e) {
             id = null;
         }
-        QAIssue issue = id == null ? null : issues.findByIdAndProjectId(id, projectId).orElse(null);
+        QAIssue issue = id == null ? null
+            : (forUpdate ? issues.findForUpdate(id, projectId) : issues.findByIdAndProjectId(id, projectId)).orElse(null);
         if (issue == null) {
             throw ApiException.notFound("이슈를 찾을 수 없습니다.");
         }

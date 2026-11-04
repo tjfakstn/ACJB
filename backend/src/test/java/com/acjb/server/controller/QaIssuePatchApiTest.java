@@ -71,16 +71,16 @@ class QaIssuePatchApiTest {
 
     @BeforeEach
     void setUp() {
-        project = projects.save(new Project("patch-api"));
-        Project otherProject = projects.save(new Project("patch-api-other"));
-        reporter = members.save(new Member("p-reporter@test.dev", "등록자", MemberRole.DESIGNER));
-        assignee = members.save(new Member("p-assignee@test.dev", "담당자", MemberRole.DEVELOPER));
-        other = members.save(new Member("p-other@test.dev", "다른 멤버", MemberRole.DEVELOPER));
-        outsider = members.save(new Member("p-outsider@test.dev", "외부", MemberRole.PLANNER));
-        projectMembers.save(new ProjectMember(project, reporter));
-        projectMembers.save(new ProjectMember(project, assignee));
-        projectMembers.save(new ProjectMember(project, other));
-        projectMembers.save(new ProjectMember(otherProject, outsider));
+        project = projects.save(new Project("patch-api", owner()));
+        Project otherProject = projects.save(new Project("patch-api-other", owner()));
+        reporter = members.save(new Member("p-reporter@test.dev", "등록자"));
+        assignee = members.save(new Member("p-assignee@test.dev", "담당자"));
+        other = members.save(new Member("p-other@test.dev", "다른 멤버"));
+        outsider = members.save(new Member("p-outsider@test.dev", "외부"));
+        projectMembers.save(new ProjectMember(project, reporter, MemberRole.DESIGNER));
+        projectMembers.save(new ProjectMember(project, assignee, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(project, other, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(otherProject, outsider, MemberRole.PLANNER));
     }
 
     /** 등록 API를 거친 것과 같은 상태(needs_check + 이력 1건)를 만든다. status가 다르면 그 상태로 맞춘다 */
@@ -328,5 +328,10 @@ class QaIssuePatchApiTest {
             .andExpect(jsonPath("$.data.repro_steps[1]").value("상단 알림 아이콘 확인"))
             .andExpect(jsonPath("$.data.screen_location").value("홈 화면 상단 알림 아이콘"))
             .andExpect(jsonPath("$.data.environment.device").value("Pixel 8"));
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

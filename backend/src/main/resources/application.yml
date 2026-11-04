@@ -21,6 +21,18 @@ spring:
       # 이슈 목록에서 repro_steps·screenshots·style_mismatch를 이슈마다 따로 읽는 N+1을 묶음 조회로 줄인다
       hibernate.default_batch_fetch_size: 100
 
+  # 초대 메일 SMTP(Gmail) — 계정·앱 비밀번호는 backend/.env의 MAIL_USERNAME·MAIL_PASSWORD
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+
   security:
     oauth2:
       client:
@@ -41,6 +53,10 @@ server:
 
 app:
   # parse(AC8) — 모델은 parse_query.md 실패 모드 점검표를 검증한 모델과 맞춘다(2026-11-04 설만수 결정)
+  # 초대 메일(AC17) — 팀 공용 Gmail 계정. 수락 링크는 프론트의 초대 페이지({token}에 원문 토큰)
+  invite:
+    mail-from: ${MAIL_USERNAME:}
+    accept-url: http://localhost:5173/invitations/{token}
   # Figma 동기화 — 토큰은 backend/.env의 FIGMA_ACCESS_TOKEN(로그에 남기지 않는다)
   figma:
     access-token: ${FIGMA_ACCESS_TOKEN:}

@@ -70,15 +70,15 @@ class VerificationApiTest {
 
     @BeforeEach
     void setUp() {
-        project = projects.save(new Project("verify-api"));
-        otherProject = projects.save(new Project("verify-api-other"));
-        reporter = members.save(new Member("v-reporter@test.dev", "등록자", MemberRole.DESIGNER));
-        assignee = members.save(new Member("v-assignee@test.dev", "담당자", MemberRole.DEVELOPER));
-        other = members.save(new Member("v-other@test.dev", "다른 멤버", MemberRole.PLANNER));
+        project = projects.save(new Project("verify-api", owner()));
+        otherProject = projects.save(new Project("verify-api-other", owner()));
+        reporter = members.save(new Member("v-reporter@test.dev", "등록자"));
+        assignee = members.save(new Member("v-assignee@test.dev", "담당자"));
+        other = members.save(new Member("v-other@test.dev", "다른 멤버"));
         for (Member m : List.of(reporter, assignee, other)) {
-            projectMembers.save(new ProjectMember(project, m));
+            projectMembers.save(new ProjectMember(project, m, MemberRole.DEVELOPER));
         }
-        projectMembers.save(new ProjectMember(otherProject, reporter));
+        projectMembers.save(new ProjectMember(otherProject, reporter, MemberRole.DESIGNER));
     }
 
     private QAIssue issue(Project p, Member assignedTo, IssueStatus status) {
@@ -285,5 +285,10 @@ class VerificationApiTest {
         // fixed 2번 → 등록자에게 fixed 2건, fail 1번 → 담당자에게 recheck_failed 1건
         assertThat(notifications.countByIssueIdAndEvent(issue.getId(), NotificationEvent.FIXED)).isEqualTo(2);
         assertThat(notifications.countByIssueIdAndEvent(issue.getId(), NotificationEvent.RECHECK_FAILED)).isEqualTo(1);
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

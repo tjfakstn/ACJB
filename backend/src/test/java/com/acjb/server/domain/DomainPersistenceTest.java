@@ -34,10 +34,10 @@ class DomainPersistenceTest {
 
     @Test
     void 이슈와_연관_데이터를_저장하고_같은_값으로_읽는다() {
-        Project project = projects.saveAndFlush(new Project("persist-test"));
-        Member reporter = members.save(new Member("reporter@test.dev", "등록자", MemberRole.DESIGNER));
-        Member assignee = members.save(new Member("assignee@test.dev", "담당자", MemberRole.DEVELOPER));
-        projectMembers.save(new ProjectMember(project, reporter));
+        Project project = projects.saveAndFlush(new Project("persist-test", owner()));
+        Member reporter = members.save(new Member("reporter@test.dev", "등록자"));
+        Member assignee = members.save(new Member("assignee@test.dev", "담당자"));
+        projectMembers.save(new ProjectMember(project, reporter, MemberRole.PLANNER));
         // 스타일 차이는 이슈에 임베드하지 않고 style_mismatches 행을 먼저 만든 뒤 FK로 연결한다(docs/db-schema.md)
         StyleMismatch mismatch = mismatches.save(StyleMismatch.manual(project, null, null, StyleProperty.RADIUS, "8px", "6px"));
 
@@ -66,8 +66,8 @@ class DomainPersistenceTest {
 
     @Test
     void 스타일_차이가_없는_이슈는_style_mismatch가_null이다() {
-        Project project = projects.save(new Project("persist-test-2"));
-        Member reporter = members.save(new Member("r2@test.dev", "등록자2", MemberRole.PLANNER));
+        Project project = projects.save(new Project("persist-test-2", owner()));
+        Member reporter = members.save(new Member("r2@test.dev", "등록자2"));
 
         QAIssue issue = issues.saveAndFlush(new QAIssue(
             project, "문구 변경", "설정 화면", List.of("설정 진입"), PlatformScope.COMMON, null, null, null, null, null, reporter));
@@ -75,5 +75,10 @@ class DomainPersistenceTest {
         QAIssue loaded = issues.findById(issue.getId()).orElseThrow();
         assertThat(loaded.getStyleMismatch()).isNull();
         assertThat(loaded.getAssignedTo()).isNull();
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

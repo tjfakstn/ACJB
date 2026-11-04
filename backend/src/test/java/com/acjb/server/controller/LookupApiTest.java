@@ -56,17 +56,17 @@ class LookupApiTest {
     @BeforeEach
     void setUp() {
         // 이름 순서와 저장 순서를 일부러 다르게 둔다 — 정렬이 name asc인지 확인하려고
-        beta = projects.save(new Project("l-beta"));
-        gamma = projects.save(new Project("l-gamma"));
-        alpha = projects.save(new Project("l-alpha"));
-        me = members.save(new Member("l-me@test.dev", "나나", MemberRole.DEVELOPER));
-        kim = members.save(new Member("l-kim@test.dev", "가가", MemberRole.DESIGNER));
-        outsider = members.save(new Member("l-out@test.dev", "다다", MemberRole.PLANNER));
-        projectMembers.save(new ProjectMember(alpha, me));
-        projectMembers.save(new ProjectMember(alpha, kim));
-        projectMembers.save(new ProjectMember(beta, me));
-        projectMembers.save(new ProjectMember(beta, outsider));
-        projectMembers.save(new ProjectMember(gamma, outsider));
+        beta = projects.save(new Project("l-beta", owner()));
+        gamma = projects.save(new Project("l-gamma", owner()));
+        alpha = projects.save(new Project("l-alpha", owner()));
+        me = members.save(new Member("l-me@test.dev", "나나"));
+        kim = members.save(new Member("l-kim@test.dev", "가가"));
+        outsider = members.save(new Member("l-out@test.dev", "다다"));
+        projectMembers.save(new ProjectMember(alpha, me, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(alpha, kim, MemberRole.DESIGNER));
+        projectMembers.save(new ProjectMember(beta, me, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(beta, outsider, MemberRole.PLANNER));
+        projectMembers.save(new ProjectMember(gamma, outsider, MemberRole.PLANNER));
     }
 
     private ResultActions getAs(String email, String path) throws Exception {
@@ -172,5 +172,10 @@ class LookupApiTest {
     void 비멤버는_알림_경로도_403이고_미인증은_401() throws Exception {
         getAs(me.getEmail(), "/projects/" + gamma.getId() + "/notifications").andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/projects/" + alpha.getId() + "/notifications")).andExpect(status().isUnauthorized());
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

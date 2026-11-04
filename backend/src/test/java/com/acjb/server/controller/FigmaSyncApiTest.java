@@ -79,11 +79,11 @@ class FigmaSyncApiTest {
 
     @BeforeEach
     void setUp() {
-        project = projects.save(new Project("figma-api"));
-        otherProject = projects.save(new Project("figma-api-other"));
-        me = members.save(new Member("figma@test.dev", "멤버", MemberRole.DESIGNER));
-        projectMembers.save(new ProjectMember(project, me));
-        projectMembers.save(new ProjectMember(otherProject, me));
+        project = projects.save(new Project("figma-api", owner()));
+        otherProject = projects.save(new Project("figma-api-other", owner()));
+        me = members.save(new Member("figma@test.dev", "멤버"));
+        projectMembers.save(new ProjectMember(project, me, MemberRole.DESIGNER));
+        projectMembers.save(new ProjectMember(otherProject, me, MemberRole.DESIGNER));
         when(figma.isConfigured()).thenReturn(true);
     }
 
@@ -234,5 +234,10 @@ class FigmaSyncApiTest {
             .andExpect(jsonPath("$.data").doesNotExist());
         getAs(project.getId() + "/figma/sync/abc").andExpect(status().isNotFound());
         getAs(project.getId() + "/figma/frames").andExpect(jsonPath("$.data.items.length()").value(0));
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

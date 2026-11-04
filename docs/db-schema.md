@@ -209,14 +209,24 @@ erDiagram
 | figma_frames | UNIQUE(project_id, frame_id) | upsert |
 | project_members | UNIQUE(project_id, member_id) | AC12 멤버 확인 |
 
-## 5. 현재 엔티티와의 차이 (구현 시 해야 할 일)
+## 5. 엔티티 반영 상태
 
-현재 `server-feat-db-domain`의 엔티티는 9개 테이블이다. 목표와 다른 점:
+2026-11-04에 엔티티를 이 설계에 맞췄다(`server-feat-schema-align` `a78192f`, 아직 `server`에 병합 전). 1~4절과 실제 MySQL DDL이 같다는 것을 `qating_test` 스키마에서 `information_schema`로 대조해 확인했다(13개 테이블의 컬럼 타입·NULL 여부, FK, 4절 인덱스).
 
-1. **신규 4개 테이블**: `figma_syncs`, `figma_frames`, `style_scans`, `style_mismatches` (+ 엔티티·Repository·enum `JobStatus`, `MismatchSource`).
-2. **`qa_issues` 변경**: 임베드된 `mismatch_*` 컬럼(StyleMismatch embeddable)을 제거하고 `style_mismatch_id` FK로 교체.
-3. **인덱스 추가**: 4절 전부(현재 없음).
-4. `StyleProperty` enum은 그대로 재사용.
+반영한 것:
+
+1. **신규 4개 테이블**: `figma_syncs`, `figma_frames`, `style_scans`, `style_mismatches` — 엔티티·Repository·enum `JobStatus`, `MismatchSource` 추가.
+2. **`qa_issues` 변경**: 임베드 `mismatch_*` 컬럼을 없애고 `style_mismatch_id` FK로 교체. 사람이 입력한 차이도 `StyleMismatch.manual()`로 행을 먼저 만들어 연결하고, scan 결과는 `StyleMismatch.fromScan()`으로 만든다.
+3. **인덱스**: 4절 전부. 목록 정렬용 인덱스는 MySQL 8 내림차순 인덱스(`created_at DESC, id DESC`)로 만든다.
+4. **컬럼 명세 정렬**: Environment 컬럼명 `env_*`, `qa_issue_repro_steps.step` 500, `qa_issue_screenshots`의 `position`·`url` 1000, `projects`·`members`의 `created_at`, 각 컬럼 길이.
+5. `StyleProperty` enum은 그대로 재사용.
+
+구현 메모:
+
+- **enum은 `VARCHAR`로 고정한다.** Hibernate는 `@Enumerated(EnumType.STRING)`을 MySQL에서 native `ENUM` 타입으로 만든다. 그러면 값을 추가할 때마다 `ALTER`가 필요하고 `ddl-auto: update`는 이를 반영하지 않으므로, enum 필드마다 `@JdbcTypeCode(SqlTypes.VARCHAR)`를 붙인다. 새 enum 필드를 추가할 때도 같이 붙일 것.
+- **`ddl-auto: update`는 컬럼을 지우지 않는다.** 이번 변경 전 스키마로 만든 로컬 개발 DB에는 옛 컬럼(`mismatch_*`, `platform`·`device` 등)이 남는다. 로컬 `qating` 스키마의 테이블을 지우고 앱을 다시 띄우면 시드와 함께 새로 만들어진다. 배포 전 마이그레이션 도구 전환 TODO는 그대로다.
+- **`projects.name` UNIQUE**: 3절 표에는 없지만 시드 로더가 이름으로 프로젝트를 찾아 엔티티에 남겨 두었다. 3절 표에 반영할지는 미정.
+- **`GET /figma/frames` 목록 정렬**: `openapi.yaml`에 정렬 기준이 없어 목록 조회 메서드는 아직 만들지 않았다(AGENTS.md 5절). 구현 전에 정렬 기준을 정해야 한다.
 
 ## 6. 의도적으로 두지 않은 것
 

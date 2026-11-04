@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,7 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.acjb.server.auth.CurrentMember;
 import com.acjb.server.common.ApiResponses;
 import com.acjb.server.dto.CreateQaIssueRequest;
+import com.acjb.server.service.QaIssuePatchService;
 import com.acjb.server.service.QaIssueService;
+
+import tools.jackson.databind.JsonNode;
 
 /** QA 이슈 등록·목록·상세 (SPEC 5절). 이 경로는 Security 단계에서 프로젝트 멤버만 통과한다(AC12) */
 @RestController
@@ -25,10 +29,12 @@ import com.acjb.server.service.QaIssueService;
 public class QaIssueController {
 
     private final QaIssueService service;
+    private final QaIssuePatchService patchService;
     private final CurrentMember currentMember;
 
-    public QaIssueController(QaIssueService service, CurrentMember currentMember) {
+    public QaIssueController(QaIssueService service, QaIssuePatchService patchService, CurrentMember currentMember) {
         this.service = service;
+        this.patchService = patchService;
         this.currentMember = currentMember;
     }
 
@@ -49,5 +55,12 @@ public class QaIssueController {
     @GetMapping("/{issueId}")
     public Map<String, Object> get(@PathVariable Long projectId, @PathVariable String issueId) {
         return ApiResponses.ok(service.get(projectId, issueId));
+    }
+
+    /** body는 JsonNode로 받는다 — 필드가 "없음"과 "null"을 구분해야 해서(assigned_to: null은 400) */
+    @PatchMapping("/{issueId}")
+    public Map<String, Object> patch(@PathVariable Long projectId, @PathVariable String issueId, @RequestBody JsonNode body,
+                                     @AuthenticationPrincipal OAuth2User principal) {
+        return ApiResponses.ok(patchService.patch(projectId, issueId, body, currentMember.require(principal)));
     }
 }

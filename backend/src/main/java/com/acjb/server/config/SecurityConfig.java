@@ -6,15 +6,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import com.acjb.server.auth.JsonErrorResponder;
+import com.acjb.server.auth.ProjectMemberAuthorizationManager;
 
 /**
  * 구글 소셜로그인(OAuth2 Login) 초기 설정.
@@ -38,14 +39,22 @@ public class SecurityConfig {
     private static final String AUTH_LOGIN_BASE_URI = "/api/v1/auth/login";
     private static final String AUTH_CALLBACK_BASE_URI = "/api/v1/auth/callback";
     private static final String AUTH_LOGOUT_URI = "/api/v1/auth/logout";
+    private static final String AUTH_ME_URI = "/api/v1/auth/me";
+
+    private static final String PROJECT_SCOPED_PATH = "/api/v1/projects/{projectId}/**";
 
     private final CorsProperties corsProperties;
+    private final ProjectMemberAuthorizationManager projectMemberAuthorization;
+    private final JsonErrorResponder errorResponder;
 
     @Value("${app.oauth2.login-success-redirect}")
     private String loginSuccessRedirect;
 
-    public SecurityConfig(CorsProperties corsProperties) {
+    public SecurityConfig(CorsProperties corsProperties, ProjectMemberAuthorizationManager projectMemberAuthorization,
+                          JsonErrorResponder errorResponder) {
         this.corsProperties = corsProperties;
+        this.projectMemberAuthorization = projectMemberAuthorization;
+        this.errorResponder = errorResponder;
     }
 
     @Bean
@@ -55,8 +64,13 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     "/", "/error", "/api/v1/health",
+                    // AC10: 미인증이어도 200 {authenticated: false}를 돌려줘야 해서 열어 둔다(컨트롤러가 principal null을 처리)
+                    AUTH_ME_URI,
                     AUTH_LOGIN_BASE_URI + "/**", AUTH_CALLBACK_BASE_URI + "/**", AUTH_LOGOUT_URI
                 ).permitAll()
+                // AC12: 프로젝트 하위 경로는 그 프로젝트 멤버만 (미인증 401, 비멤버 403)
+                .requestMatchers(PathPatternRequestMatcher.withDefaults().matcher(PROJECT_SCOPED_PATH))
+                    .access(projectMemberAuthorization)
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2
@@ -73,10 +87,13 @@ public class SecurityConfig {
             // 프론트가 fetch로 인증 여부를 확인할 때(/api/**), 미인증이면 구글 로그인으로
             // 리다이렉트하지 않고 401만 반환 — 리다이렉트를 fetch가 따라가면 accounts.google.com에서
             // CORS로 막혀 "Failed to fetch"가 나기 때문. 브라우저 직접 접근(로그인 버튼 클릭)은 영향 없음.
-            .exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor(
-                new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
-                PathPatternRequestMatcher.withDefaults().matcher("/api/**")
-            ));
+            // 401·403 본문은 openapi ErrorResponse 형태로 통일한다(골든 케이스 au-001·au-002).
+            .exceptionHandling(ex -> ex
+                .defaultAuthenticationEntryPointFor(errorResponder.unauthorized(),
+                    PathPatternRequestMatcher.withDefaults().matcher("/api/**"))
+                .defaultAccessDeniedHandlerFor(errorResponder.forbidden(),
+                    PathPatternRequestMatcher.withDefaults().matcher("/api/**"))
+            );
 
         return http.build();
     }

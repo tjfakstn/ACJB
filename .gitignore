@@ -32,3 +32,6 @@ build/
 
 # Logs
 *.log
+
+# 시드 멤버의 실제 구글 이메일 (로컬 전용, data/seed/members.csv 보다 우선)
+data/seed/*.local.csv

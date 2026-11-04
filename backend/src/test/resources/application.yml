@@ -1,5 +1,20 @@
 # 테스트 전용 설정 — 실제 구글 자격증명 없이 컨텍스트 로딩만 확인하기 위한 더미 값
 spring:
+  # DB 비밀번호는 backend/.env 에서 읽는다 (docker compose의 MySQL이 떠 있어야 테스트가 돈다)
+  config:
+    import: optional:file:.env[.properties]
+
+  # 개발 DB(qating)와 분리된 스키마 — 테스트가 개발 데이터를 지우지 않게 한다
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/qating_test?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${DB_USER:qating}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+
   security:
     oauth2:
       client:
@@ -9,6 +24,8 @@ spring:
             client-secret: test-client-secret
 
 app:
+  seed:
+    enabled: false
   cors:
     allowed-origins:
       - http://localhost:5173

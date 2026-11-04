@@ -15,6 +15,7 @@ import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRepository;
 import com.acjb.server.repository.QAIssueRepository;
 import com.acjb.server.repository.StatusHistoryRepository;
+import com.acjb.server.repository.StyleMismatchRepository;
 import com.acjb.server.repository.VerificationRepository;
 
 /** 엔티티가 MySQL(qating_test)에 저장되고 같은 값으로 읽히는지만 확인한다. 규칙(AC1~AC13)은 서비스·골든 케이스에서 검증한다 */
@@ -29,6 +30,7 @@ class DomainPersistenceTest {
     @Autowired StatusHistoryRepository histories;
     @Autowired VerificationRepository verifications;
     @Autowired NotificationRepository notifications;
+    @Autowired StyleMismatchRepository mismatches;
 
     @Test
     void 이슈와_연관_데이터를_저장하고_같은_값으로_읽는다() {
@@ -36,12 +38,14 @@ class DomainPersistenceTest {
         Member reporter = members.save(new Member("reporter@test.dev", "등록자", MemberRole.DESIGNER));
         Member assignee = members.save(new Member("assignee@test.dev", "담당자", MemberRole.DEVELOPER));
         projectMembers.save(new ProjectMember(project, reporter));
+        // 스타일 차이는 이슈에 임베드하지 않고 style_mismatches 행을 먼저 만든 뒤 FK로 연결한다(docs/db-schema.md)
+        StyleMismatch mismatch = mismatches.save(StyleMismatch.manual(project, null, null, StyleProperty.RADIUS, "8px", "6px"));
 
         QAIssue issue = issues.saveAndFlush(new QAIssue(
             project, "아이콘이 너무 커요", "홈 화면 상단 알림 아이콘", List.of("홈 진입", "아이콘 확인", "크기 비교"),
             PlatformScope.AOS, new Environment(EnvPlatform.AOS, "Pixel 8", null, DeployStage.STAGING),
             List.of("https://example.com/a.png"), null,
-            new StyleMismatch(StyleProperty.RADIUS, "8px", "6px"), assignee, reporter));
+            mismatch, assignee, reporter));
         histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
         verifications.save(new Verification(issue, VerificationResult.FAIL, "해당 화면만", reporter));
         notifications.save(new Notification(issue, NotificationEvent.ISSUE_CREATED, assignee, "in_app"));

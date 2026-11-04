@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 /** AC12: /projects/{projectId}/** 는 이 관계가 있는 멤버만 호출할 수 있다 */
 @Entity
 @Table(name = "project_members",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"project_id", "member_id"}))
+    uniqueConstraints = @UniqueConstraint(name = "uk_project_members_project_member", columnNames = {"project_id", "member_id"}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProjectMember {

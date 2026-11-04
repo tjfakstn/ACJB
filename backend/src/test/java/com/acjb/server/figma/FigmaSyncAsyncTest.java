@@ -61,9 +61,9 @@ class FigmaSyncAsyncTest {
 
     @Test
     void 커밋_뒤_백그라운드에서_동기화가_끝난다() throws Exception {
-        project = projects.save(new Project("figma-async"));
-        me = members.save(new Member("figma-async@test.dev", "멤버", MemberRole.DESIGNER));
-        membership = projectMembers.save(new ProjectMember(project, me));
+        project = projects.save(new Project("figma-async", owner()));
+        me = members.save(new Member("figma-async@test.dev", "멤버"));
+        membership = projectMembers.save(new ProjectMember(project, me, MemberRole.DESIGNER));
         when(figma.isConfigured()).thenReturn(true);
         when(figma.topLevelNodes("ASYNCKEY")).thenReturn(List.of(new FigmaNode("1:2", "홈", "FRAME")));
 
@@ -82,5 +82,10 @@ class FigmaSyncAsyncTest {
         assertThat(last).isEqualTo(JobStatus.DONE);
         assertThat(frames.findByProjectIdOrderByNameAscIdAsc(project.getId())).singleElement()
             .satisfies(f -> assertThat(f.getName()).isEqualTo("홈"));
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

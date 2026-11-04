@@ -68,11 +68,11 @@ class ConcurrentTransitionTest {
 
     @BeforeEach
     void setUp() {
-        project = projects.save(new Project("concurrent-" + System.nanoTime()));
-        reporter = members.save(new Member("cc-rep-" + System.nanoTime() + "@test.dev", "등록자", MemberRole.DESIGNER));
-        assignee = members.save(new Member("cc-asg-" + System.nanoTime() + "@test.dev", "담당자", MemberRole.DEVELOPER));
-        projectMembers.save(new ProjectMember(project, reporter));
-        projectMembers.save(new ProjectMember(project, assignee));
+        project = projects.save(new Project("concurrent-" + System.nanoTime(), owner()));
+        reporter = members.save(new Member("cc-rep-" + System.nanoTime() + "@test.dev", "등록자"));
+        assignee = members.save(new Member("cc-asg-" + System.nanoTime() + "@test.dev", "담당자"));
+        projectMembers.save(new ProjectMember(project, reporter, MemberRole.DESIGNER));
+        projectMembers.save(new ProjectMember(project, assignee, MemberRole.DEVELOPER));
     }
 
     @AfterEach
@@ -156,5 +156,10 @@ class ConcurrentTransitionTest {
             assertThat(verifications.findByIssueIdOrderByVerifiedAtDescIdDesc(issue.getId())).hasSize(1);
             assertThat(notifications.countByIssueIdAndEvent(issue.getId(), NotificationEvent.RECHECK_FAILED)).isEqualTo(1);
         }
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

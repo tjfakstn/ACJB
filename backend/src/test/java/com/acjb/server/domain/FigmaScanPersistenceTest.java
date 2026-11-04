@@ -32,8 +32,8 @@ class FigmaScanPersistenceTest {
 
     @Test
     void 동기화_작업은_queued로_저장되고_frame_ids를_JSON으로_읽는다() {
-        Project project = projects.save(new Project("figma-test"));
-        Member requester = members.save(new Member("sync@test.dev", "요청자", MemberRole.DESIGNER));
+        Project project = projects.save(new Project("figma-test", owner()));
+        Member requester = members.save(new Member("sync@test.dev", "요청자"));
 
         FigmaSync sync = syncs.saveAndFlush(new FigmaSync(project, "FILEKEY", List.of("84:759", "84:760"), requester));
         FigmaSync all = syncs.saveAndFlush(new FigmaSync(project, "FILEKEY", null, requester));
@@ -45,7 +45,7 @@ class FigmaScanPersistenceTest {
 
     @Test
     void 같은_프로젝트에_같은_frame_id는_두_번_저장되지_않는다() {
-        Project project = projects.save(new Project("frame-test"));
+        Project project = projects.save(new Project("frame-test", owner()));
         frames.saveAndFlush(new FigmaFrame(project, "84:759", "FILEKEY", "홈", "https://figma.com/a"));
 
         assertThat(frames.findByProjectIdAndFrameId(project.getId(), "84:759")).isPresent();
@@ -55,8 +55,8 @@ class FigmaScanPersistenceTest {
 
     @Test
     void scan이_찾은_차이는_scan의_화면_정보를_그대로_가진다() {
-        Project project = projects.save(new Project("scan-test"));
-        Member requester = members.save(new Member("scan@test.dev", "요청자", MemberRole.DEVELOPER));
+        Project project = projects.save(new Project("scan-test", owner()));
+        Member requester = members.save(new Member("scan@test.dev", "요청자"));
         StyleScan scan = scans.save(new StyleScan(project, "84:759", "84:800", "https://app.test/home", ".btn-primary", requester));
 
         StyleMismatch found = mismatches.saveAndFlush(StyleMismatch.fromScan(scan, StyleProperty.COLOR, "#1A73E8", "#1A73E9"));
@@ -74,9 +74,14 @@ class FigmaScanPersistenceTest {
 
     @Test
     void expected_value나_actual_value가_null이면_DB가_저장을_거부한다() {
-        Project project = projects.save(new Project("ac2-test"));
+        Project project = projects.save(new Project("ac2-test", owner()));
 
         assertThatThrownBy(() -> mismatches.saveAndFlush(StyleMismatch.manual(project, null, null, StyleProperty.RADIUS, "8px", null)))
             .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

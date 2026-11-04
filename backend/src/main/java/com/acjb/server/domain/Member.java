@@ -2,13 +2,8 @@ package com.acjb.server.domain;
 
 import java.time.Instant;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -18,7 +13,10 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 구글 로그인 이메일로 식별한다. 프로젝트 소속은 {@link ProjectMember} */
+/**
+ * 구글 로그인 이메일로 식별하는 사용자. 처음 로그인(첫 요청)할 때 만들어진다(AC16).
+ * 역할(designer/developer/planner)은 프로젝트마다 다르므로 여기가 아니라 {@link ProjectMember}에 있다(2026-11-04)
+ */
 @Entity
 @Table(name = "members")
 @Getter
@@ -35,19 +33,12 @@ public class Member {
     @Column(nullable = false, length = 50)
     private String name;
 
-    @Enumerated(EnumType.STRING)
-
-    @JdbcTypeCode(SqlTypes.VARCHAR)
-    @Column(nullable = false, length = 20)
-    private MemberRole role;
-
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
-    public Member(String email, String name, MemberRole role) {
+    public Member(String email, String name) {
         this.email = email;
         this.name = name;
-        this.role = role;
     }
 
     @PrePersist

@@ -15,6 +15,12 @@ public final class ErrorCodes {
     public static final String CONCURRENT_UPDATE = "CONCURRENT_UPDATE";
     /** 예상하지 못한 서버 오류 */
     public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
+    /** 이미 그 프로젝트 멤버인 사람을 초대·수락 */
+    public static final String ALREADY_MEMBER = "ALREADY_MEMBER";
+    /** 만료·취소·이미 수락된 초대(AC18) */
+    public static final String INVITATION_CLOSED = "INVITATION_CLOSED";
+    /** 소유자는 제거할 수 없다(AC19, N15) */
+    public static final String OWNER_NOT_REMOVABLE = "OWNER_NOT_REMOVABLE";
     /** parse: LLM 호출 실패·거절·스키마 위반(N9) */
     public static final String PARSE_FAILED = "PARSE_FAILED";
     /** Figma 연동이 설정되지 않음(FIGMA_ACCESS_TOKEN 없음) */

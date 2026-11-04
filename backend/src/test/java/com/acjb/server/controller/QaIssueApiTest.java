@@ -64,15 +64,15 @@ class QaIssueApiTest {
 
     @BeforeEach
     void setUp() {
-        project = projects.save(new Project("issue-api"));
-        otherProject = projects.save(new Project("issue-api-other"));
-        reporter = members.save(new Member("reporter@test.dev", "등록자", MemberRole.DESIGNER));
-        assignee = members.save(new Member("assignee@test.dev", "담당자", MemberRole.DEVELOPER));
-        outsider = members.save(new Member("outsider@test.dev", "외부", MemberRole.PLANNER));
-        projectMembers.save(new ProjectMember(project, reporter));
-        projectMembers.save(new ProjectMember(project, assignee));
-        projectMembers.save(new ProjectMember(otherProject, outsider));
-        projectMembers.save(new ProjectMember(otherProject, reporter));
+        project = projects.save(new Project("issue-api", owner()));
+        otherProject = projects.save(new Project("issue-api-other", owner()));
+        reporter = members.save(new Member("reporter@test.dev", "등록자"));
+        assignee = members.save(new Member("assignee@test.dev", "담당자"));
+        outsider = members.save(new Member("outsider@test.dev", "외부"));
+        projectMembers.save(new ProjectMember(project, reporter, MemberRole.DESIGNER));
+        projectMembers.save(new ProjectMember(project, assignee, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(otherProject, outsider, MemberRole.PLANNER));
+        projectMembers.save(new ProjectMember(otherProject, reporter, MemberRole.DESIGNER));
     }
 
     private ResultActions postIssue(Project p, Member actor, String body) throws Exception {
@@ -301,5 +301,10 @@ class QaIssueApiTest {
             .andExpect(jsonPath("$.data.total").value(2));
         getAs(reporter, project.getId() + "/qa-issues?status=closed")
             .andExpect(status().isBadRequest());
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

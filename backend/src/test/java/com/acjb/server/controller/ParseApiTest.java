@@ -62,9 +62,9 @@ class ParseApiTest {
 
     @BeforeEach
     void setUp() {
-        project = projects.save(new Project("parse-api"));
-        me = members.save(new Member("parse@test.dev", "멤버", MemberRole.DESIGNER));
-        projectMembers.save(new ProjectMember(project, me));
+        project = projects.save(new Project("parse-api", owner()));
+        me = members.save(new Member("parse@test.dev", "멤버"));
+        projectMembers.save(new ProjectMember(project, me, MemberRole.DESIGNER));
     }
 
     private ResultActions parse(String body) throws Exception {
@@ -161,5 +161,10 @@ class ParseApiTest {
         parse("{\"text\":\"   \"}").andExpect(status().isBadRequest());
         parse("{\"text\":\"" + "가".repeat(5001) + "\"}").andExpect(status().isBadRequest());
         verify(parser, never()).parse(anyString());
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

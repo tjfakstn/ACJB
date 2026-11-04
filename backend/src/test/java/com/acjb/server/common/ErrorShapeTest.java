@@ -57,9 +57,9 @@ class ErrorShapeTest {
 
     @BeforeEach
     void setUp() {
-        project = projects.save(new Project("error-shape"));
-        me = members.save(new Member("error-shape@test.dev", "멤버", MemberRole.DEVELOPER));
-        projectMembers.save(new ProjectMember(project, me));
+        project = projects.save(new Project("error-shape", owner()));
+        me = members.save(new Member("error-shape@test.dev", "멤버"));
+        projectMembers.save(new ProjectMember(project, me, MemberRole.DEVELOPER));
     }
 
     @Test
@@ -90,5 +90,10 @@ class ErrorShapeTest {
             .andExpect(status().isMethodNotAllowed())
             .andExpect(jsonPath("$.success").value(false))
             .andExpect(jsonPath("$.error.code").value("METHOD_NOT_ALLOWED"));
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

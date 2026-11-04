@@ -58,11 +58,11 @@ class StyleMismatchApiTest {
 
     @BeforeEach
     void setUp() {
-        project = projects.save(new Project("sm-api"));
-        otherProject = projects.save(new Project("sm-api-other"));
-        me = members.save(new Member("sm@test.dev", "멤버", MemberRole.DESIGNER));
-        projectMembers.save(new ProjectMember(project, me));
-        projectMembers.save(new ProjectMember(otherProject, me));
+        project = projects.save(new Project("sm-api", owner()));
+        otherProject = projects.save(new Project("sm-api-other", owner()));
+        me = members.save(new Member("sm@test.dev", "멤버"));
+        projectMembers.save(new ProjectMember(project, me, MemberRole.DESIGNER));
+        projectMembers.save(new ProjectMember(otherProject, me, MemberRole.DESIGNER));
     }
 
     private ResultActions getAs(String path) throws Exception {
@@ -163,8 +163,8 @@ class StyleMismatchApiTest {
 
     @Test
     void body의_assigned_to와_reported_by는_받지_않는다() throws Exception {
-        Member other = members.save(new Member("sm-other@test.dev", "다른", MemberRole.DEVELOPER));
-        projectMembers.save(new ProjectMember(project, other));
+        Member other = members.save(new Member("sm-other@test.dev", "다른"));
+        projectMembers.save(new ProjectMember(project, other, MemberRole.DEVELOPER));
         StyleMismatch m = mismatches.save(StyleMismatch.manual(project, null, null, StyleProperty.COLOR, "a", "b"));
         createIssue(m, """
             {"description":"d","screen_location":"홈","repro_steps":["홈 진입"],"platform_scope":"common",
@@ -173,5 +173,10 @@ class StyleMismatchApiTest {
             .andExpect(jsonPath("$.data.assigned_to").isEmpty())
             .andExpect(jsonPath("$.data.reported_by").value(String.valueOf(me.getId())));
         assertThat(notifications.count()).isZero();
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

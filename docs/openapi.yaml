@@ -364,7 +364,10 @@ paths:
     get:
       tags: [Auth]
       summary: 로그인 상태 확인
-      description: 인증 여부와 무관하게 200으로 응답 (미인증이면 authenticated:false)
+      description: >-
+        인증 여부와 무관하게 200으로 응답 (미인증이면 authenticated:false). 로그인했으면 `id`는 내 멤버 id로,
+        `owner_id`·`reported_by`·`assigned_to` 등과 비교해 내 것인지 판단하는 데 쓴다(2026-11-05 추가).
+        처음 로그인한 구글 계정은 이 호출에서 Member가 만들어진다(AC16). name·email은 Member 값, picture는 구글 프로필 값이다.
       security: []
       responses:
         '200':
@@ -373,18 +376,23 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [authenticated]
                 properties:
                   authenticated:
                     type: boolean
+                  id:
+                    type: string
+                    description: 내 멤버 id (로그인했을 때만)
                   name:
                     type: string
                   email:
                     type: string
                   picture:
                     type: string
+                    nullable: true
               examples:
                 authenticated:
-                  value: { authenticated: true, name: 홍길동, email: hong@example.com, picture: 'https://...' }
+                  value: { authenticated: true, id: '12', name: 홍길동, email: hong@example.com, picture: 'https://...' }
                 anonymous:
                   value: { authenticated: false }
 

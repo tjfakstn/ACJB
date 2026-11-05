@@ -56,7 +56,7 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 인증은 구글 로그인 세션 쿠키다. POST·PATCH는 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더에 실어 보내야 하고, 없거나 틀리면 403이다. 멤버를 가리키는 값(`assigned_to`, `reported_by`, `verified_by` 등)은 모두 멤버 id다.
 
 - `GET /health` → `{status: "ok"}` **(구현됨)**
-- `GET /auth/me` → `{authenticated, name, email, picture}` / 미인증 `{authenticated: false}` **(구현됨)**
+- `GET /auth/me` → `{authenticated, id, name, email, picture}` (`id`는 내 멤버 id, 2026-11-05 추가) / 미인증 `{authenticated: false}` **(구현됨)**
 - `GET /projects` → `Project[]` — 내가 속한 프로젝트만 (AC15)
 - `POST /projects` — body `{name, role}` → 201 `Project` — 요청자가 소유자이자 `role` 멤버 (AC16)
 - `GET /projects/{projectId}/members` → `Member[]` — 담당자 선택용, 프로젝트별 `role` 포함 (AC15)

@@ -37,7 +37,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 4. 정해진 상태 전이만 허용한다: `needs_check`/`needs_recheck` → `fixed`는 PATCH로만, `fixed` → `resolved`/`needs_recheck`는 재검증 등록으로만 일어난다. 그 외 요청은 거부(409)하고, 허용된 모든 변경은 `status_history`에 남긴다. (↔ AC6)
 5. 재검증을 조회·등록할 때는 최초 등록된 재현 절차(`repro_steps`)를 그대로 반환한다 — 재입력을 요구하지 않는다. (↔ AC5)
 6. `/projects/{projectId}/**`는 로그인한 그 프로젝트 멤버만 호출한다(미인증 401, 비멤버 403). (↔ AC12)
-7. `fixed` 처리는 그 이슈의 담당자만, 재검증 등록은 그 이슈의 등록자만 할 수 있다(그 외 403). 권한 검사를 상태 전이 검사보다 먼저 하고, 거부된 요청은 아무 데이터도 바꾸지 않는다. (↔ AC13)
+7. `fixed` 처리는 그 이슈의 담당자만, 재검증 등록은 그 이슈의 등록자만 할 수 있다(등록자가 프로젝트에서 제거됐으면 소유자, 그 외 403). 권한 검사를 상태 전이 검사보다 먼저 하고, 거부된 요청은 아무 데이터도 바꾸지 않는다. (↔ AC13)
 
 ## 4. 금지 사항 (에이전트에게 위임할 때 항상 걸린다)
 
@@ -95,7 +95,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 | Backend | Spring Boot(Java 21) | |
 | DB | MySQL | 개발 단계부터 MySQL 사용(2026-10-28 결정 — 배포 때 DB를 바꾸지 않는다). 접속 정보는 `.env`, 키는 `.env.example`에 추가 |
 | 인증 | Google OAuth2 (구현됨) | |
-| 외부 연동 | Figma API, Claude API(parse·초기 전체 비교·이력 기반 점검 후보), Gmail SMTP(초대 메일) | GitHub 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
+| 외부 연동 | Figma API, Claude API(parse·초기 전체 비교·이력 기반 점검 후보), Gmail SMTP(초대 메일), Voyage AI(임베딩 — 이력 기반 점검 후보 검색, 2026-11-05) | GitHub 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
 | 인프라 / 배포 | TODO | |
 
 결정 배경: [docs/decision_log.md](docs/decision_log.md)

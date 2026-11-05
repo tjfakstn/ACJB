@@ -147,7 +147,7 @@ erDiagram
 | qa_issue_id | BIGINT | FK, NOT NULL | |
 | result | VARCHAR(10) | NOT NULL | pass / fail |
 | scope | VARCHAR(255) | NULL | |
-| verified_by_id | BIGINT | FK→members, NOT NULL | 등록자만(AC13) |
+| verified_by_id | BIGINT | FK→members, NOT NULL | 등록자만, 등록자가 제거됐으면 소유자(AC13) |
 | verified_at | DATETIME(6) | NOT NULL | |
 
 ### notifications

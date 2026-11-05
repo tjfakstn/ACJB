@@ -838,7 +838,7 @@ paths:
       description: >-
         상태가 fixed인 이슈에만 등록할 수 있다(그 외 409). pass면 이슈를 resolved로, fail이면 needs_recheck로 바꾸고
         status_history에 남긴다(AC7). 응답에 이슈의 최초 repro_steps를 그대로 담아 재입력 없이 쓰게 한다(AC5).
-        그 이슈의 reported_by만 등록할 수 있다(그 외 403, AC13). fail이면 담당자에게 Notification(event: recheck_failed)이 생성된다(AC11).
+        그 이슈의 reported_by만 등록할 수 있다. reported_by가 더 이상 프로젝트 멤버가 아니면 프로젝트 소유자가 대신 등록한다(그 외 403, AC13, 2026-11-05). fail이면 담당자에게 Notification(event: recheck_failed)이 생성된다(AC11).
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/IssueId'
@@ -960,8 +960,17 @@ components:
       properties:
         code:
           type: string
+          description: >-
+            서비스가 정한 오류 코드(2026-11-05 확정) — UNAUTHORIZED(401), FORBIDDEN(403), NOT_FOUND(404),
+            VALIDATION_FAILED(400), INVALID_TRANSITION(409, AC6), CONCURRENT_UPDATE(409, 동시 요청 — 다시 시도),
+            ALREADY_MEMBER(409), INVITATION_CLOSED(409, 만료·취소·이미 수락된 초대), OWNER_NOT_REMOVABLE(409),
+            PARSE_FAILED(502, parse LLM 실패·스키마 위반), FIGMA_UNAVAILABLE(503, 서버에 Figma 토큰 미설정),
+            INTERNAL_ERROR(500). 프론트는 이 값으로 분기한다. 요청이 컨트롤러에 닿기 전 프레임워크 단계에서 거부되면
+            HTTP 상태 이름이 온다(예 METHOD_NOT_ALLOWED) — 그래서 enum으로 막지 않는다.
+          example: VALIDATION_FAILED
         message:
           type: string
+          description: 사용자에게 보여 줄 수 있는 한국어 설명. 내부 오류 상세는 담지 않는다
 
     ErrorResponse:
       type: object

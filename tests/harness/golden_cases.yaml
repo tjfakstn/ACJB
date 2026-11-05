@@ -479,3 +479,264 @@ cases:
     expected:
       status_in: [403, 404]
       body_not_has: [data]
+
+  # ===== AC13(11-05 수정)·AC14~AC19·N14·N15 — 2026-11-05 설만수 승인 =====
+  # 근거: docs/SPEC.md AC13(11-05 수정)·AC14~AC19, 6.1절 N14·N15. N16은 2차 LLM·RAG 설계 확정 후 작성.
+
+  # --- AC14: 내 알림 조회 ---
+  - id: nt-007
+    ac: AC14
+    description: 알림 목록은 요청자가 받은 것만 created_at desc, id desc 순으로 반환하고 다른 멤버의 알림은 담지 않는다
+    input:
+      endpoint: GET /projects/{projectId}/notifications
+      precondition: member-1에게 알림 2건(먼저 A, 나중 B), member-2에게 알림 1건
+      actor: member-1
+    expected:
+      status: 200
+      items_count: 2
+      items_order: [B, A]
+      items_all: { to_member_id: "member-1" }
+
+  # --- AC15: 프로젝트·멤버 조회 ---
+  - id: pj-001
+    ac: AC15
+    description: 프로젝트 목록은 요청자가 멤버인 프로젝트만 name asc, id asc 순으로 반환한다
+    input:
+      endpoint: GET /projects
+      precondition: actor는 "나" 프로젝트와 "가" 프로젝트의 멤버, "다" 프로젝트의 멤버가 아님
+      actor: member-1
+    expected:
+      status: 200
+      items_names_in_order: ["가", "나"]
+
+  - id: pj-002
+    ac: AC15
+    description: 멤버 목록은 그 프로젝트 멤버에게만 반환하고 각 멤버의 프로젝트별 role을 담는다
+    input:
+      endpoint: GET /projects/{projectId}/members
+      precondition: member-1(developer), member-2(designer)가 멤버
+      actor: member-1
+    expected:
+      status: 200
+      items_count: 2
+      body_has: [data.items.id, data.items.name, data.items.email, data.items.role]
+
+  # --- AC16: 프로젝트 생성 ---
+  - id: pj-003
+    ac: AC16
+    description: 프로젝트를 만들면 요청자가 소유자이자 고른 role의 멤버가 된다
+    input:
+      endpoint: POST /projects
+      actor: member-1
+      body: { name: "새 프로젝트", role: "planner" }
+    expected:
+      status: 201
+      body: { data: { name: "새 프로젝트", owner_id: "member-1" } }
+      followup:
+        description: GET /projects/{newId}/members
+        expected_members: [{ id: "member-1", role: "planner" }]
+
+  - id: pj-004
+    ac: AC16
+    description: role이 정해진 값이 아니거나 name이 비면 400이고 프로젝트를 만들지 않는다
+    input:
+      endpoint: POST /projects
+      actor: member-1
+      body: { name: "새 프로젝트", role: "manager" }
+    expected:
+      status: 400
+      body: { success: false }
+      followup:
+        expected_project_count_delta: 0
+
+  # --- AC17: 초대 ---
+  - id: iv-001
+    ac: AC17
+    description: 멤버가 이메일로 초대하면 7일 뒤 만료되는 pending 초대 1건이 생기고 초대 메일이 1통 나간다
+    input:
+      endpoint: POST /projects/{projectId}/invitations
+      actor: member-1
+      body: { email: "new@test.dev" }
+    expected:
+      status: 201
+      body: { data: { email: "new@test.dev", status: "pending", invited_by: "member-1" } }
+      expires_at_minus_created_at: 7d
+      expected_mail_count_delta: 1
+
+  - id: iv-002
+    ac: AC17
+    description: 이미 그 프로젝트 멤버인 이메일을 초대하면 409이고 초대를 만들지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/invitations
+      precondition: member-2는 이미 멤버
+      actor: member-1
+      body: { email: "<member-2의 이메일>" }
+    expected:
+      status: 409
+      error_code: ALREADY_MEMBER
+      followup:
+        expected_invitation_count_delta: 0
+
+  - id: iv-003
+    ac: AC17
+    description: 같은 이메일에 pending 초대가 있으면 그 초대는 canceled가 되고 새 pending 초대가 생긴다(재발송)
+    input:
+      endpoint: POST /projects/{projectId}/invitations
+      precondition: new@test.dev에게 pending 초대(old) 1건
+      actor: member-1
+      body: { email: "new@test.dev" }
+    expected:
+      status: 201
+      followup:
+        expected_invitation_status: { old: "canceled" }
+        expected_pending_count_for_email: 1
+
+  # --- AC18: 초대 수락 ---
+  - id: iv-004
+    ac: AC18
+    description: 수락한 사람이 초대받은 이메일과 다른 계정이면 403이고 멤버를 만들지 않는다
+    input:
+      endpoint: POST /invitations/{token}/accept
+      precondition: new@test.dev에게 온 pending 초대
+      actor: other@test.dev로 로그인한 사용자
+      body: { role: "designer" }
+    expected:
+      status: 403
+      followup:
+        expected_member_count_delta: 0
+        expected_invitation_status: "pending"
+
+  - id: iv-005
+    ac: AC18
+    description: 만료·취소·이미 수락된 초대를 수락하면 409이고 멤버를 만들지 않는다
+    input:
+      endpoint: POST /invitations/{token}/accept
+      precondition: 초대 status가 accepted (expired·canceled도 같은 결과)
+      actor: 초대받은 이메일로 로그인한 사용자
+      body: { role: "designer" }
+    expected:
+      status: 409
+      error_code: INVITATION_CLOSED
+      followup:
+        expected_member_count_delta: 0
+
+  - id: iv-006
+    ac: AC18
+    description: role이 정해진 값이 아니면 400이고 멤버를 만들지 않으며 초대는 pending으로 남는다
+    input:
+      endpoint: POST /invitations/{token}/accept
+      actor: 초대받은 이메일로 로그인한 사용자
+      body: { role: "owner" }
+    expected:
+      status: 400
+      followup:
+        expected_member_count_delta: 0
+        expected_invitation_status: "pending"
+
+  - id: iv-007
+    ac: AC18
+    description: 초대받은 계정이 정해진 role로 수락하면 그 role의 멤버가 되고 초대는 accepted가 된다
+    input:
+      endpoint: POST /invitations/{token}/accept
+      actor: 초대받은 이메일로 로그인한 사용자
+      body: { role: "designer" }
+    expected:
+      status: 200
+      body: { data: { id: "{projectId}" } }
+      followup:
+        expected_members_contains: { role: "designer" }
+        expected_invitation_status: "accepted"
+
+  # --- AC19: 멤버 제거 ---
+  - id: pj-005
+    ac: AC19
+    description: 소유자가 멤버를 제거하면 그 멤버가 담당자인 미해결 이슈의 assigned_to만 비우고 resolved 이슈·상태·이력·알림은 그대로다
+    input:
+      endpoint: DELETE /projects/{projectId}/members/{memberId}
+      precondition: member-2가 담당자인 이슈 X(needs_check)와 Y(resolved)
+      actor: 소유자(member-1)
+    expected:
+      status: 204
+      followup:
+        expected_assigned_to: { X: null, Y: "member-2" }
+        expected_issue_status: { X: "needs_check", Y: "resolved" }
+        status_history_length_unchanged: true
+        expected_notification_count_total_delta: 0
+
+  - id: pj-006
+    ac: AC19
+    description: 소유자가 아닌 멤버가 다른 멤버를 제거하면 403이고 아무것도 바뀌지 않는다
+    input:
+      endpoint: DELETE /projects/{projectId}/members/{memberId}
+      actor: member-2 (소유자 아님)
+      target: member-3
+    expected:
+      status: 403
+      followup:
+        expected_member_count_delta: 0
+
+  # --- AC13 (2026-11-05 수정): 등록자가 제거된 이슈의 재검증 ---
+  - id: au-008
+    ac: AC13
+    description: 등록자가 프로젝트에서 제거됐으면 소유자가 재검증을 등록할 수 있다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
+      precondition: 이슈 status fixed, reported_by가 member-3이고 member-3은 제거됨
+      actor: 소유자(member-1)
+      body: { result: "pass" }
+    expected:
+      status: 201
+      body: { data: { issue_status: "resolved" } }
+
+  - id: au-009
+    ac: AC13
+    description: 등록자가 아직 멤버면 소유자라도 재검증을 등록할 수 없다(403, 상태·이력 그대로)
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
+      precondition: 이슈 status fixed, reported_by가 member-3(멤버)
+      actor: 소유자(member-1)
+      body: { result: "pass" }
+    expected:
+      status: 403
+      followup:
+        expected_issue_status: "fixed"
+        status_history_length_unchanged: true
+
+  # --- 6.1절 금지 기준 ---
+  - id: ng-011
+    ac: AC17
+    rule: N14
+    description: 초대 응답·목록 어디에도 초대 토큰(원문·해시)을 담지 않는다
+    input:
+      endpoint: GET /projects/{projectId}/invitations, GET /invitations/mine, POST /projects/{projectId}/invitations 응답
+    expected:
+      body_not_has: [data.token, data.token_hash, data.items.token, data.items.token_hash]
+
+  - id: ng-012
+    ac: AC19
+    rule: N15
+    description: 소유자 자신은 제거할 수 없다(409) — 소유자 없는 프로젝트를 만들지 않는다
+    input:
+      endpoint: DELETE /projects/{projectId}/members/{ownerId}
+      actor: 소유자
+    expected:
+      status: 409
+      error_code: OWNER_NOT_REMOVABLE
+      followup:
+        expected_member_count_delta: 0
+
+  - id: ng-013
+    ac: AC19
+    rule: N15
+    description: 멤버를 제거해도 그 멤버가 등록한 이슈·status_history·알림·재검증 기록은 지우지 않는다
+    input:
+      endpoint: DELETE /projects/{projectId}/members/{memberId}
+      precondition: member-2가 등록한 이슈 1건(재검증 1건, 알림 2건 포함)
+      actor: 소유자
+    expected:
+      status: 204
+      followup:
+        expected_issue_count_delta: 0
+        expected_verification_count_delta: 0
+        expected_notification_count_total_delta: 0
+        status_history_length_unchanged: true

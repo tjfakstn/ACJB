@@ -11,11 +11,14 @@ spring:
     username: ${DB_USER:qating}
     password: ${DB_PASSWORD}
 
+  # 테이블은 Flyway가 db/migration/V*.sql을 순서대로 적용해 만든다(2026-11-05). 스키마를 바꾸려면 새 V 파일을 추가한다
+  flyway:
+    locations: classpath:db/migration
+
   jpa:
-    # 스키마 마이그레이션 도구(Flyway 등)는 아직 도입하지 않아서 개발 중에는 엔티티 기준으로 맞춘다.
-    # TODO: 배포 전에 마이그레이션 도구로 전환하고 update를 validate로 바꿀 것
+    # Hibernate는 테이블을 고치지 않고 엔티티와 맞는지 검사만 한다 — 어긋나면 서버가 뜨지 않는다
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
     properties:
       # 이슈 목록에서 repro_steps·screenshots·style_mismatch를 이슈마다 따로 읽는 N+1을 묶음 조회로 줄인다

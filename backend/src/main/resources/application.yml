@@ -11,15 +11,30 @@ spring:
     username: ${DB_USER:qating}
     password: ${DB_PASSWORD}
 
+  # 테이블은 Flyway가 db/migration/V*.sql을 순서대로 적용해 만든다(2026-11-05). 스키마를 바꾸려면 새 V 파일을 추가한다
+  flyway:
+    locations: classpath:db/migration
+
   jpa:
-    # 스키마 마이그레이션 도구(Flyway 등)는 아직 도입하지 않아서 개발 중에는 엔티티 기준으로 맞춘다.
-    # TODO: 배포 전에 마이그레이션 도구로 전환하고 update를 validate로 바꿀 것
+    # Hibernate는 테이블을 고치지 않고 엔티티와 맞는지 검사만 한다 — 어긋나면 서버가 뜨지 않는다
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
     properties:
       # 이슈 목록에서 repro_steps·screenshots·style_mismatch를 이슈마다 따로 읽는 N+1을 묶음 조회로 줄인다
       hibernate.default_batch_fetch_size: 100
+
+  # 초대 메일 SMTP(Gmail) — 계정·앱 비밀번호는 backend/.env의 MAIL_USERNAME·MAIL_PASSWORD
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
 
   security:
     oauth2:
@@ -41,10 +56,19 @@ server:
 
 app:
   # parse(AC8) — 모델은 parse_query.md 실패 모드 점검표를 검증한 모델과 맞춘다(2026-11-04 설만수 결정)
+  # 초대 메일(AC17) — 팀 공용 Gmail 계정. 수락 링크는 프론트의 초대 페이지({token}에 원문 토큰)
+  invite:
+    mail-from: ${MAIL_USERNAME:}
+    accept-url: http://localhost:5173/invitations/{token}
   # Figma 동기화 — 토큰은 backend/.env의 FIGMA_ACCESS_TOKEN(로그에 남기지 않는다)
   figma:
     access-token: ${FIGMA_ACCESS_TOKEN:}
     base-url: https://api.figma.com
+    timeout: 30s
+  # 단일 컴포넌트 scan — 서버가 target_url을 헤드리스 크로미움으로 연다. 루프백(localhost)은 로컬 개발에서만 허용
+  # (backend/.env의 SCAN_ALLOW_LOCALHOST=true). 사설 IP·메타데이터 주소는 항상 막는다(2026-11-04 설만수 결정)
+  scan:
+    allow-localhost: ${SCAN_ALLOW_LOCALHOST:false}
     timeout: 30s
   parse:
     model: claude-sonnet-5
@@ -59,3 +83,5 @@ app:
     # localhost:8080에서 만든 세션 쿠키가 localhost:5173 요청에도 그대로 붙음.
     # TODO: 실제 배포 도메인 확정되면 프로필별로 분리
     login-success-redirect: http://localhost:5173/
+    # 로그아웃 후 돌아갈 프론트 주소(로그인 화면). openapi의 "'/'로 리다이렉트"는 프론트의 '/'다
+    logout-success-redirect: http://localhost:5173/

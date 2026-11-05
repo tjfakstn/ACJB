@@ -43,12 +43,12 @@ class ProjectAccessTest {
 
     @BeforeEach
     void setUp() {
-        mine = projects.save(new Project("ac12-mine"));
-        other = projects.save(new Project("ac12-other"));
-        Member me = members.save(new Member("me@test.dev", "멤버", MemberRole.DEVELOPER));
-        Member outsider = members.save(new Member("outsider@test.dev", "다른 프로젝트 멤버", MemberRole.DESIGNER));
-        projectMembers.save(new ProjectMember(mine, me));
-        projectMembers.save(new ProjectMember(other, outsider));
+        mine = projects.save(new Project("ac12-mine", owner()));
+        other = projects.save(new Project("ac12-other", owner()));
+        Member me = members.save(new Member("me@test.dev", "멤버"));
+        Member outsider = members.save(new Member("outsider@test.dev", "다른 프로젝트 멤버"));
+        projectMembers.save(new ProjectMember(mine, me, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(other, outsider, MemberRole.DESIGNER));
     }
 
     private static OAuth2LoginRequestPostProcessor loginAs(String email) {
@@ -112,5 +112,10 @@ class ProjectAccessTest {
         mvc.perform(get("/api/v1/auth/me"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.authenticated").value(false));
+    }
+
+    /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */
+    private Member owner() {
+        return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
 }

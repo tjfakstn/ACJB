@@ -30,6 +30,9 @@ public interface QAIssueRepository extends JpaRepository<QAIssue, Long> {
     List<QAIssue> search(@Param("projectId") Long projectId, @Param("status") IssueStatus status,
                          @Param("assignedTo") Long assignedTo);
 
+    /** AC19 — 제거되는 멤버가 담당자인 미해결 이슈(담당자를 비울 대상) */
+    List<QAIssue> findByProjectIdAndAssignedToIdAndStatusNot(Long projectId, Long assignedToId, IssueStatus status);
+
     /** 경로의 projectId와 함께 찾아, 다른 프로젝트 이슈가 섞이지 않게 한다(N10) */
     Optional<QAIssue> findByIdAndProjectId(Long id, Long projectId);
 

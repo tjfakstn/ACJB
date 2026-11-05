@@ -42,13 +42,9 @@ public class ProjectMemberAuthorizationManager implements AuthorizationManager<R
         return new AuthorizationDecision(projectMembers.existsByProjectIdAndMemberEmail(projectId, email));
     }
 
-    /** 구글 로그인 사용자의 이메일. Member는 이 이메일로 식별한다(db-schema.md members.email) */
+    /** 구글 로그인 사용자의 이메일(소문자). Member는 이 이메일로 식별한다(db-schema.md members.email) */
     static String emailOf(Authentication auth) {
-        if (auth.getPrincipal() instanceof OAuth2User user) {
-            Object email = user.getAttribute("email");
-            return email instanceof String s && !s.isBlank() ? s : null;
-        }
-        return null;
+        return auth.getPrincipal() instanceof OAuth2User user ? CurrentMember.emailOf(user) : null;
     }
 
     private static Long parseId(String raw) {

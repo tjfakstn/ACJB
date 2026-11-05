@@ -43,3 +43,4 @@ app:
       - http://localhost:5173
   oauth2:
     login-success-redirect: http://localhost:5173/
+    logout-success-redirect: http://localhost:5173/

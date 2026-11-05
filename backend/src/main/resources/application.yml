@@ -83,3 +83,5 @@ app:
     # localhost:8080에서 만든 세션 쿠키가 localhost:5173 요청에도 그대로 붙음.
     # TODO: 실제 배포 도메인 확정되면 프로필별로 분리
     login-success-redirect: http://localhost:5173/
+    # 로그아웃 후 돌아갈 프론트 주소(로그인 화면). openapi의 "'/'로 리다이렉트"는 프론트의 '/'다
+    logout-success-redirect: http://localhost:5173/

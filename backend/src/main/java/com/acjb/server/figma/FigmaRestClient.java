@@ -82,6 +82,19 @@ public class FigmaRestClient implements FigmaClient {
         return result;
     }
 
+    @Override
+    public Optional<JsonNode> nodeDocument(String fileKey, String nodeId) {
+        JsonNode nodes = requireObject(get("/v1/files/{key}/nodes?ids={ids}", fileKey, nodeId), "nodes");
+        JsonNode entry = nodes.get(nodeId);
+        if (entry == null || entry.isNull()) {
+            return Optional.empty();
+        }
+        JsonNode document = requireObject(entry, "document");
+        requireText(document, "id");
+        requireText(document, "type");
+        return Optional.of(document);
+    }
+
     private JsonNode get(String path, String fileKey, String ids) {
         if (!configured) {
             throw new FigmaApiException("Figma 토큰(FIGMA_ACCESS_TOKEN)이 설정되지 않았습니다.");

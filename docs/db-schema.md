@@ -252,8 +252,8 @@ erDiagram
 
 구현 메모:
 
-- **enum은 `VARCHAR`로 고정한다.** Hibernate는 `@Enumerated(EnumType.STRING)`을 MySQL에서 native `ENUM` 타입으로 만든다. 그러면 값을 추가할 때마다 `ALTER`가 필요하고 `ddl-auto: update`는 이를 반영하지 않으므로, enum 필드마다 `@JdbcTypeCode(SqlTypes.VARCHAR)`를 붙인다. 새 enum 필드를 추가할 때도 같이 붙일 것.
-- **`ddl-auto: update`는 컬럼을 지우지 않는다.** 이번 변경 전 스키마로 만든 로컬 개발 DB에는 옛 컬럼(`mismatch_*`, `platform`·`device` 등)이 남는다. 로컬 `qating` 스키마의 테이블을 지우고 앱을 다시 띄우면 새로 만들어진다(시드는 2026-11-04 폐기 — 프로젝트·멤버는 앱에서 만든다). 배포 전 마이그레이션 도구 전환 TODO는 그대로다.
+- **enum은 `VARCHAR`로 고정한다.** Hibernate는 `@Enumerated(EnumType.STRING)`을 MySQL에서 native `ENUM` 타입으로 만든다. 그러면 값을 추가할 때마다 컬럼 타입 `ALTER`가 필요하므로, enum 필드마다 `@JdbcTypeCode(SqlTypes.VARCHAR)`를 붙인다. 새 enum 필드를 추가할 때도 같이 붙일 것. 다만 VARCHAR 컬럼에도 허용 값 CHECK 제약(예: `qa_issues_chk_4`)이 걸려 있어, enum 값을 추가하면 그 제약을 바꾸는 마이그레이션 파일이 필요하다.
+- **스키마는 Flyway로만 바꾼다(2026-11-05).** 테이블은 서버가 켜질 때 `backend/src/main/resources/db/migration/V*.sql`이 순서대로 적용돼 만들어지고, Hibernate는 `ddl-auto: validate`로 엔티티와 맞는지 검사만 한다. 스키마를 바꾸려면 엔티티와 함께 새 파일 `V2__설명.sql`(다음 번호)을 추가한다 — 이미 적용된 V 파일은 고치지 않는다. Flyway 도입 전에 만든 로컬 DB는 기록 테이블이 없어 서버가 뜨지 않으므로 로컬 `qating` 스키마를 비우고 다시 띄운다(시드는 2026-11-04 폐기 — 프로젝트·멤버는 앱에서 만든다).
 - **`projects.name` UNIQUE**: 시드 로더가 이름으로 프로젝트를 찾느라 엔티티에 남겨 두었으나, 2026-11-04 시드 폐기·사용자 생성 프로젝트로 바뀌어 제거 대상이다(아래 추가 목표 1번).
 - **`GET /figma/frames` 목록 정렬**: `openapi.yaml`에 정렬 기준이 없어 목록 조회 메서드는 아직 만들지 않았다(AGENTS.md 5절). 구현 전에 정렬 기준을 정해야 한다.
 

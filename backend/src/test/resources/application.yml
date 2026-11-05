@@ -31,6 +31,9 @@ app:
   parse:
     model: claude-sonnet-5
     api-key: ""
+  # ng-003의 target_url이 http://localhost:5173 — 테스트는 로컬 개발과 같게 루프백을 허용한다(ComputedStyleReader는 가짜)
+  scan:
+    allow-localhost: true
   cors:
     allowed-origins:
       - http://localhost:5173

@@ -473,9 +473,21 @@ paths:
       summary: Figma 프레임 vs 배포 화면 스타일 자동 비교 실행 (v1 포함, SPEC.md 4절)
       description: >-
         범위는 웹 화면의 단일 컴포넌트, color·font_weight·radius 3개 property로 한정한다. 한쪽 값 추출에 실패하면
-        그 property는 저장하지 않는다(AC2). 동작 방식(2026-10-28 제안, 구현 전 확인 필요): 서버가 Figma REST API로
-        `node_id`의 값을 읽고(토큰은 서버 환경변수 `FIGMA_ACCESS_TOKEN`), 헤드리스 브라우저로 `target_url`을 열어
-        `selector`가 가리키는 요소의 getComputedStyle을 읽어 비교한다. `frame_id`는 figma/sync로 가져온 프레임이어야 한다.
+        그 property는 저장하지 않는다(AC2). 동작 방식(2026-11-05 구현으로 확정): 서버가 Figma REST API로
+        `node_id`의 값을 읽고(토큰은 서버 환경변수 `FIGMA_ACCESS_TOKEN`), 헤드리스 Chromium(Playwright)으로 `target_url`을 열어
+        `selector`가 가리키는 요소의 getComputedStyle을 읽어 비교한다. `frame_id`는 figma/sync로 가져온 프레임이어야 하고,
+        `node_id`는 그 프레임 안에 있어야 한다.
+
+        비교 규칙(스파이크 2026-09-28 기준): color 채널별 ±2, font_weight 정확히 일치, radius ±1px. 값이 다른 property만
+        StyleMismatch로 저장한다(`#RRGGBB` / `600` / `8px` 형식). Figma 노드가 TEXT면 CSS 글자색(color)과, 그 외에는
+        배경색(background-color)과 비교한다. 투명도·그라디언트·모서리마다 다른 반경처럼 값 하나로 정할 수 없는 경우는
+        추출 실패로 보고 비교하지 않는다(N3). 비교할 수 있는 property가 하나도 없거나, selector가 요소 0개 또는 2개 이상에
+        맞으면 scan은 failed가 되고 이유는 상태 조회의 `error_message`에 남는다.
+
+        `target_url` 제한(2026-11-04 결정, 내부망 접근 차단): http/https만, 사용자 정보(user@host) 불가, 1000자 이하.
+        사설·링크로컬(클라우드 메타데이터 169.254.169.254 포함)·CGNAT·멀티캐스트 등 내부 주소로 풀리는 호스트는 거부한다.
+        localhost(루프백)는 서버 환경변수 `SCAN_ALLOW_LOCALHOST=true`일 때만 허용한다(로컬 개발용, 배포 서버에서는 끔).
+        화면이 여는 모든 요청과 리다이렉트도 단계마다 같은 규칙으로 검사해 막는다.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
       requestBody:
@@ -506,7 +518,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/StyleMismatchScanResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            필수 항목 누락, frame_id·node_id 형식 오류, selector 500자 초과, 허용하지 않는 target_url,
+            figma/sync로 동기화되지 않은 frame_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: 서버에 Figma 토큰이 설정되지 않음 (error.code FIGMA_UNAVAILABLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /projects/{projectId}/style-mismatches/scans/{scanId}:
     get:
@@ -526,6 +556,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StyleMismatchScanStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -1224,6 +1258,10 @@ components:
             status: { type: string, enum: [queued, running, done, failed] }
             mismatch_count: { type: integer }
             finished_at: { type: string, format: date-time, nullable: true }
+            error_message:
+              type: string
+              nullable: true
+              description: failed일 때만 값이 있다. 사용자가 selector·URL을 고칠 수 있도록 보여 주는 이유 (500자 이하)
         error: { type: object, nullable: true, example: null }
 
     StyleMismatchListResponse:

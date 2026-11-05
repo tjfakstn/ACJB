@@ -380,10 +380,10 @@ cases:
   - id: ng-003
     ac: AC2
     rule: N4
-    description: scan은 v1에 포함돼(2026-10-28 확정, 설만수 승인) 유효한 요청(frame_id·target_url)이면 비동기 작업이 큐에 들어가 202와 scan_id를 반환한다
+    description: scan은 v1에 포함돼(2026-10-28 확정, 설만수 승인) 유효한 요청(frame_id·node_id·target_url·selector)이면 비동기 작업이 큐에 들어가 202와 scan_id를 반환한다. node_id·selector는 openapi 단일 컴포넌트 scan 요청 형식에 맞춰 2026-11-05 추가(설만수 승인, 기대값은 그대로)
     input:
       endpoint: POST /projects/{projectId}/style-mismatches/scan
-      body: { frame_id: "84:759", target_url: "http://localhost:5173" }
+      body: { frame_id: "84:759", node_id: "84:759", target_url: "http://localhost:5173", selector: "button.primary" }
     expected:
       status: 202
       body_has: [scan_id, status]

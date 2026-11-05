@@ -8,6 +8,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
@@ -51,6 +54,10 @@ public class SecurityConfig {
     @Value("${app.oauth2.login-success-redirect}")
     private String loginSuccessRedirect;
 
+    // 상대 경로("/")로 두면 백엔드 주소(localhost:8080/)로 가서 404가 났다 — 로그인과 같이 프론트 절대 주소로 보낸다
+    @Value("${app.oauth2.logout-success-redirect}")
+    private String logoutSuccessRedirect;
+
     public SecurityConfig(CorsProperties corsProperties, ProjectMemberAuthorizationManager projectMemberAuthorization,
                           JsonErrorResponder errorResponder) {
         this.corsProperties = corsProperties;
@@ -59,7 +66,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, ClientRegistrationRepository clientRegistrations) throws Exception {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             // 세션 쿠키 인증이라 상태 변경 요청(POST·PATCH)에 CSRF 토큰을 요구한다(SPEC 5절).
@@ -80,7 +87,9 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2
-                .authorizationEndpoint(authz -> authz.baseUri(AUTH_LOGIN_BASE_URI))
+                .authorizationEndpoint(authz -> authz
+                    .baseUri(AUTH_LOGIN_BASE_URI)
+                    .authorizationRequestResolver(selectAccountResolver(clientRegistrations)))
                 .redirectionEndpoint(redir -> redir.baseUri(AUTH_CALLBACK_BASE_URI + "/*"))
                 .defaultSuccessUrl(loginSuccessRedirect, true)
             )
@@ -88,7 +97,7 @@ public class SecurityConfig {
             // — CSRF 토큰을 프론트에서 아직 다루지 않아서 POST 대신 선택 (TODO: 상태변경 API 늘어나면 재검토)
             .logout(logout -> logout
                 .logoutRequestMatcher(PathPatternRequestMatcher.pathPattern(HttpMethod.GET, AUTH_LOGOUT_URI))
-                .logoutSuccessUrl("/")
+                .logoutSuccessUrl(logoutSuccessRedirect)
             )
             // 프론트가 fetch로 인증 여부를 확인할 때(/api/**), 미인증이면 구글 로그인으로
             // 리다이렉트하지 않고 401만 반환 — 리다이렉트를 fetch가 따라가면 accounts.google.com에서
@@ -102,6 +111,19 @@ public class SecurityConfig {
             );
 
         return http.build();
+    }
+
+    /**
+     * 구글에 prompt=select_account를 붙여 로그인할 때마다 계정 선택창을 띄운다(2026-11-05 설만수 결정).
+     * 붙이지 않으면 QAting에서 로그아웃해도 브라우저에 남은 구글 로그인으로 같은 계정에 바로 다시 들어가,
+     * 한 브라우저에서 다른 계정(예: 초대받은 계정)으로 바꿔 로그인할 수 없다.
+     */
+    private static OAuth2AuthorizationRequestResolver selectAccountResolver(ClientRegistrationRepository clientRegistrations) {
+        DefaultOAuth2AuthorizationRequestResolver resolver =
+            new DefaultOAuth2AuthorizationRequestResolver(clientRegistrations, AUTH_LOGIN_BASE_URI);
+        resolver.setAuthorizationRequestCustomizer(request ->
+            request.additionalParameters(params -> params.put("prompt", "select_account")));
+        return resolver;
     }
 
     private CorsConfigurationSource corsConfigurationSource() {

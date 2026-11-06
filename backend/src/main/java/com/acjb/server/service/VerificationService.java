@@ -20,6 +20,7 @@ import com.acjb.server.dto.VerificationCreateResponse;
 import com.acjb.server.dto.VerificationListResponse;
 import com.acjb.server.dto.VerificationResponse;
 import com.acjb.server.repository.NotificationRepository;
+import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.QAIssueRepository;
 import com.acjb.server.repository.StatusHistoryRepository;
 import com.acjb.server.repository.VerificationRepository;
@@ -39,13 +40,16 @@ public class VerificationService {
     private final VerificationRepository verifications;
     private final StatusHistoryRepository histories;
     private final NotificationRepository notifications;
+    private final ProjectMemberRepository projectMembers;
 
     public VerificationService(QAIssueRepository issues, VerificationRepository verifications,
-                               StatusHistoryRepository histories, NotificationRepository notifications) {
+                               StatusHistoryRepository histories, NotificationRepository notifications,
+                               ProjectMemberRepository projectMembers) {
         this.issues = issues;
         this.verifications = verifications;
         this.histories = histories;
         this.notifications = notifications;
+        this.projectMembers = projectMembers;
     }
 
     @Transactional
@@ -65,8 +69,8 @@ public class VerificationService {
         QAIssue issue = findIssue(projectId, issueId, true);
 
         // 3) 권한(AC13) — 재검증은 그 이슈의 등록자만. 전이 검사보다 먼저
-        if (!issue.getReportedBy().getId().equals(actor.getId())) {
-            throw ApiException.forbidden("재검증은 이 이슈를 등록한 사람만 할 수 있습니다.");
+        if (!canVerify(issue, actor)) {
+            throw ApiException.forbidden("재검증은 이 이슈를 등록한 사람만 할 수 있습니다(등록자가 프로젝트에서 빠졌으면 소유자).");
         }
         // 4) 전이(AC6) — fixed인 이슈만 재검증한다
         if (issue.getStatus() != IssueStatus.FIXED) {
@@ -86,6 +90,20 @@ public class VerificationService {
         issues.flush();
         return new VerificationCreateResponse(VerificationResponse.of(verification),
             next.name().toLowerCase(Locale.ROOT), List.copyOf(issue.getReproSteps()));
+    }
+
+    /**
+     * 등록자가 프로젝트에서 제거되면 아무도 재검증할 수 없어 이슈가 fixed에 묶이므로, 그때만 소유자가 대신한다
+     * (2026-11-05 결정, SPEC AC13). 등록자가 아직 멤버면 소유자라도 403이다(au-009).
+     */
+    private boolean canVerify(QAIssue issue, Member actor) {
+        Long reporterId = issue.getReportedBy().getId();
+        if (reporterId.equals(actor.getId())) {
+            return true;
+        }
+        Long projectId = issue.getProject().getId();
+        return issue.getProject().getOwner().getId().equals(actor.getId())
+            && !projectMembers.existsByProjectIdAndMemberId(projectId, reporterId);
     }
 
     /** 최신순(verified_at desc, id desc)으로 고정 */

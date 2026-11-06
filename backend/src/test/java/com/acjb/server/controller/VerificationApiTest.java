@@ -198,6 +198,54 @@ class VerificationApiTest {
         verifyAs(other, issue, "{\"result\":\"pass\"}").andExpect(status().isForbidden());
     }
 
+    // --- AC13 (2026-11-05 수정): 등록자가 제거되면 소유자가 대신 ---
+
+    /** 소유자를 프로젝트 멤버로 넣는다(AC12 필터를 통과해야 권한 검사까지 온다) */
+    private Member ownerAsMember() {
+        Member owner = project.getOwner();
+        projectMembers.save(new ProjectMember(project, owner, MemberRole.PLANNER));
+        return owner;
+    }
+
+    private void removeReporter() {
+        projectMembers.delete(projectMembers.findByProjectIdAndMemberId(project.getId(), reporter.getId()).orElseThrow());
+        projectMembers.flush();
+    }
+
+    @Test
+    void au008_등록자가_제거됐으면_소유자가_재검증할_수_있다() throws Exception {
+        QAIssue issue = issue(project, assignee, IssueStatus.FIXED);
+        Member owner = ownerAsMember();
+        removeReporter();
+        verifyAs(owner, issue, "{\"result\":\"pass\"}")
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.issue_status").value("resolved"))
+            .andExpect(jsonPath("$.data.verification.verified_by").value(String.valueOf(owner.getId())));
+        assertThat(reloadStatus(issue)).isEqualTo(IssueStatus.RESOLVED);
+    }
+
+    @Test
+    void au009_등록자가_아직_멤버면_소유자라도_403이고_상태_이력이_그대로다() throws Exception {
+        QAIssue issue = issue(project, assignee, IssueStatus.FIXED);
+        Member owner = ownerAsMember();
+        long historyBefore = histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()).size();
+        verifyAs(owner, issue, "{\"result\":\"pass\"}")
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.success").value(false));
+        assertThat(reloadStatus(issue)).isEqualTo(IssueStatus.FIXED);
+        assertThat(verifications.count()).isZero();
+        assertThat(histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId())).hasSize((int) historyBefore);
+    }
+
+    @Test
+    void 등록자가_제거돼도_소유자가_아닌_멤버는_403() throws Exception {
+        QAIssue issue = issue(project, assignee, IssueStatus.FIXED);
+        removeReporter();
+        verifyAs(other, issue, "{\"result\":\"pass\"}").andExpect(status().isForbidden());
+        assertThat(reloadStatus(issue)).isEqualTo(IssueStatus.FIXED);
+        assertThat(verifications.count()).isZero();
+    }
+
     // --- N6 · N8 ---
 
     @Test

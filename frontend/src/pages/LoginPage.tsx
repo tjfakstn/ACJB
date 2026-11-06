@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchMe } from '../lib/api'
+import { fetchMe, takeAfterLogin } from '../lib/api'
 import { GoogleLoginButton } from '../components/GoogleLoginButton'
 
 // Figma 와이어프레임 '랜딩/로그인 화면' 참고 (13:96) — 지금은 1차 와이어프레임이라
@@ -13,7 +13,7 @@ export function LoginPage() {
   useEffect(() => {
     fetchMe().then((me) => {
       if (me.authenticated) {
-        navigate('/app', { replace: true })
+        navigate(takeAfterLogin() ?? '/app/projects', { replace: true })
       } else {
         setChecking(false)
       }

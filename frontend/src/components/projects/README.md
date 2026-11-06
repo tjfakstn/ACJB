@@ -1,60 +1,29 @@
-# 프로젝트 목록 & 연결 플로우 (02 Projects)
+# 프로젝트·멤버·초대 화면
 
-로그인 이후 첫 화면. Figma `안캡잘부-캡스톤디자인` 02 Projects — Refined 프레임 기반.
+Figma `UI Design - Refined` › "QAting - 전체 서비스 최종 통합 UI"(573:15223) 중 지금 스펙(`docs/SPEC.md`)과 맞는 화면만 구현했다(2026-11-06).
 
-- 라우트: `/app/projects` (`src/pages/ProjectsPage.tsx`)
-- Figma: node-id `424-3239` (02 Projects & Connect — Refined)
-
-## 화면/상태
-
-| 상태 | Figma | 설명 |
+| 라우트 | 화면 | 시안 |
 | --- | --- | --- |
-| 빈 상태 | 02-2 | 연결된 프로젝트 0개. 점선 박스 + 1·2·3 단계 안내 (`EmptyState`) |
-| 목록 | 02-1 | 카드 1개 이상. 상단 하이라이트 스트립 + 툴바 + 카드 리스트 |
-| 연결 팝업 1 | 02-3 | 기본 정보(프로젝트 이름/설명) 입력 |
-| 연결 팝업 2 | 02-4 | 서비스 연결(GitHub/Figma 링크) |
-| 연결 팝업 3 | 02-6 | 분석 진행(스피너 + 진행률 + 3단계) → 완료 시 목록에 카드 추가 |
+| `/app/projects` | 프로젝트 목록·빈 상태 (`pages/ProjectsPage.tsx`) | U01-03, U01-A1 |
+| (팝업) | 새 프로젝트 만들기 → 만드는 중 → 완료, 이름 미입력·입력 오류·생성 실패 (`CreateProjectDialog`) | U01-04~06, U01-B1~B3 |
+| `/app/projects/:id/members` | 멤버 관리 + 이메일 초대 (`pages/MembersPage.tsx`, `members/InviteDialog`) | U02-C1 |
+| `/invitations/:token` | 초대 메일 링크 — 확인·수락, 만료·취소·이미 수락, 잘못된 링크 (`pages/InvitationPage.tsx`) | U02-B2, U02-B3 |
 
-플로우: 빈 상태 → `새 프로젝트 연결` → 팝업(1→2→3) → `onComplete` → 목록에 카드 추가.
+API는 `src/lib/api.ts` 한 곳에서 부른다(CSRF 헤더, `{success,data,error}` 응답, `error.code`로 분기).
 
-## 컴포넌트
+## 시안과 다르게 한 것 (스펙에 맞춤 — 오단비·최유정 확인 필요)
 
-- `ProjectsPage` — 페이지. 인증 가드(`fetchMe`) + 목록 상태 + 팝업 열고닫기.
-- `AppHeader` — 로그인 후 공통 헤더(로고/알림/계정).
-- `HighlightStrip` — 전체 수 + FAIL/이상없음 분포 바.
-- `ProjectToolbar` — 검색/상태/정렬 (표시만, 미연동).
-- `ProjectListItem` — 02-1 카드 한 줄.
-- `EmptyState` — 02-2 빈 상태.
-- `ConnectProjectDialog` — 3단계 연결 팝업(분석은 프론트 시뮬레이션).
-- `types.ts` — `Project`, `ConnectProjectInput`.
+- **역할은 본인이 고른다**: 만들 때(만든 사람)·수락할 때(초대받은 사람). 시안은 초대하는 사람이 정하고 나중에 바꾼다 — 역할 변경 API 없음(SPEC AC16·AC18)
+- **프로젝트 설명 없음**: 서버에 설명 필드가 없다
+- **GitHub 없음**: 연결 단계·문구에서 뺐다(v1 비포함). Figma 연결 단계(U03)는 아직 없다
+- **목록 카드의 QA 결과·FAIL 건수·마지막 분석 시각, 상태 필터·정렬 없음**: 내려줄 API가 없다. 목록은 서버가 name asc로 고정
+- **초대는 이메일 한 명씩**(U02-01~05의 여러 명·역할 지정 대신), **거절·재요청 버튼 없음**, **초대 실패 탭 없음**
+- **작업공간 홈(U04-01) 없음**: 프로젝트를 누르면 멤버 관리로 간다. 왼쪽 메뉴의 나머지는 "준비 중"
+
+## 로그인 뒤 돌아가기
+
+서버는 로그인에 성공하면 항상 프론트의 `/`로 보낸다. 초대 링크에서 로그인하면 `sessionStorage`에 경로를 적어 두고, `/`(랜딩)가 로그인 상태를 확인해 그 경로나 `/app/projects`로 보낸다.
 
 ## 디자인 토큰
 
-`src/index.css`의 `@theme`에 `--color-qa-*`(primary/logo/success/warning/sub/border/surface) 추가 — Figma 변수에서 가져옴.
-`bg-qa-primary`, `text-qa-success` 처럼 Tailwind 유틸로 사용.
-→ **최유정**: 공용 디자인 토큰 정본으로 승격할지, 공용 `Button`에도 반영할지 확정 필요.
-
-## 연결 성공/실패 규칙 (구현됨)
-
-- **성공했을 때만 목록에 추가된다.** 연결/분석에 실패하면 팝업이 02-5 오류 화면으로 남고
-  `onComplete`가 호출되지 않으므로, 실패한 프로젝트는 '모든 프로젝트' 목록에 뜨지 않는다.
-- **QA 결과 / FAIL(불일치) 건수는 백엔드 결과값만 쓴다.** 프론트에서 지어내지 않는다.
-  `attemptConnect`가 돌려준 `{ qaCount, failCount }`를 그대로 카드에 넣는다(`connectProject.ts`).
-- 오류는 서비스(GitHub/Figma)별로 표시된다. 실패한 서비스 카드에 오류 표시 + 상단 배너가 뜨고,
-  해당 링크를 수정하면 `시작하기`가 다시 활성화된다.
-
-## 백엔드 연동 TODO (미구현)
-
-말씀대로 **아직 로그인/연동 전**이라 목록·분석·집계는 스텁(`connectProject.ts`)이다. 이어서 할 일:
-
-1. **목록 조회 / 프로젝트 연결 API 신설** — `openapi.yaml`에는 `/projects/{projectId}/...` 만 있고
-   목록 조회(`GET /projects`)·연결 생성(`POST /projects`)이 없음. 스펙 확정 필요(오단비/설만수).
-   - 목록 API는 정렬 기준을 명시적으로 고정할 것(AGENTS.md §5, 예: `created_at desc`).
-2. **GitHub / Figma 링크 유효성 검증 (백엔드)** — 입력값이 형식만 맞는 게 아니라
-   **실제 존재하고 접근 가능한 GitHub repo / Figma 파일 링크**인지 서버에서 검증해야 함.
-   프론트는 비어있는지 정도만 보고, 유효성의 정본은 서버 응답으로 판단한다.
-   현재 `attemptConnect`는 임시 스텁(링크가 비었거나 'fail' 포함 시 실패)으로, 실제 검증 호출로 교체.
-3. **QA 결과 / FAIL(불일치) 집계** — `attemptConnect` 성공 응답의 `qaCount`/`failCount`를
-   서버 분석 결과(figma sync + style-mismatches scan 집계)로 채운다. 현재 스텁은 0을 반환.
-4. **분석 진행률** — 현재 1.1초 간격 더미. 실제 분석 작업 상태 폴링으로 교체.
-5. `ProjectsPage` 의 마운트 로딩(`GET /projects`)과 `handleComplete`의 id 등을 실제 API 응답으로 교체.
+`src/index.css`의 `--color-qa-*` — Figma 변수에서 가져옴. 공용 정본으로 승격할지는 최유정 확인 필요.

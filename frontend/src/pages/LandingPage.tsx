@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { fetchMe, takeAfterLogin } from '../lib/api'
 import {
   CheckCircle,
   Dot,
@@ -171,6 +173,14 @@ const DIFF_ROWS = [
 ] as const
 
 export function LandingPage() {
+  const navigate = useNavigate()
+  // 서버는 로그인에 성공하면 항상 '/'(여기)로 보낸다 — 로그인한 사용자는 하던 곳(초대 링크 등)이나 프로젝트 목록으로 넘긴다
+  useEffect(() => {
+    fetchMe().then((me) => {
+      if (me.authenticated) navigate(takeAfterLogin() ?? '/app/projects', { replace: true })
+    })
+  }, [navigate])
+
   return (
     <div className="flex min-h-screen flex-col items-center bg-white">
       {/* Header */}

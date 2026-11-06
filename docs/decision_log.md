@@ -203,3 +203,27 @@
   - 초기 전체 비교 스파이크: 프레임↔URL 입력을 전제로 LLM 짝 추정 정확도와 비교할 property 범위 측정
   - 골든 케이스: AC13 수정분·AC14~AC19·N14·N15 19건은 같은 날 설만수 승인으로 추가(`nt-007`, `pj-001`~`pj-006`, `iv-001`~`iv-007`, `au-008`·`au-009`, `ng-011`~`ng-013`). N16은 2차 LLM·RAG 설계 확정 후
 - **결정자**: 설만수
+
+## 2026-11-06 재검증 범위 제안(2차 LLM·RAG) 상세 설계 확정
+
+- **결정** (설계 전문: `docs/design-recheck-suggestions.md`):
+  1. **API는 `POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions`** — 본문 없음, 응답은 근거(type·id)가 달린 제안 최대 5개와 `searched_count`·`dropped_count`(SPEC AC20, openapi v0.4.0)
+  2. **요청은 재검증 등록 권한자만**(등록자, 등록자가 제거됐으면 소유자 — AC13과 같은 규칙), `fixed` 이슈만. 거부될 때는 외부 호출을 하지 않는다
+  3. **제안 결과는 저장하지 않는다** — 매번 새로 계산해 응답만 돌려준다
+  4. **에러 코드**: `fixed`가 아니면 기존 `INVALID_TRANSITION`(409), 임베딩·LLM 실패와 스키마 위반은 새 코드 `SUGGESTION_FAILED`(502) — 확정 목록은 13개가 된다
+  5. **임베딩**: Voyage `voyage-4`(1024차원), 대상은 이슈·스타일 차이·`fail` 재검증 기록, 원본이 만들어질 때 커밋 후 비동기로 한 번 만들고 빠진 것은 제안 요청 때 보충한다. `embeddings` 테이블(db-schema)에 저장, 같은 프로젝트·같은 모델만 상위 8개 검색
+  6. **근거 id 검사**: 근거가 비었거나 하나라도 검색 결과에 없던 id면 그 제안 전체를 버린다. 대상 이슈와 같은 화면 제안도 버린다
+  7. **evals는 파이썬 단독 실행**(`evals/run_evals.py`) — 가상 프로젝트 이력으로 백엔드 없이 검색·호출·근거 검사·채점을 돌린다. 임베딩 텍스트 규칙·K·프롬프트는 백엔드와 같은 파일·값을 읽는다
+- **왜**:
+  - 2: 유료 호출을 재검증하는 사람에게만 두고, 새 권한 규칙을 만들지 않는다
+  - 3: 저장하면 테이블과 보존 기간 결정이 더 필요하다. v1은 화면에 보여주는 것으로 충분하다
+  - 4: 프론트가 parse 실패와 제안 실패를 코드로 구분할 수 있다
+  - 5: 세 원본 모두 생성 뒤 텍스트가 바뀌지 않아(PATCH는 status·assigned_to만) 한 번 만들면 된다. 비동기라 키가 없거나 Voyage가 실패해도 이슈 등록은 영향이 없다. pass 재검증은 회귀 근거가 되지 않는다
+  - 6: 지어낸 근거를 섞은 제안은 나머지 설명도 믿기 어렵다
+  - 7: 평가용 데이터를 DB에 넣는 경로와 로그인 우회를 만들지 않아도 된다(N10). 대신 백엔드와 규칙이 어긋날 수 있어 같은 파일을 읽게 한다
+- **남은 일**:
+  - 구현(server): `V2__embeddings.sql`·엔티티, Voyage 클라이언트, 비동기 생성, 검색, `src/qating/prompts/recheck_scope.md`·`src/qating/schemas/RecheckSuggestion.schema.json`, 근거 id 검사, `ErrorCodes.SUGGESTION_FAILED`. `VOYAGE_API_KEY`를 `backend/.env.example`에 추가
+  - evals: `evalset.jsonl` 15~20케이스(인터뷰 로그 2·6·8의 연결 화면 회귀 패턴), `judge_prompt.md`, `run_evals.py`
+  - 골든 케이스: 후보 `rs-001`~`rs-004`(AC20), `ng-014`~`ng-016`(N16) — 사람 승인 후 추가
+  - AC13 소유자 재검증은 server에 반영됨(`864b34d`, dev 통합 전)
+- **결정자**: 설만수

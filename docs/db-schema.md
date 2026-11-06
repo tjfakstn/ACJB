@@ -29,7 +29,7 @@ erDiagram
     members ||--o{ notifications : receives
 ```
 
-## 2. 테이블 요약 (14개)
+## 2. 테이블 요약 (14개 + 설계 확정 1개)
 
 | 테이블 | 역할 | 관련 API / AC |
 | --- | --- | --- |
@@ -47,6 +47,7 @@ erDiagram
 | `figma_frames` | 동기화된 프레임 | `GET /figma/frames` |
 | `style_scans` | scan 작업 | `POST/GET /style-mismatches/scan(s)` |
 | `style_mismatches` | 스타일 차이(수동·scan 공통) | `GET /style-mismatches` 목록·상세 · AC2 |
+| `embeddings` | 재검증 범위 제안 검색용 벡터 (2026-11-06 설계 확정, **아직 V2 마이그레이션·엔티티 없음**) | `POST .../recheck-suggestions` · AC20 |
 
 (`github_*` 컬럼은 v1 비포함이라 만들지 않는다. 세션은 서버 메모리 — 별도 테이블 없음.)
 
@@ -221,6 +222,19 @@ erDiagram
 
 `expected_value`/`actual_value`를 NOT NULL로 두어 DB 차원에서도 AC2(둘 중 하나라도 없으면 저장 금지)를 막는다. `frame_id`는 figma_frames에 FK를 걸지 않는다 — 수동 입력은 동기화하지 않은 프레임을 가리킬 수 있고, 프레임이 재동기화돼도 차이 기록은 남아야 하기 때문.
 
+### embeddings (2026-11-06 설계 확정 — 구현 때 `V2__embeddings.sql`로 추가)
+| 컬럼 | 타입 | 제약 | 비고 |
+| --- | --- | --- | --- |
+| id | BIGINT | PK | |
+| project_id | BIGINT | FK→projects, NOT NULL | 검색 범위. 다른 프로젝트 문서를 쓰지 않는 근거(N16) |
+| source_type | VARCHAR(20) | NOT NULL, CHECK | qa_issue / style_mismatch / verification |
+| source_id | BIGINT | NOT NULL | 원본 행 id. FK 없음(다형 참조) |
+| model | VARCHAR(40) | NOT NULL | 예 `voyage-4` |
+| vector | BLOB | NOT NULL | float32 1024개, little-endian(4KB) |
+| created_at | DATETIME(6) | NOT NULL | |
+
+임베딩 텍스트 규칙·대상(`verification`은 fail만)·생성 시점은 `docs/design-recheck-suggestions.md` 3·4절. 원본 셋 다 생성 후 텍스트가 바뀌지 않아 갱신 컬럼은 두지 않는다. `source_id`에 FK를 걸지 않는 이유: 세 테이블을 가리키고, 원본은 v1에서 삭제되지 않는다. 모델을 바꾸면 `model`이 달라 새 행이 생기고 검색은 현재 모델 행만 쓴다. 제안 결과는 저장하지 않으므로(2026-11-06) 제안용 테이블은 없다.
+
 ## 4. 인덱스 (목록 정렬·조회용)
 
 | 테이블 | 인덱스 | 이유 |
@@ -237,6 +251,8 @@ erDiagram
 | invitations | UNIQUE(token_hash) | 수락 링크로 찾기 |
 | invitations | (project_id, status, created_at DESC, id DESC) | 프로젝트의 대기 초대 목록 |
 | invitations | (email, status) | `GET /invitations/mine`, 같은 이메일 재초대 |
+| embeddings | UNIQUE(source_type, source_id, model) | 같은 원본 중복 생성 방지, 누락분 찾기 |
+| embeddings | (project_id, model) | 프로젝트 문서만 읽어 유사도 계산 |
 
 ## 5. 엔티티 반영 상태
 

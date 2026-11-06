@@ -56,12 +56,14 @@ GET이 아니라 POST인 이유: 외부 유료 호출(LLM·임베딩)을 일으�
 
 | type | 원본 | 임베딩 텍스트 | 대상 |
 |---|---|---|---|
-| `qa_issue` | QAIssue | `화면: {screen_location}\n증상: {description}\n재현: {repro_steps 줄바꿈}\n플랫폼: {platform_scope}` | 전부 |
-| `style_mismatch` | StyleMismatch | `화면: {screen}\n요소: {selector}\n{property}: 기대 {expected} / 실제 {actual}` | 전부 |
-| `verification` | Verification | `화면: {이슈 screen_location}\n결과: {pass/fail}\n범위: {scope}` | **fail만** |
+| `qa_issue` | QAIssue | `화면: {screen_location}\n증상: {description}\n재현: {repro_steps를 " → "로 이음}\n플랫폼: {platform_scope}` | 전부 |
+| `style_mismatch` | StyleMismatch | `화면: {screen}\n요소: {selector}\n{property}: 기대 {expected} / 실제 {actual}` (screen·selector가 비면 그 줄은 뺀다) | 전부 |
+| `verification` | Verification | `화면: {이슈 screen_location}\n증상: {이슈 description}\n결과: 재검증 실패\n범위: {scope}` (scope가 비면 그 줄은 뺀다) | **fail만** |
 
 - 세 원본 모두 생성 뒤 텍스트가 바뀌지 않는다(QAIssue PATCH는 status·assigned_to만, StyleMismatch·Verification은 updatable=false) → **생성 시 한 번만** 만들면 된다
 - verification pass는 "문제 없음"이라 회귀 근거가 되지 않아 제외
+- verification 텍스트에 원래 이슈의 증상을 넣는다(2026-11-06 구현 때 추가) — 화면·결과·범위만으로는 무엇이 실패했는지 알 수 없어 검색에 거의 걸리지 않는다
+- 정본은 서버 코드 `EmbeddingTexts`(`backend/.../recheck/EmbeddingTexts.java`)이고, `evals/run_evals.py`도 같은 규칙을 따른다
 - 상태·담당자·작성자 이름은 넣지 않는다(의미 검색에 잡음, 개인정보)
 
 ## 4. 저장 (Flyway V2)
@@ -83,6 +85,7 @@ CREATE INDEX idx_embeddings_project ON embeddings(project_id, model);
 
 - source는 FK를 걸지 않는다(세 테이블을 가리키는 다형 참조). 원본은 v1에서 삭제되지 않는다
 - 모델을 바꾸면 `model`이 달라 새 행이 생기고 옛 행은 검색에서 빠진다(재생성은 누락분 보충이 처리)
+- 같은 프로젝트의 보충은 서버 안에서 한 번에 하나만 돈다(2026-11-06 구현 때 추가). 이슈를 연달아 등록하면 보충이 동시에 떠서 같은 문서를 중복으로 보내 Voyage 무료 등급의 분당 한도(429)에 걸렸다. 서버가 여러 대가 되면 `uk_embeddings_source`가 중복 저장만 막는다
 
 **갱신 시점**: 원본 저장 트랜잭션이 커밋된 뒤 비동기로 생성(`@TransactionalEventListener(AFTER_COMMIT)` + 기존 AsyncConfig). 실패해도 이슈 등록 등 본 요청은 영향 없음. 빠진 행은 제안 요청 때 ②에서 보충한다 — 그래서 키가 없던 기간의 데이터도 나중에 검색된다.
 

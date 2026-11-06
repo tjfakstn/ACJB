@@ -222,7 +222,7 @@
   - 6: 지어낸 근거를 섞은 제안은 나머지 설명도 믿기 어렵다
   - 7: 평가용 데이터를 DB에 넣는 경로와 로그인 우회를 만들지 않아도 된다(N10). 대신 백엔드와 규칙이 어긋날 수 있어 같은 파일을 읽게 한다
 - **남은 일**:
-  - 구현(server): `V2__embeddings.sql`·엔티티, Voyage 클라이언트, 비동기 생성, 검색, `src/qating/prompts/recheck_scope.md`·`src/qating/schemas/RecheckSuggestion.schema.json`, 근거 id 검사, `ErrorCodes.SUGGESTION_FAILED`. `VOYAGE_API_KEY`를 `backend/.env.example`에 추가
+  - ~~구현(server)~~ → 같은 날 server `9431b5e`에 반영(골든 7건 포함 테스트 209개, 실제 Voyage·Claude 호출 확인). 구현하며 바꾼 두 가지(fail 재검증 텍스트에 이슈 증상 포함, 같은 프로젝트 보충 직렬화)는 설계 문서 3·4절에 반영. Voyage 무료 등급은 분당 호출 한도가 작아 429가 나므로 실사용 전에 결제 수단 등록 필요
   - evals: `evalset.jsonl` 15~20케이스(인터뷰 로그 2·6·8의 연결 화면 회귀 패턴), `judge_prompt.md`, `run_evals.py`
   - 골든 케이스: `rs-001`~`rs-004`(AC20), `ng-014`~`ng-016`(N16)은 같은 날 설만수 승인으로 추가. 구현 전이라 지금은 통과하지 않는다
   - AC13 소유자 재검증은 server에 반영됨(`864b34d`, dev 통합 전)

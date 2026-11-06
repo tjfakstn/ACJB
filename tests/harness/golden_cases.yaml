@@ -740,3 +740,114 @@ cases:
         expected_verification_count_delta: 0
         expected_notification_count_total_delta: 0
         status_history_length_unchanged: true
+
+  # ===== AC20·N16 재검증 범위 제안 — 2026-11-06 설만수 승인 =====
+  # 근거: docs/SPEC.md AC20, 6.1절 N16, docs/design-recheck-suggestions.md 10절.
+  # 임베딩(Voyage)·LLM(Claude)은 테스트 대역으로 바꾼다 — 서버가 규칙을 지키는지만 본다. 제안 품질은 evals/에서 잰다.
+  # embedding_calls·llm_calls: 요청 한 번 동안 대역이 불린 횟수.
+
+  # --- AC20: 재검증 범위 제안 ---
+  - id: rs-001
+    ac: AC20
+    description: fixed 이슈의 등록자가 요청하면 검색된 문서를 근거로 단 제안을 그대로 돌려준다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
+      precondition: 이슈 X(fixed, 등록자 member-1, 화면 "결제 화면"), 같은 프로젝트에 이슈 7(화면 "결제 완료 화면")이 있고 검색 결과에 들어감
+      llm_stub: { suggestions: [{ screen: "결제 완료 화면", reason: "같은 결제 버튼을 쓴다", evidence_ids: ["qa_issue:7"] }] }
+      actor: member-1
+    expected:
+      status: 200
+      body: { success: true, data: { issue_id: "{issueId}", dropped_count: 0 } }
+      suggestions_count: 1
+      suggestions_0: { screen: "결제 완료 화면", evidence: [{ type: "qa_issue", id: "7" }] }
+      llm_calls: 1
+
+  - id: rs-002
+    ac: AC20
+    description: fixed가 아닌 이슈에 요청하면 409이고 임베딩·LLM을 부르지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
+      precondition: 이슈 status needs_check, 등록자 member-1
+      actor: member-1
+    expected:
+      status: 409
+      error_code: INVALID_TRANSITION
+      embedding_calls: 0
+      llm_calls: 0
+
+  - id: rs-003
+    ac: AC20
+    description: 재검증 등록 권한이 없는 멤버(등록자가 아닌 담당자)가 요청하면 403이고 임베딩·LLM을 부르지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
+      precondition: 이슈 status fixed, 등록자 member-1(멤버), 담당자 member-2
+      actor: member-2
+    expected:
+      status: 403
+      embedding_calls: 0
+      llm_calls: 0
+
+  - id: rs-004
+    ac: AC20
+    description: 검색할 다른 문서가 하나도 없으면 LLM을 부르지 않고 빈 제안을 돌려준다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
+      precondition: 프로젝트에 대상 이슈(fixed) 하나뿐, 스타일 차이·fail 재검증 기록 없음
+      actor: 등록자
+    expected:
+      status: 200
+      body: { data: { suggestions: [], searched_count: 0, dropped_count: 0 } }
+      llm_calls: 0
+
+  # --- 6.1절 금지 기준 N16 ---
+  - id: ng-014
+    ac: AC20
+    rule: N16
+    description: 검색 결과에 없던 id를 근거로 단 제안은 통째로 버리고 dropped_count에 센다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
+      precondition: 이슈 X(fixed), 검색 결과는 qa_issue:7과 qa_issue:9
+      llm_stub:
+        suggestions:
+          - { screen: "결제 완료 화면", reason: "근거 있음", evidence_ids: ["qa_issue:7"] }
+          - { screen: "장바구니 화면", reason: "근거 일부 지어냄", evidence_ids: ["qa_issue:9", "qa_issue:99"] }
+      actor: 등록자
+    expected:
+      status: 200
+      suggestions_count: 1
+      suggestions_0: { screen: "결제 완료 화면" }
+      body: { data: { dropped_count: 1 } }
+      body_not_contains: ["99", "장바구니 화면"]
+
+  - id: ng-015
+    ac: AC20
+    rule: N16
+    description: 다른 프로젝트의 문서는 내용이 아무리 비슷해도 검색·근거에 들어가지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
+      precondition: 이슈 X(fixed, "결제 버튼 색이 달라요"), 다른 프로젝트에 같은 문장의 이슈 O, 이 프로젝트에는 주제가 다른 이슈 A 하나
+      actor: 등록자
+    expected:
+      status: 200
+      body: { data: { searched_count: 1 } }
+      llm_calls: 1
+      llm_input_contains: ["qa_issue:{A의 id}"]
+      llm_input_not_contains: ["qa_issue:{O의 id}"]
+
+  - id: ng-016
+    ac: AC20
+    rule: N16
+    description: 제안을 요청해도 이슈·StyleMismatch·Verification·알림을 만들거나 바꾸지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
+      precondition: rs-001과 같은 상태
+      actor: 등록자
+    expected:
+      status: 200
+      followup:
+        expected_issue_count_delta: 0
+        expected_style_mismatch_count_delta: 0
+        expected_verification_count_delta: 0
+        expected_notification_count_total_delta: 0
+        expected_issue_status: "fixed"
+        status_history_length_unchanged: true

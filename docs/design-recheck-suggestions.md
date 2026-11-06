@@ -124,7 +124,7 @@ CREATE INDEX idx_embeddings_project ON embeddings(project_id, model);
 - 실행: `run_evals.py`가 케이스 이력을 Voyage로 임베딩 → 같은 검색 규칙 → 같은 프롬프트로 Claude 호출 → 근거 id 검사 → 채점. 백엔드 없이 돈다(임베딩 텍스트 규칙·K·프롬프트는 백엔드와 같은 파일·값을 읽는다)
 - 합격 기준(첫 목표): 근거 id 위반으로 버려지는 제안 10% 이하, 정답 화면 재현율 0.6 이상, 근거 일치 0.9 이상 — 첫 실행 후 조정
 
-## 10. 골든 케이스 후보 (승인 후 추가, LLM·Voyage는 테스트 대역)
+## 10. 골든 케이스 (2026-11-06 설만수 승인, `tests/harness/golden_cases.yaml`에 추가 — LLM·Voyage는 테스트 대역)
 
 | id | 내용 |
 |---|---|

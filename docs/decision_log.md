@@ -224,6 +224,6 @@
 - **남은 일**:
   - 구현(server): `V2__embeddings.sql`·엔티티, Voyage 클라이언트, 비동기 생성, 검색, `src/qating/prompts/recheck_scope.md`·`src/qating/schemas/RecheckSuggestion.schema.json`, 근거 id 검사, `ErrorCodes.SUGGESTION_FAILED`. `VOYAGE_API_KEY`를 `backend/.env.example`에 추가
   - evals: `evalset.jsonl` 15~20케이스(인터뷰 로그 2·6·8의 연결 화면 회귀 패턴), `judge_prompt.md`, `run_evals.py`
-  - 골든 케이스: 후보 `rs-001`~`rs-004`(AC20), `ng-014`~`ng-016`(N16) — 사람 승인 후 추가
+  - 골든 케이스: `rs-001`~`rs-004`(AC20), `ng-014`~`ng-016`(N16)은 같은 날 설만수 승인으로 추가. 구현 전이라 지금은 통과하지 않는다
   - AC13 소유자 재검증은 server에 반영됨(`864b34d`, dev 통합 전)
 - **결정자**: 설만수

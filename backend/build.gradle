@@ -50,11 +50,12 @@ tasks.named('test') {
 	useJUnitPlatform()
 }
 
-// 파싱 프롬프트와 IssueReportContext 스키마의 정본은 저장소 루트 src/qating/ 에 있다.
+// 파싱·재검증 범위 제안 프롬프트와 출력 스키마의 정본은 저장소 루트 src/qating/ 에 있다.
 // 복사본을 두지 않고 빌드 때 classpath(qating/...)로 가져와 정본 하나만 고치면 되게 한다.
 processResources {
 	from('../src/qating') {
-		include 'prompts/parse_query.md', 'schemas/IssueReportContext.schema.json'
+		include 'prompts/parse_query.md', 'schemas/IssueReportContext.schema.json',
+			'prompts/recheck_scope.md', 'schemas/RecheckSuggestion.schema.json'
 		into 'qating'
 	}
 }

@@ -74,6 +74,17 @@ app:
     model: claude-sonnet-5
     api-key: ${ANTHROPIC_API_KEY:}
     timeout: 30s
+  # 재검증 범위 제안(AC20) — LLM은 parse와 같은 키·모델, 임베딩은 Voyage AI(backend/.env의 VOYAGE_API_KEY, 2026-11-05 결정)
+  recheck:
+    model: claude-sonnet-5
+    api-key: ${ANTHROPIC_API_KEY:}
+    timeout: 60s
+  voyage:
+    api-key: ${VOYAGE_API_KEY:}
+    base-url: https://api.voyageai.com
+    model: voyage-4
+    dimension: 1024
+    timeout: 30s
   # 프론트(client) 로컬 개발 origin — frontend/ 스캐폴딩 완료로 확정 (Vite 기본 포트 5173)
   cors:
     allowed-origins:

@@ -4,9 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.acjb.server.recheck.EmbeddingSourcesChanged;
 import com.acjb.server.common.ApiException;
 import com.acjb.server.domain.DeployStage;
 import com.acjb.server.domain.EnvPlatform;
@@ -62,9 +64,13 @@ public class QaIssueService {
     private final StatusHistoryRepository histories;
     private final NotificationRepository notifications;
 
+    private final ApplicationEventPublisher events;
+
     public QaIssueService(QAIssueRepository issues, ProjectRepository projects, MemberRepository members,
                           ProjectMemberRepository projectMembers, StyleMismatchRepository mismatches,
-                          StatusHistoryRepository histories, NotificationRepository notifications) {
+                          StatusHistoryRepository histories, NotificationRepository notifications,
+                          ApplicationEventPublisher events) {
+        this.events = events;
         this.issues = issues;
         this.projects = projects;
         this.members = members;
@@ -141,6 +147,8 @@ public class QaIssueService {
             notifications.save(new Notification(issue, NotificationEvent.ISSUE_CREATED, assignee, IN_APP));
         }
         issues.flush();
+        // 이슈(와 함께 만든 스타일 차이)는 재검증 범위 제안(AC20)의 검색 문서가 된다 — 커밋 뒤 임베딩을 만든다
+        events.publishEvent(new EmbeddingSourcesChanged(projectId));
         return QaIssueResponse.of(issue, List.of(first));
     }
 

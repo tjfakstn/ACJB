@@ -1,8 +1,8 @@
 package com.acjb.server.common;
 
 /**
- * ErrorResponse.error.code 값. openapi에는 code가 string으로만 정의돼 있어 값 목록은 여기서 관리한다.
- * TODO: 이 목록을 openapi.yaml Error.code에 반영(팀 확정 필요)
+ * ErrorResponse.error.code 값(13개, 2026-11-05 확정·11-06 SUGGESTION_FAILED 추가). openapi Error.code 설명에 상태 코드와 함께 적혀 있다 —
+ * 값을 추가하면 그 설명도 같이 고친다. enum이 아닌 이유: 프레임워크 단계 오류는 HTTP 상태 이름이 온다.
  */
 public final class ErrorCodes {
     public static final String UNAUTHORIZED = "UNAUTHORIZED";
@@ -23,6 +23,8 @@ public final class ErrorCodes {
     public static final String OWNER_NOT_REMOVABLE = "OWNER_NOT_REMOVABLE";
     /** parse: LLM 호출 실패·거절·스키마 위반(N9) */
     public static final String PARSE_FAILED = "PARSE_FAILED";
+    /** 재검증 범위 제안(AC20): 임베딩·LLM 호출 실패·스키마 위반 */
+    public static final String SUGGESTION_FAILED = "SUGGESTION_FAILED";
     /** Figma 연동이 설정되지 않음(FIGMA_ACCESS_TOKEN 없음) */
     public static final String FIGMA_UNAVAILABLE = "FIGMA_UNAVAILABLE";
 

@@ -32,3 +32,7 @@ build/
 
 # Logs
 *.log
+
+
+# evals 임베딩 캐시(재실행 때 Voyage 호출을 줄인다)
+evals/.cache/

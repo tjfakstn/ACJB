@@ -1,0 +1,52 @@
+# 테스트 전용 설정 — 실제 구글 자격증명 없이 컨텍스트 로딩만 확인하기 위한 더미 값
+spring:
+  # DB 비밀번호는 backend/.env 에서 읽는다 (docker compose의 MySQL이 떠 있어야 테스트가 돈다)
+  config:
+    import: optional:file:.env[.properties]
+
+  # 개발 DB(qating)와 분리된 스키마 — 테스트가 개발 데이터를 지우지 않게 한다
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/qating_test?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${DB_USER:qating}
+    password: ${DB_PASSWORD}
+
+  # 운영과 같은 V*.sql로 테이블을 만든다. 테스트 시작 때마다 비우고 다시 적용한다(TestFlywayConfig) — 예전 create-drop과 같은 효과
+  flyway:
+    clean-disabled: false
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-client-id
+            client-secret: test-client-secret
+
+app:
+  # 테스트는 FigmaClient를 가짜로 바꿔 끼운다. 요청 단계의 "설정됨" 검사만 통과시키는 더미 값
+  figma:
+    access-token: test-figma-token
+  # 테스트는 IssueTextParser를 가짜로 바꿔 끼우므로 실제 API를 부르지 않는다
+  parse:
+    model: claude-sonnet-5
+    api-key: ""
+  # 테스트는 EmbeddingClient·RecheckSuggester를 가짜로 바꿔 끼우므로 실제 API를 부르지 않는다
+  recheck:
+    model: claude-sonnet-5
+    api-key: ""
+  voyage:
+    api-key: ""
+  # ng-003의 target_url이 http://localhost:5173 — 테스트는 로컬 개발과 같게 루프백을 허용한다(ComputedStyleReader는 가짜)
+  scan:
+    allow-localhost: true
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+  oauth2:
+    login-success-redirect: http://localhost:5173/
+    logout-success-redirect: http://localhost:5173/

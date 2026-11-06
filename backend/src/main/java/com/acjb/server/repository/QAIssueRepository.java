@@ -1,0 +1,47 @@
+package com.acjb.server.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.acjb.server.domain.IssueStatus;
+import com.acjb.server.domain.QAIssue;
+
+import jakarta.persistence.LockModeType;
+
+public interface QAIssueRepository extends JpaRepository<QAIssue, Long> {
+    // 목록 API는 정렬 기준을 고정한다(AGENTS.md 5절): created_at desc, 같으면 id desc
+    List<QAIssue> findByProjectIdOrderByCreatedAtDescIdDesc(Long projectId);
+
+    List<QAIssue> findByProjectIdAndStatusOrderByCreatedAtDescIdDesc(Long projectId, IssueStatus status);
+
+    /** GET /qa-issues 목록. status·assigned_to는 없으면 거르지 않는다. 정렬 고정(created_at desc, id desc) */
+    @Query("""
+        select i from QAIssue i
+        where i.project.id = :projectId
+          and (:status is null or i.status = :status)
+          and (:assignedTo is null or i.assignedTo.id = :assignedTo)
+        order by i.createdAt desc, i.id desc
+        """)
+    List<QAIssue> search(@Param("projectId") Long projectId, @Param("status") IssueStatus status,
+                         @Param("assignedTo") Long assignedTo);
+
+    /** AC19 — 제거되는 멤버가 담당자인 미해결 이슈(담당자를 비울 대상) */
+    List<QAIssue> findByProjectIdAndAssignedToIdAndStatusNot(Long projectId, Long assignedToId, IssueStatus status);
+
+    /** 경로의 projectId와 함께 찾아, 다른 프로젝트 이슈가 섞이지 않게 한다(N10) */
+    Optional<QAIssue> findByIdAndProjectId(Long id, Long projectId);
+
+    /**
+     * 상태를 바꾸는 요청(PATCH fixed, 재검증 등록)용 — 이슈 행에 쓰기 잠금(SELECT … FOR UPDATE)을 건다.
+     * 같은 이슈에 요청이 동시에 오면 차례로 처리돼, 늦은 쪽은 바뀐 상태를 보고 409를 받는다.
+     * 잠금 없이 읽으면 두 요청이 같은 상태를 보고 진행하다 MySQL 데드락으로 500이 났다(2026-11-04 재현)
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select i from QAIssue i where i.id = :id and i.project.id = :projectId")
+    Optional<QAIssue> findForUpdate(@Param("id") Long id, @Param("projectId") Long projectId);
+}

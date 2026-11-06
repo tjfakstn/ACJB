@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -11,6 +12,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.acjb.server.recheck.EmbeddingSourcesChanged;
 import com.acjb.server.domain.FigmaFrame;
 import com.acjb.server.domain.StyleMismatch;
 import com.acjb.server.domain.StyleScan;
@@ -39,9 +41,12 @@ public class StyleScanJob {
     private final StyleMismatchRepository mismatches;
     private final FigmaFrameRepository frames;
     private final TransactionTemplate tx;
+    private final ApplicationEventPublisher events;
 
     public StyleScanJob(FigmaClient figma, ComputedStyleReader reader, StyleScanRepository scans,
-                        StyleMismatchRepository mismatches, FigmaFrameRepository frames, PlatformTransactionManager txManager) {
+                        StyleMismatchRepository mismatches, FigmaFrameRepository frames, PlatformTransactionManager txManager,
+                        ApplicationEventPublisher events) {
+        this.events = events;
         this.figma = figma;
         this.reader = reader;
         this.scans = scans;
@@ -121,6 +126,10 @@ public class StyleScanJob {
             }
         }
         scan.complete(count);
+        if (count > 0) {
+            // 스타일 차이는 재검증 범위 제안(AC20)의 검색 문서가 된다 — 이 트랜잭션 커밋 뒤 임베딩을 만든다
+            events.publishEvent(new EmbeddingSourcesChanged(scan.getProject().getId()));
+        }
     }
 
     private void fail(Long scanId, String message) {

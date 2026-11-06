@@ -3,6 +3,7 @@ package com.acjb.server.service;
 import java.util.List;
 import java.util.Locale;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ import com.acjb.server.dto.CreateVerificationRequest;
 import com.acjb.server.dto.VerificationCreateResponse;
 import com.acjb.server.dto.VerificationListResponse;
 import com.acjb.server.dto.VerificationResponse;
+import com.acjb.server.recheck.EmbeddingSourcesChanged;
 import com.acjb.server.repository.NotificationRepository;
 import com.acjb.server.repository.QAIssueRepository;
 import com.acjb.server.repository.StatusHistoryRepository;
@@ -39,13 +41,18 @@ public class VerificationService {
     private final VerificationRepository verifications;
     private final StatusHistoryRepository histories;
     private final NotificationRepository notifications;
+    private final VerifierPolicy verifierPolicy;
+    private final ApplicationEventPublisher events;
 
     public VerificationService(QAIssueRepository issues, VerificationRepository verifications,
-                               StatusHistoryRepository histories, NotificationRepository notifications) {
+                               StatusHistoryRepository histories, NotificationRepository notifications,
+                               VerifierPolicy verifierPolicy, ApplicationEventPublisher events) {
         this.issues = issues;
         this.verifications = verifications;
         this.histories = histories;
         this.notifications = notifications;
+        this.verifierPolicy = verifierPolicy;
+        this.events = events;
     }
 
     @Transactional
@@ -65,8 +72,8 @@ public class VerificationService {
         QAIssue issue = findIssue(projectId, issueId, true);
 
         // 3) 권한(AC13) — 재검증은 그 이슈의 등록자만. 전이 검사보다 먼저
-        if (!issue.getReportedBy().getId().equals(actor.getId())) {
-            throw ApiException.forbidden("재검증은 이 이슈를 등록한 사람만 할 수 있습니다.");
+        if (!verifierPolicy.canVerify(issue, actor)) {
+            throw ApiException.forbidden("재검증은 이 이슈를 등록한 사람만 할 수 있습니다(등록자가 프로젝트에서 빠졌으면 소유자).");
         }
         // 4) 전이(AC6) — fixed인 이슈만 재검증한다
         if (issue.getStatus() != IssueStatus.FIXED) {
@@ -82,6 +89,10 @@ public class VerificationService {
         // AC11: fail이면 담당자에게 1건. 담당자가 없거나 pass면 만들지 않는다
         if (result == VerificationResult.FAIL && issue.getAssignedTo() != null) {
             notifications.save(new Notification(issue, NotificationEvent.RECHECK_FAILED, issue.getAssignedTo(), IN_APP));
+        }
+        // fail 재검증은 재검증 범위 제안(AC20)의 검색 문서가 된다 — 커밋 뒤 임베딩을 만든다
+        if (result == VerificationResult.FAIL) {
+            events.publishEvent(new EmbeddingSourcesChanged(projectId));
         }
         issues.flush();
         return new VerificationCreateResponse(VerificationResponse.of(verification),

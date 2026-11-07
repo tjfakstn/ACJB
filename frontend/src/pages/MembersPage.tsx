@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ApiError, cancelInvitation, fetchMe, formatDate, inviteMember, listInvitations, listMembers, listProjects, removeMember,
-  ROLE_LABELS, type Invitation, type Me, type Project, type ProjectMember,
+  ROLE_LABELS, type Invitation, type Me, type MemberRole, type Project, type ProjectMember,
 } from '../lib/api'
 import { AppHeader } from '../components/projects/AppHeader'
 import { WorkspaceSidebar } from '../components/members/WorkspaceSidebar'
@@ -13,9 +13,10 @@ import { InviteDialog } from '../components/members/InviteDialog'
 // "초대 실패" 탭은 뺐다(메일 발송 실패 상태를 서버가 기록하지 않는다).
 type Tab = 'all' | 'joined' | 'pending'
 
-const ROLE_BADGE: Record<string, string> = {
+const ROLE_BADGE: Record<MemberRole, string> = {
   designer: 'bg-[#fdeef5] text-[#c2457f]',
-  developer: 'bg-[#eef4ff] text-qa-primary',
+  frontend: 'bg-[#eef4ff] text-qa-primary',
+  backend: 'bg-[#e8f7f1] text-[#1f8a5f]',
   planner: 'bg-[#f3eeff] text-[#7b4fd6]',
 }
 
@@ -136,8 +137,8 @@ export function MembersPage() {
                   ))}
                 </div>
 
-                <table className="w-full text-sm">
-                  <thead className="bg-qa-surface text-left text-xs text-gray-500">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
+                  <thead className="whitespace-nowrap bg-qa-surface text-left text-xs text-gray-500">
                     <tr>
                       <th className="px-6 py-3 font-medium">멤버</th>
                       <th className="px-4 py-3 font-medium">프로젝트 역할</th>
@@ -165,7 +166,7 @@ export function MembersPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3.5">
-                            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_BADGE[m.role] ?? 'bg-gray-100 text-gray-600'}`}>{ROLE_LABELS[m.role] ?? m.role}</span>
+                            <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_BADGE[m.role] ?? 'bg-gray-100 text-gray-600'}`}>{ROLE_LABELS[m.role] ?? m.role}</span>
                           </td>
                           <td className="px-4 py-3.5"><StatusDot color="bg-qa-success" label="참여 완료" /></td>
                           <td className="px-4 py-3.5 text-xs text-qa-sub">-</td>
@@ -209,7 +210,7 @@ export function MembersPage() {
                       <tr><td colSpan={5} className="px-6 py-10 text-center text-qa-sub">{tab === 'pending' ? '대기 중인 초대가 없어요' : '멤버가 없어요'}</td></tr>
                     )}
                   </tbody>
-                </table>
+                </table></div>
               </section>
 
               <p className="mt-4 text-xs text-qa-sub">
@@ -237,7 +238,7 @@ function Stat({ label, value, hint }: { label: string; value: number; hint: stri
 
 function StatusDot({ color, label }: { color: string; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2.5 py-1 text-xs text-gray-700">
+    <span className="inline-flex items-center whitespace-nowrap gap-1.5 rounded-full bg-gray-50 px-2.5 py-1 text-xs text-gray-700">
       <span className={`h-1.5 w-1.5 rounded-full ${color}`} />{label}
     </span>
   )

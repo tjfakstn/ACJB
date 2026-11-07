@@ -80,12 +80,13 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 
 // ---------------------------------------------------------------- 프로젝트·멤버 (SPEC AC15·16·19)
 
-/** 프로젝트별 역할 — 서버 값(designer/developer/planner) */
-export type MemberRole = 'designer' | 'developer' | 'planner'
+/** 프로젝트별 역할 — 서버 값(designer/frontend/backend/planner — 2026-11-07 developer를 나눔) */
+export type MemberRole = 'designer' | 'frontend' | 'backend' | 'planner'
 
 export const ROLE_LABELS: Record<MemberRole, string> = {
   designer: '디자인',
-  developer: '개발',
+  frontend: '프론트엔드',
+  backend: '백엔드',
   planner: '기획',
 }
 

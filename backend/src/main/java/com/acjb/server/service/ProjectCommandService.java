@@ -14,6 +14,7 @@ import com.acjb.server.domain.MemberRole;
 import com.acjb.server.domain.Project;
 import com.acjb.server.domain.ProjectMember;
 import com.acjb.server.domain.QAIssue;
+import com.acjb.server.dto.MemberResponse;
 import com.acjb.server.dto.ProjectResponse;
 import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRepository;
@@ -73,6 +74,26 @@ public class ProjectCommandService {
             issue.assignTo(null);
         }
         projectMembers.delete(membership);
+    }
+
+    /**
+     * AC24 — 소유자만(본인 역할 포함). 이슈·담당자·알림은 바꾸지 않는다(알림 종류 3개 고정, N5).
+     * 검사 순서: 소유자(403) → 역할 값(400) → 대상 멤버(404)
+     */
+    @Transactional
+    public MemberResponse changeRole(Long projectId, String memberId, String role, Member requester) {
+        Project project = projects.findById(projectId).orElseThrow(() -> ApiException.notFound("프로젝트를 찾을 수 없습니다."));
+        if (!project.getOwner().getId().equals(requester.getId())) {
+            throw ApiException.forbidden("역할은 프로젝트 소유자만 바꿀 수 있습니다.");
+        }
+        MemberRole memberRole = parseRole(role);
+        Long targetId = parseIdOrNull(memberId);
+        ProjectMember membership = targetId == null ? null : projectMembers.findByProjectIdAndMemberId(projectId, targetId).orElse(null);
+        if (membership == null) {
+            throw ApiException.notFound("이 프로젝트의 멤버가 아닙니다.");
+        }
+        membership.changeRole(memberRole);
+        return MemberResponse.of(membership);
     }
 
     static MemberRole parseRole(String raw) {

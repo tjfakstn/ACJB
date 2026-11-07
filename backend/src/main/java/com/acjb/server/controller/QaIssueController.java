@@ -53,8 +53,9 @@ public class QaIssueController {
     @GetMapping
     public Map<String, Object> list(@PathVariable Long projectId,
                                     @RequestParam(required = false) String status,
+                                    @RequestParam(required = false) String source,
                                     @RequestParam(name = "assigned_to", required = false) String assignedTo) {
-        return ApiResponses.ok(service.list(projectId, status, assignedTo));
+        return ApiResponses.ok(service.list(projectId, status, source, assignedTo));
     }
 
     @GetMapping("/{issueId}")

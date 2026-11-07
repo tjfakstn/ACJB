@@ -7,6 +7,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.acjb.server.auth.CurrentMember;
 import com.acjb.server.common.ApiResponses;
+import com.acjb.server.dto.ChangeRoleRequest;
 import com.acjb.server.dto.CreateProjectRequest;
 import com.acjb.server.service.ProjectCommandService;
 import com.acjb.server.service.ProjectQueryService;
@@ -46,6 +48,15 @@ public class ProjectController {
             currentMember.require(principal)));
     }
 
+    /** AC24 — body {role}. 소유자만 */
+    @PatchMapping("/{projectId}/members/{memberId}")
+    public Map<String, Object> changeRole(@PathVariable Long projectId, @PathVariable String memberId,
+                                          @RequestBody(required = false) ChangeRoleRequest request,
+                                          @AuthenticationPrincipal OAuth2User principal) {
+        return ApiResponses.ok(commands.changeRole(projectId, memberId, request == null ? null : request.role(),
+            currentMember.require(principal)));
+    }
+
     @DeleteMapping("/{projectId}/members/{memberId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void removeMember(@PathVariable Long projectId, @PathVariable String memberId,
@@ -56,6 +67,12 @@ public class ProjectController {
     @GetMapping
     public Map<String, Object> myProjects(@AuthenticationPrincipal OAuth2User principal) {
         return ApiResponses.ok(service.myProjects(CurrentMember.emailOf(principal)));
+    }
+
+    /** AC25 — 작업공간 홈 */
+    @GetMapping("/{projectId}")
+    public Map<String, Object> detail(@PathVariable Long projectId, @AuthenticationPrincipal OAuth2User principal) {
+        return ApiResponses.ok(service.detail(projectId, currentMember.require(principal)));
     }
 
     @GetMapping("/{projectId}/members")

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oauth2Login;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.acjb.server.domain.Invitation;
 import com.acjb.server.domain.IssueStatus;
 import com.acjb.server.domain.Member;
 import com.acjb.server.domain.MemberRole;
@@ -200,5 +202,106 @@ class ProjectManagementApiTest {
         mvc.perform(as(delete("/api/v1/projects/" + t.project().getId() + "/members/" + stranger.getId()), t.owner().getEmail()))
             .andExpect(status().isNotFound());
         assertThat(projectMembers.existsByProjectIdAndMemberId(t.project().getId(), t.owner().getId())).isTrue();
+    }
+
+    // --- AC24: 역할 변경 (2026-11-07) ---
+
+    private String memberPath(Team t, Member m) {
+        return "/api/v1/projects/" + t.project().getId() + "/members/" + m.getId();
+    }
+
+    private MemberRole roleOf(Team t, Member m) {
+        em.flush();
+        em.clear();
+        return projectMembers.findByProjectIdAndMemberId(t.project().getId(), m.getId()).orElseThrow().getRole();
+    }
+
+    @Test
+    void rl001_소유자가_멤버_역할을_바꾸면_그_역할만_바뀌고_알림은_없다() throws Exception {
+        Team t = team();
+        mvc.perform(as(patch(memberPath(t, t.dev())), t.owner().getEmail()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":\"frontend\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(String.valueOf(t.dev().getId())))
+            .andExpect(jsonPath("$.data.role").value("frontend"));
+        assertThat(roleOf(t, t.dev())).isEqualTo(MemberRole.FRONTEND);
+        assertThat(notifications.count()).isZero();
+    }
+
+    @Test
+    void rl001_소유자는_자기_역할도_바꿀_수_있다() throws Exception {
+        Team t = team();
+        mvc.perform(as(patch(memberPath(t, t.owner())), t.owner().getEmail()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":\"designer\"}"))
+            .andExpect(status().isOk());
+        assertThat(roleOf(t, t.owner())).isEqualTo(MemberRole.DESIGNER);
+    }
+
+    @Test
+    void rl002_소유자가_아니면_403이고_역할이_그대로다() throws Exception {
+        Team t = team();
+        mvc.perform(as(patch(memberPath(t, t.designer())), t.dev().getEmail()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":\"planner\"}"))
+            .andExpect(status().isForbidden());
+        assertThat(roleOf(t, t.designer())).isEqualTo(MemberRole.DESIGNER);
+    }
+
+    @Test
+    void rl003_정해진_값이_아닌_역할은_400() throws Exception {
+        Team t = team();
+        mvc.perform(as(patch(memberPath(t, t.dev())), t.owner().getEmail()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":\"developer\"}"))
+            .andExpect(status().isBadRequest());
+        assertThat(roleOf(t, t.dev())).isEqualTo(MemberRole.BACKEND);
+    }
+
+    @Test
+    void 프로젝트_멤버가_아닌_사람의_역할_변경은_404() throws Exception {
+        Team t = team();
+        Member stranger = members.save(new Member("rm-stranger@test.dev", "외부"));
+        mvc.perform(as(patch(memberPath(t, stranger)), t.owner().getEmail()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":\"planner\"}"))
+            .andExpect(status().isNotFound());
+    }
+
+    // --- AC25: 작업공간 홈 (2026-11-07) ---
+
+    @Test
+    void ws001_상세는_연결_실행상태_멤버수_대기초대수와_5개_상태의_이슈수를_준다() throws Exception {
+        Team t = team();
+        issue(t, t.dev(), IssueStatus.NEEDS_CHECK);
+        issue(t, t.dev(), IssueStatus.NEEDS_CHECK);
+        issue(t, t.dev(), IssueStatus.FIXED);
+        em.persist(new Invitation(t.project(), "pending@test.dev", "h-pending", t.owner(), java.time.Instant.now()));
+        em.persist(new Invitation(t.project(), "expired@test.dev", "h-expired", t.owner(),
+            java.time.Instant.now().minus(java.time.Duration.ofDays(8))));   // 만료 — 세지 않는다
+        em.flush();
+
+        mvc.perform(as(get("/api/v1/projects/" + t.project().getId()), t.dev().getEmail()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.name").value("rm-project"))
+            .andExpect(jsonPath("$.data.owner_id").value(String.valueOf(t.owner().getId())))
+            .andExpect(jsonPath("$.data.my_role").value("backend"))
+            .andExpect(jsonPath("$.data.figma").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.data.github").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.data.analysis_status").value("none"))
+            .andExpect(jsonPath("$.data.first_qa_status").value("none"))
+            .andExpect(jsonPath("$.data.member_count").value(3))
+            .andExpect(jsonPath("$.data.pending_invitation_count").value(1))
+            .andExpect(jsonPath("$.data.issue_counts.needs_check").value(2))
+            .andExpect(jsonPath("$.data.issue_counts.in_progress").value(0))
+            .andExpect(jsonPath("$.data.issue_counts.fixed").value(1))
+            .andExpect(jsonPath("$.data.issue_counts.needs_recheck").value(0))
+            .andExpect(jsonPath("$.data.issue_counts.resolved").value(0));
+    }
+
+    @Test
+    void ws002_비멤버의_상세_요청은_403이고_데이터가_없다() throws Exception {
+        Team t = team();
+        members.save(new Member("rm-out@test.dev", "외부"));
+        mvc.perform(as(get("/api/v1/projects/" + t.project().getId()), "rm-out@test.dev"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.data").doesNotExist());   // au-002와 같은 형태 — 거부 응답에는 data 키가 없다
     }
 }

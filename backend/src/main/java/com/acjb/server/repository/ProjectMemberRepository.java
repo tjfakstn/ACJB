@@ -24,4 +24,6 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     List<ProjectMember> findMembersOfProject(@Param("projectId") Long projectId);
 
     Optional<ProjectMember> findByProjectIdAndMemberId(Long projectId, Long memberId);
+
+    long countByProjectId(Long projectId);
 }

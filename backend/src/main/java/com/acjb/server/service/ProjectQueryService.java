@@ -1,5 +1,20 @@
 package com.acjb.server.service;
 
+import java.time.Clock;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import com.acjb.server.domain.InvitationStatus;
+import com.acjb.server.domain.IssueStatus;
+import com.acjb.server.domain.Project;
+import com.acjb.server.domain.ProjectMember;
+import com.acjb.server.domain.RunKind;
+import com.acjb.server.dto.ProjectDetailResponse;
+import com.acjb.server.repository.InvitationRepository;
+import com.acjb.server.repository.ProjectRepository;
+import com.acjb.server.repository.ProjectRunRepository;
+import com.acjb.server.repository.QAIssueRepository;
+
 import java.util.List;
 import java.util.Locale;
 
@@ -24,10 +39,55 @@ public class ProjectQueryService {
 
     private final ProjectMemberRepository projectMembers;
     private final NotificationRepository notifications;
+    private final ProjectRepository projects;
+    private final ProjectRunRepository runs;
+    private final InvitationRepository invitations;
+    private final QAIssueRepository issues;
+    private final Clock clock;
 
-    public ProjectQueryService(ProjectMemberRepository projectMembers, NotificationRepository notifications) {
+    public ProjectQueryService(ProjectMemberRepository projectMembers, NotificationRepository notifications, ProjectRepository projects,
+                               ProjectRunRepository runs, InvitationRepository invitations, QAIssueRepository issues, Clock clock) {
         this.projectMembers = projectMembers;
         this.notifications = notifications;
+        this.projects = projects;
+        this.runs = runs;
+        this.invitations = invitations;
+        this.issues = issues;
+        this.clock = clock;
+    }
+
+    /**
+     * AC25 — 작업공간 홈. 프로젝트 멤버 여부는 Security 단계(AC12)에서 확인했다.
+     * 실행 상태는 kind별 최근 실행(없으면 none), 이슈 수는 5개 상태 모두(0 포함)
+     */
+    public ProjectDetailResponse detail(Long projectId, Member me) {
+        Project p = projects.findById(projectId).orElseThrow(() -> ApiException.notFound("프로젝트를 찾을 수 없습니다."));
+        ProjectMember mine = projectMembers.findByProjectIdAndMemberId(projectId, me.getId())
+            .orElseThrow(() -> ApiException.forbidden("이 프로젝트의 멤버가 아닙니다."));
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (IssueStatus s : IssueStatus.values()) {
+            counts.put(lower(s), 0L);
+        }
+        for (Object[] row : issues.countByStatus(projectId)) {
+            counts.put(lower((IssueStatus) row[0]), (Long) row[1]);
+        }
+        ProjectDetailResponse.FigmaConnection figma = p.getFigmaFileKey() == null ? null
+            : new ProjectDetailResponse.FigmaConnection(p.getFigmaUrl(), p.getFigmaFileKey(), p.getFigmaFileName(), p.getFigmaConnectedAt());
+        ProjectDetailResponse.GithubConnection github = p.getGithubRepo() == null ? null
+            : new ProjectDetailResponse.GithubConnection(p.getGithubUrl(), p.getGithubRepo(), p.getGithubDefaultBranch(), p.getGithubConnectedAt());
+        return new ProjectDetailResponse(String.valueOf(p.getId()), p.getName(), String.valueOf(p.getOwner().getId()),
+            lower(mine.getRole()), figma, github, runStatus(projectId, RunKind.ANALYSIS), runStatus(projectId, RunKind.FIRST_QA),
+            projectMembers.countByProjectId(projectId),
+            invitations.countByProjectIdAndStatusAndExpiresAtAfter(projectId, InvitationStatus.PENDING, clock.instant()),
+            counts);
+    }
+
+    private String runStatus(Long projectId, RunKind kind) {
+        return runs.findFirstByProjectIdAndKindOrderByCreatedAtDescIdDesc(projectId, kind).map(r -> lower(r.getStatus())).orElse("none");
+    }
+
+    private static String lower(Enum<?> e) {
+        return e.name().toLowerCase(Locale.ROOT);
     }
 
     /**

@@ -24,7 +24,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * AC12: /projects/{projectId}/** 는 이 관계가 있는 멤버만 호출할 수 있다.
- * role은 이 프로젝트에서의 역할 — 프로젝트를 만들 때(AC16)·초대를 수락할 때(AC18) 본인이 고른다
+ * role은 이 프로젝트에서의 역할 — 프로젝트를 만들 때(AC16)·초대를 수락할 때(AC18) 본인이 고르고, 이후에는 소유자만 바꾼다(AC24)
  */
 @Entity
 @Table(name = "project_members",
@@ -52,6 +52,11 @@ public class ProjectMember {
 
     @Column(nullable = false, updatable = false)
     private Instant joinedAt;
+
+    /** AC24 — 권한 검사는 서비스에서 한다 */
+    public void changeRole(MemberRole role) {
+        this.role = role;
+    }
 
     public ProjectMember(Project project, Member member, MemberRole role) {
         this.project = project;

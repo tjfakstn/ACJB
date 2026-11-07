@@ -79,7 +79,7 @@ public class ProjectQueryService {
         ProjectDetailResponse.GithubConnection github = p.getGithubRepo() == null ? null
             : new ProjectDetailResponse.GithubConnection(p.getGithubUrl(), p.getGithubRepo(), p.getGithubDefaultBranch(),
                 p.getGithubBranch() == null ? p.getGithubDefaultBranch() : p.getGithubBranch(), p.getGithubConnectedAt());
-        return new ProjectDetailResponse(String.valueOf(p.getId()), p.getName(), p.getDescription(), String.valueOf(p.getOwner().getId()),
+        return new ProjectDetailResponse(String.valueOf(p.getId()), p.getName(), p.getDescription(), String.valueOf(p.getOwner().getId()), p.getCreatedAt(),
             mine.getRole() == null ? null : lower(mine.getRole()), figma, github, runStatus(projectId, RunKind.ANALYSIS), runStatus(projectId, RunKind.FIRST_QA),
             projectMembers.countByProjectId(projectId),
             invitations.countByProjectIdAndStatusAndExpiresAtAfter(projectId, InvitationStatus.PENDING, clock.instant()),

@@ -70,7 +70,7 @@ class QaIssueApiTest {
         assignee = members.save(new Member("assignee@test.dev", "담당자"));
         outsider = members.save(new Member("outsider@test.dev", "외부"));
         projectMembers.save(new ProjectMember(project, reporter, MemberRole.DESIGNER));
-        projectMembers.save(new ProjectMember(project, assignee, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(project, assignee, MemberRole.BACKEND));
         projectMembers.save(new ProjectMember(otherProject, outsider, MemberRole.PLANNER));
         projectMembers.save(new ProjectMember(otherProject, reporter, MemberRole.DESIGNER));
     }

@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 구글 로그인 이메일로 식별하는 사용자. 처음 로그인(첫 요청)할 때 만들어진다(AC16).
- * 역할(designer/developer/planner)은 프로젝트마다 다르므로 여기가 아니라 {@link ProjectMember}에 있다(2026-11-04)
+ * 역할(designer/frontend/backend/planner)은 프로젝트마다 다르므로 여기가 아니라 {@link ProjectMember}에 있다(2026-11-04)
  */
 @Entity
 @Table(name = "members")

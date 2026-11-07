@@ -98,7 +98,7 @@ class RecheckSuggestionApiTest {
         assignee = members.save(new Member("rs-assignee@test.dev", "담당자"));
         projectMembers.save(new ProjectMember(project, owner, MemberRole.PLANNER));
         projectMembers.save(new ProjectMember(project, reporter, MemberRole.DESIGNER));
-        projectMembers.save(new ProjectMember(project, assignee, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(project, assignee, MemberRole.BACKEND));
 
         when(embeddingClient.isConfigured()).thenReturn(true);
         when(embeddingClient.model()).thenReturn("test-model");

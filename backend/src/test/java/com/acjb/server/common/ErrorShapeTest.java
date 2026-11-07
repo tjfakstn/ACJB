@@ -59,7 +59,7 @@ class ErrorShapeTest {
     void setUp() {
         project = projects.save(new Project("error-shape", owner()));
         me = members.save(new Member("error-shape@test.dev", "멤버"));
-        projectMembers.save(new ProjectMember(project, me, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(project, me, MemberRole.BACKEND));
     }
 
     @Test

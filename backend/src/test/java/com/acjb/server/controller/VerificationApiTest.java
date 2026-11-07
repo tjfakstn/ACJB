@@ -76,7 +76,7 @@ class VerificationApiTest {
         assignee = members.save(new Member("v-assignee@test.dev", "담당자"));
         other = members.save(new Member("v-other@test.dev", "다른 멤버"));
         for (Member m : List.of(reporter, assignee, other)) {
-            projectMembers.save(new ProjectMember(project, m, MemberRole.DEVELOPER));
+            projectMembers.save(new ProjectMember(project, m, MemberRole.BACKEND));
         }
         projectMembers.save(new ProjectMember(otherProject, reporter, MemberRole.DESIGNER));
     }

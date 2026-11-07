@@ -93,8 +93,8 @@ class ProjectManagementApiTest {
     @Test
     void ac16_이름이_비었거나_역할이_정해진_값이_아니면_400이고_아무것도_만들지_않는다() throws Exception {
         long before = projects.count();
-        for (String body : List.of("{\"name\":\"  \",\"role\":\"developer\"}", "{\"name\":\"QA\"}",
-                "{\"name\":\"QA\",\"role\":\"owner\"}", "{\"name\":\"" + "가".repeat(101) + "\",\"role\":\"developer\"}")) {
+        for (String body : List.of("{\"name\":\"  \",\"role\":\"backend\"}", "{\"name\":\"QA\"}",
+                "{\"name\":\"QA\",\"role\":\"owner\"}", "{\"name\":\"" + "가".repeat(101) + "\",\"role\":\"backend\"}")) {
             mvc.perform(as(post("/api/v1/projects"), "ac16-bad@test.dev").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
@@ -104,10 +104,23 @@ class ProjectManagementApiTest {
     }
 
     @Test
+    void 역할은_frontend_backend로_나뉘고_예전_값_developer는_400이다() throws Exception {
+        String fe = createProject("split@test.dev", "{\"name\":\"FE\",\"role\":\"frontend\"}");
+        mvc.perform(as(get("/api/v1/projects/" + fe + "/members"), "split@test.dev")).andExpect(jsonPath("$.data.items[0].role").value("frontend"));
+
+        long before = projects.count();
+        mvc.perform(as(post("/api/v1/projects"), "split@test.dev").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"OLD\",\"role\":\"developer\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success").value(false));
+        assertThat(projects.count()).isEqualTo(before);
+    }
+
+    @Test
     void 같은_사람도_프로젝트마다_역할이_다를_수_있다() throws Exception {
-        String a = createProject("multi@test.dev", "{\"name\":\"A\",\"role\":\"developer\"}");
+        String a = createProject("multi@test.dev", "{\"name\":\"A\",\"role\":\"backend\"}");
         String b = createProject("multi@test.dev", "{\"name\":\"B\",\"role\":\"designer\"}");
-        mvc.perform(as(get("/api/v1/projects/" + a + "/members"), "multi@test.dev")).andExpect(jsonPath("$.data.items[0].role").value("developer"));
+        mvc.perform(as(get("/api/v1/projects/" + a + "/members"), "multi@test.dev")).andExpect(jsonPath("$.data.items[0].role").value("backend"));
         mvc.perform(as(get("/api/v1/projects/" + b + "/members"), "multi@test.dev")).andExpect(jsonPath("$.data.items[0].role").value("designer"));
         assertThat(members.findAll().stream().filter(m -> m.getEmail().equals("multi@test.dev")).count()).isEqualTo(1);
     }
@@ -115,7 +128,7 @@ class ProjectManagementApiTest {
     @Test
     void 미인증이면_프로젝트를_만들_수_없다() throws Exception {
         mvc.perform(post("/api/v1/projects").cookie(new Cookie("XSRF-TOKEN", "t")).header("X-XSRF-TOKEN", "t")
-                .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"QA\",\"role\":\"developer\"}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"QA\",\"role\":\"backend\"}"))
             .andExpect(status().isUnauthorized());
     }
 
@@ -130,7 +143,7 @@ class ProjectManagementApiTest {
         Member designer = members.save(new Member("rm-des@test.dev", "디자이너"));
         Project project = projects.save(new Project("rm-project", owner));
         projectMembers.save(new ProjectMember(project, owner, MemberRole.PLANNER));
-        projectMembers.save(new ProjectMember(project, dev, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(project, dev, MemberRole.BACKEND));
         projectMembers.save(new ProjectMember(project, designer, MemberRole.DESIGNER));
         return new Team(project, owner, dev, designer);
     }

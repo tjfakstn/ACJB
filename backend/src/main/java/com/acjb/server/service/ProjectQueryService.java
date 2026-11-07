@@ -74,7 +74,8 @@ public class ProjectQueryService {
             counts.put(lower((IssueStatus) row[0]), (Long) row[1]);
         }
         ProjectDetailResponse.FigmaConnection figma = p.getFigmaFileKey() == null ? null
-            : new ProjectDetailResponse.FigmaConnection(p.getFigmaUrl(), p.getFigmaFileKey(), p.getFigmaFileName(), p.getFigmaConnectedAt());
+            : new ProjectDetailResponse.FigmaConnection(p.getFigmaUrl(), p.getFigmaFileKey(), p.getFigmaFileName(),
+                p.getFigmaPageId(), p.getFigmaPageName(), p.getFigmaConnectedAt());
         ProjectDetailResponse.GithubConnection github = p.getGithubRepo() == null ? null
             : new ProjectDetailResponse.GithubConnection(p.getGithubUrl(), p.getGithubRepo(), p.getGithubDefaultBranch(), p.getGithubConnectedAt());
         return new ProjectDetailResponse(String.valueOf(p.getId()), p.getName(), p.getDescription(), String.valueOf(p.getOwner().getId()),

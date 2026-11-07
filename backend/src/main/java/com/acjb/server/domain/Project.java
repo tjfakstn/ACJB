@@ -51,6 +51,13 @@ public class Project {
     @Column(name = "figma_file_name", length = 255)
     private String figmaFileName;
 
+    /** 분석할 페이지(2026-11-07, V6) — 연결은 페이지 공유 링크만 받는다 */
+    @Column(name = "figma_page_id", length = 50)
+    private String figmaPageId;
+
+    @Column(name = "figma_page_name", length = 255)
+    private String figmaPageName;
+
     @Column(name = "figma_connected_at")
     private Instant figmaConnectedAt;
 
@@ -81,10 +88,12 @@ public class Project {
     }
 
     /** AC21 — 접근 확인에 성공한 값만 넘긴다(서비스에서 확인) */
-    public void connectFigma(String url, String fileKey, String fileName, Instant now) {
+    public void connectFigma(String url, String fileKey, String fileName, String pageId, String pageName, Instant now) {
         this.figmaUrl = url;
         this.figmaFileKey = fileKey;
         this.figmaFileName = fileName;
+        this.figmaPageId = pageId;
+        this.figmaPageName = pageName;
         this.figmaConnectedAt = now;
     }
 

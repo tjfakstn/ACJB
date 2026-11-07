@@ -49,7 +49,10 @@ import jakarta.servlet.http.Cookie;
 @Transactional
 class ConnectionApiTest {
 
-    private static final String FIGMA_URL = "https://www.figma.com/design/AbC123/membership";
+    /** Figma 앱 페이지 [공유하기]에서 복사한 모양 — node-id는 "424-2"로 온다 */
+    private static final String FIGMA_URL = "https://www.figma.com/design/AbC123/membership?node-id=424-2&t=abc-1";
+    private static final FigmaClient.FileOutline OUTLINE = new FigmaClient.FileOutline("멤버십 앱 리뉴얼",
+        java.util.List.of(new FigmaClient.Page("0:1", "Archive"), new FigmaClient.Page("424:2", "UI Design - Refined")));
 
     @Autowired MockMvc mvc;
     @Autowired EntityManager em;
@@ -88,16 +91,33 @@ class ConnectionApiTest {
     }
 
     @Test
-    void cn001_접근_가능한_Figma_링크를_연결하면_파일_이름과_함께_저장된다() throws Exception {
-        when(figma.fileName("AbC123")).thenReturn("멤버십 앱 리뉴얼");
+    void cn001_접근_가능한_Figma_페이지_링크를_연결하면_파일과_페이지가_함께_저장된다() throws Exception {
+        when(figma.outline("AbC123")).thenReturn(OUTLINE);
         connect("figma", owner, FIGMA_URL)
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.file_key").value("AbC123"))
             .andExpect(jsonPath("$.data.file_name").value("멤버십 앱 리뉴얼"))
+            .andExpect(jsonPath("$.data.page_id").value("424:2"))
+            .andExpect(jsonPath("$.data.page_name").value("UI Design - Refined"))
             .andExpect(jsonPath("$.data.url").value(FIGMA_URL));
-        assertThat(reload().getFigmaFileName()).isEqualTo("멤버십 앱 리뉴얼");
+        Project saved = reload();
+        assertThat(saved.getFigmaFileName()).isEqualTo("멤버십 앱 리뉴얼");
+        assertThat(saved.getFigmaPageId()).isEqualTo("424:2");
         mvc.perform(get("/api/v1/projects/" + project.getId()).with(oauth2Login().attributes(a -> a.put("email", member.getEmail()))))
-            .andExpect(jsonPath("$.data.figma.file_name").value("멤버십 앱 리뉴얼"));
+            .andExpect(jsonPath("$.data.figma.page_name").value("UI Design - Refined"));
+    }
+
+    /** cn-006 — 페이지 공유 링크만 받는다 */
+    @Test
+    void cn006_페이지_링크가_아니면_400이고_연결하지_않는다() throws Exception {
+        when(figma.outline("AbC123")).thenReturn(OUTLINE);
+        connect("figma", owner, "https://www.figma.com/design/AbC123/membership").andExpect(status().isBadRequest());
+        connect("figma", owner, "https://www.figma.com/proto/AbC123/membership?node-id=424-2").andExpect(status().isBadRequest());
+        connect("figma", owner, "https://www.figma.com/file/AbC123/membership?node-id=424-2").andExpect(status().isBadRequest());
+        verify(figma, never()).outline(any());   // 형식이 틀리면 외부 호출 없음
+        connect("figma", owner, "https://www.figma.com/design/AbC123/membership?node-id=605-30464")   // 섹션·프레임
+            .andExpect(status().isBadRequest());
+        assertThat(reload().getFigmaFileKey()).isNull();
     }
 
     @Test
@@ -116,7 +136,7 @@ class ConnectionApiTest {
         connect("github", owner, "github.com/studio").andExpect(status().isBadRequest());
         connect("figma", owner, "https://example.com/design/AbC123").andExpect(status().isBadRequest());
         verify(github, never()).repository(any(), any());
-        verify(figma, never()).fileName(any());
+        verify(figma, never()).outline(any());
     }
 
     @Test
@@ -147,10 +167,10 @@ class ConnectionApiTest {
 
     @Test
     void Figma_보기_권한이_없으면_422_없는_파일이면_502() throws Exception {
-        when(figma.fileName("AbC123")).thenThrow(new FigmaApiException("forbidden", 403, null));
+        when(figma.outline("AbC123")).thenThrow(new FigmaApiException("forbidden", 403, null));
         connect("figma", owner, FIGMA_URL).andExpect(status().is(422)).andExpect(jsonPath("$.error.code").value("CONNECTION_FORBIDDEN"));
-        when(figma.fileName("Nope99")).thenThrow(new FigmaApiException("not found", 404, null));
-        connect("figma", owner, "https://www.figma.com/file/Nope99/x").andExpect(status().isBadGateway())
+        when(figma.outline("Nope99")).thenThrow(new FigmaApiException("not found", 404, null));
+        connect("figma", owner, "https://www.figma.com/design/Nope99/x?node-id=1-2").andExpect(status().isBadGateway())
             .andExpect(jsonPath("$.error.code").value("CONNECTION_FAILED"));
         assertThat(reload().getFigmaFileKey()).isNull();
     }
@@ -158,7 +178,7 @@ class ConnectionApiTest {
     @Test
     void cn004_소유자가_아니면_403이고_외부_호출을_하지_않는다() throws Exception {
         connect("figma", member, FIGMA_URL).andExpect(status().isForbidden());
-        verify(figma, never()).fileName(any());
+        verify(figma, never()).outline(any());
     }
 
     @Test
@@ -166,10 +186,10 @@ class ConnectionApiTest {
         ProjectRun run = runs.save(new ProjectRun(project, RunKind.ANALYSIS, owner, Instant.now()));
         run.finish(RunStatus.SUCCEEDED, Instant.now());
         runs.saveAndFlush(run);
-        connect("figma", owner, "https://www.figma.com/design/Other99/next")
+        connect("figma", owner, "https://www.figma.com/design/Other99/next?node-id=0-1")
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.error.code").value("NOT_READY"));
-        verify(figma, never()).fileName(any());
+        verify(figma, never()).outline(any());
     }
 
     /** 브라우저는 Origin을 붙여 보낸다 — CORS 허용 메서드에 PUT이 없으면 연결 요청이 403 "Invalid CORS request"로 막힌다 */
@@ -182,5 +202,15 @@ class ConnectionApiTest {
                 .cookie(new Cookie("XSRF-TOKEN", "t")).header("X-XSRF-TOKEN", "t")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"url\":\"https://github.com/team/app\"}"))
             .andExpect(status().isOk());
+    }
+
+    /** Figma는 만료·잘못된 토큰도 403으로 준다 — 사용자 권한 문제(422)가 아니라 서버 설정 문제(503)로 알린다 */
+    @Test
+    void 서버_Figma_토큰이_만료됐으면_503이고_권한_없음으로_안내하지_않는다() throws Exception {
+        when(figma.outline("AbC123")).thenThrow(new FigmaApiException("token expired", 403, true, null));
+        connect("figma", owner, FIGMA_URL)
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.error.code").value("FIGMA_UNAVAILABLE"));
+        assertThat(reload().getFigmaFileKey()).isNull();
     }
 }

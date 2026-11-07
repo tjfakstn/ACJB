@@ -50,8 +50,13 @@ public class FigmaRestClient implements FigmaClient {
     }
 
     @Override
-    public String fileName(String fileKey) {
-        return requireText(get("/v1/files/{key}?depth=1", fileKey, null), "name");
+    public FileOutline outline(String fileKey) {
+        JsonNode root = get("/v1/files/{key}?depth=1", fileKey, null);
+        List<Page> pages = new ArrayList<>();
+        for (JsonNode page : requireArray(requireObject(root, "document"), "children")) {
+            pages.add(new Page(requireText(page, "id"), requireText(page, "name")));
+        }
+        return new FileOutline(requireText(root, "name"), pages);
     }
 
     @Override
@@ -110,7 +115,10 @@ public class FigmaRestClient implements FigmaClient {
                 ? http.get().uri(path, fileKey).retrieve().body(String.class)
                 : http.get().uri(path, fileKey, ids).retrieve().body(String.class);
         } catch (RestClientResponseException e) {
-            throw new FigmaApiException(describe(e.getStatusCode()), e.getStatusCode().value(), e);
+            String errorBody = e.getResponseBodyAsString();
+            boolean tokenProblem = errorBody != null && errorBody.toLowerCase(java.util.Locale.ROOT).contains("token");
+            throw new FigmaApiException(tokenProblem ? "서버 Figma 토큰이 만료됐거나 올바르지 않습니다." : describe(e.getStatusCode()),
+                e.getStatusCode().value(), tokenProblem, e);
         } catch (ResourceAccessException e) {
             throw new FigmaApiException("Figma에 연결하지 못했습니다(시간 초과 또는 네트워크 오류).", e);
         }

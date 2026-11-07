@@ -35,7 +35,13 @@ public class ConnectionService {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectionService.class);
 
-    private static final Pattern FIGMA_URL = Pattern.compile("^(?:https?://)?(?:www\\.)?figma\\.com/(?:design|file)/([A-Za-z0-9]+)(?:[/?#].*)?$");
+    /**
+     * Figma 앱의 페이지 [공유하기]에서 복사한 페이지 링크만 받는다(2026-11-07): figma.com/design/{key}/{이름}?node-id={페이지}&t=…
+     * node-id는 주소에서 "424-2"(또는 "424:2", "424%3A2")로 온다. 프로토타입·브랜치·프로젝트 링크는 이 형식이 아니라서 400
+     */
+    private static final Pattern FIGMA_URL = Pattern.compile("^(?:https?://)?(?:www\\.)?figma\\.com/design/([A-Za-z0-9]+)(?:/[^/?#]*)?\\?([^#]*)(?:#.*)?$");
+    private static final Pattern NODE_ID_PARAM = Pattern.compile("(?:^|&)node-id=([0-9]+)(?:-|:|%3A|%3a)([0-9]+)(?:&|$)");
+    private static final String PAGE_LINK_GUIDE = "Figma 앱에서 대조할 페이지를 연 뒤 [공유하기]로 복사한 페이지 링크를 붙여 넣어 주세요.";
     private static final Pattern GITHUB_URL = Pattern.compile("^(?:https?://)?(?:www\\.)?github\\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\\.git)?/?(?:[?#].*)?$");
     private static final int URL_MAX = 500;
     private static final HttpStatus UNPROCESSABLE = HttpStatus.valueOf(422);
@@ -59,19 +65,26 @@ public class ConnectionService {
         Project project = ownedProject(projectId, requester);
         String url = trimmed(rawUrl);
         Matcher m = url == null ? null : FIGMA_URL.matcher(url);
-        if (m == null || !m.matches()) {
-            throw ApiException.badRequest("올바른 Figma 파일 링크가 아니에요 (예: https://www.figma.com/design/파일키/이름)");
+        Matcher node = m != null && m.matches() ? NODE_ID_PARAM.matcher(m.group(2)) : null;
+        if (node == null || !node.find()) {
+            throw ApiException.badRequest("Figma 페이지 링크가 아니에요. " + PAGE_LINK_GUIDE);
         }
+        String pageId = node.group(1) + ":" + node.group(2);
         rejectAfterAnalysis(projectId);
         if (!figma.isConfigured()) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.FIGMA_UNAVAILABLE, "서버에 Figma 연동이 설정되지 않았습니다.");
         }
         String fileKey = m.group(1);
-        String fileName;
+        FigmaClient.FileOutline outline;
         try {
-            fileName = figma.fileName(fileKey);
+            outline = figma.outline(fileKey);
         } catch (FigmaApiException e) {
             log.warn("Figma 파일 확인 실패: status={} message={}", e.status(), e.getMessage());
+            if (e.tokenProblem()) {
+                // 사용자 파일 권한이 아니라 서버 설정 문제다 — 관리자가 FIGMA_ACCESS_TOKEN을 새로 넣어야 한다
+                throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.FIGMA_UNAVAILABLE,
+                    "서버의 Figma 연동 토큰이 만료됐거나 올바르지 않아요. 관리자에게 알려 주세요.");
+            }
             if (e.status() == 403) {
                 throw new ApiException(UNPROCESSABLE, ErrorCodes.CONNECTION_FORBIDDEN,
                     "Figma 파일 보기 권한이 없어요. 파일 소유자에게 보기 권한을 요청한 뒤 다시 확인해 주세요.");
@@ -79,9 +92,12 @@ public class ConnectionService {
             throw new ApiException(HttpStatus.BAD_GATEWAY, ErrorCodes.CONNECTION_FAILED,
                 "파일을 찾을 수 없거나 Figma 응답이 지연되고 있어요. 링크를 확인한 뒤 다시 시도해 주세요.");
         }
+        // node-id가 페이지가 아니면(프레임·섹션을 골라 복사한 링크) 받지 않는다 — 대조 범위는 페이지 하나다
+        FigmaClient.Page page = outline.pages().stream().filter(p -> p.id().equals(pageId)).findFirst()
+            .orElseThrow(() -> ApiException.badRequest("링크가 페이지가 아니라 프레임이나 섹션을 가리켜요. " + PAGE_LINK_GUIDE));
         Instant now = clock.instant();
-        project.connectFigma(url, fileKey, fileName, now);
-        return new ProjectDetailResponse.FigmaConnection(url, fileKey, fileName, now);
+        project.connectFigma(url, fileKey, outline.name(), page.id(), page.name(), now);
+        return new ProjectDetailResponse.FigmaConnection(url, fileKey, outline.name(), page.id(), page.name(), now);
     }
 
     @Transactional

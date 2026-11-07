@@ -101,7 +101,7 @@ export function ProjectsPage() {
         onClose={() => { setDialogOpen(false); load() }}
         onCreated={load}
         onManageMembers={(p) => navigate(`/app/projects/${p.id}/members`)}
-        onStart={(p) => navigate(`/app/projects/${p.id}`)}
+        onStart={(p) => navigate(`/app/projects/${p.id}`, { state: { justCreated: true } })}
       />}
     </div>
   )

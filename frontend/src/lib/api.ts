@@ -184,6 +184,8 @@ export interface ProjectDetail {
   name: string
   description: string | null
   owner_id: string
+  /** 만든 시각(2026-11-07 추가 — 작업공간 "생성일") */
+  created_at: string
   /** null=미지정 */
   my_role: MemberRole | null
   figma: FigmaConnection | null

@@ -584,6 +584,44 @@ cases:
       status: 201
       body: { data: { description: null } }
 
+  # --- AC26: 프로젝트 삭제 (2026-11-07, 설만수 지시) ---
+  - id: pj-009
+    ac: AC26
+    description: 소유자가 삭제하면 그 프로젝트의 이슈·이력·재검증·알림·스타일 차이·초대·멤버십까지 모두 지워지고 다른 프로젝트와 멤버 계정은 남는다
+    input:
+      endpoint: DELETE /projects/{projectId}
+      actor: 소유자
+      precondition: 프로젝트 X에 멤버 2명, 이슈 1건(이력·재검증·알림·스타일 차이 포함), 대기 초대 1건 / 같은 멤버가 속한 프로젝트 Y에 이슈 1건
+    expected:
+      status: 204
+      followup:
+        expected_rows_for_project_x: 0
+        expected_project_y_issue_count: 1
+        expected_member_count_delta: 0
+        get_project_x_status: 403
+
+  - id: pj-010
+    ac: AC26
+    description: 소유자가 아닌 멤버의 삭제 요청은 403이고 아무것도 지우지 않는다
+    input:
+      endpoint: DELETE /projects/{projectId}
+      actor: 소유자가 아닌 프로젝트 멤버
+    expected:
+      status: 403
+      followup:
+        expected_project_exists: true
+
+  - id: pj-011
+    ac: AC26
+    description: 비교 분석·첫 QA가 실행 중이면 409 NOT_READY이고 지우지 않는다
+    input:
+      endpoint: DELETE /projects/{projectId}
+      actor: 소유자
+      precondition: 비교 분석 status running
+    expected:
+      status: 409
+      body: { error: { code: "NOT_READY" } }
+
   # --- AC17: 초대 ---
   - id: iv-001
     ac: AC17

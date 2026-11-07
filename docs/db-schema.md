@@ -333,6 +333,11 @@ erDiagram
 3. `invitations` 테이블 신규
 4. CSV 시드 로더(`SeedLoader`)와 `data/seed/members*.csv` 제거 — Member는 처음 로그인할 때 만든다
 
+### 프로젝트 삭제 순서 (AC26, 2026-11-07)
+
+FK에 ON DELETE CASCADE를 걸지 않고 서비스가 한 트랜잭션에서 자식부터 지운다 — 무엇이 지워지는지 코드에서 보이게 하고, 다른 경로(멤버 제거 등)에서 실수로 연쇄 삭제가 일어나지 않게 하려는 것.
+`notifications` → `verifications` → `status_histories` → `qa_issue_repro_steps` → `qa_issue_screenshots`(모두 그 프로젝트 이슈의 것) → `qa_issues` → `style_mismatches` → `style_scans` → `figma_syncs` → `figma_frames` → `embeddings` → `project_runs` → `invitations` → `project_members` → `projects`. `members`는 지우지 않는다.
+
 ## 6. 의도적으로 두지 않은 것
 
 - 알림 읽음 상태, 이메일·Slack 채널 — v2

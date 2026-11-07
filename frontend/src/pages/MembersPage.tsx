@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
-  ApiError, cancelInvitation, fetchMe, formatDate, inviteMember, listInvitations, listMembers, listProjects, removeMember,
-  ROLE_LABELS, type Invitation, type Me, type MemberRole, type Project, type ProjectMember,
+  ApiError, cancelInvitation, changeMemberRole, fetchMe, formatDate, listInvitations, listMembers, listProjects, removeMember, resendInvitation,
+  ROLE_LABELS, roleLabel, type Invitation, type Me, type MemberRole, type ProjectMember, type ProjectSummary,
 } from '../lib/api'
 import { AppHeader } from '../components/projects/AppHeader'
 import { WorkspaceSidebar } from '../components/members/WorkspaceSidebar'
 import { InviteDialog } from '../components/members/InviteDialog'
 
-// 프로젝트 멤버 관리(시안 U02-C1). 멤버와 대기 중 초대를 한 표에 보여준다.
-// 시안과 다른 점: 역할 변경 드롭다운 대신 역할 표시만 한다(역할 변경 API 없음 — 역할은 본인이 수락할 때 고른다),
-// "초대 실패" 탭은 뺐다(메일 발송 실패 상태를 서버가 기록하지 않는다).
+// 프로젝트 멤버 관리(시안 MEM-02·MEM-06). 멤버와 대기 중 초대를 한 표에 보여준다.
+// 역할은 수락할 때 본인이 고르고, 이후 변경은 소유자만 한다(SPEC AC24) — 소유자에게만 역할 칸이 선택 상자로 보인다.
+// 재전송은 같은 초대의 만료를 7일 늘리고 새 링크로 다시 보낸다(AC17).
+// 시안과 다른 점: "초대 실패" 탭은 뺐다(메일 발송 실패 상태를 서버가 기록하지 않는다).
 type Tab = 'all' | 'joined' | 'pending'
 
 const ROLE_BADGE: Record<MemberRole, string> = {
@@ -25,7 +26,7 @@ export function MembersPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const [me, setMe] = useState<Me | null>(null)
-  const [project, setProject] = useState<Project | null>(null)
+  const [project, setProject] = useState<ProjectSummary | null>(null)
   const [members, setMembers] = useState<ProjectMember[] | null>(null)
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -33,6 +34,7 @@ export function MembersPage() {
   const [tab, setTab] = useState<Tab>('all')
   const [inviteOpen, setInviteOpen] = useState(searchParams.get('invite') === '1')
   const [busy, setBusy] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -67,11 +69,13 @@ export function MembersPage() {
   const joined = members ?? []
   const pending = invitations.filter((i) => i.status === 'pending')
 
-  const run = async (key: string, action: () => Promise<unknown>) => {
+  const run = async (key: string, action: () => Promise<unknown>, success?: string) => {
     setBusy(key)
     setActionError(null)
+    setNotice(null)
     try {
       await action()
+      if (success) setNotice(success)
       await load()
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : '요청을 처리하지 못했어요.')
@@ -123,6 +127,9 @@ export function MembersPage() {
                 <Stat label="초대 대기 중" value={pending.length} hint="7일 안에 수락하지 않으면 만료" />
               </div>
 
+              {notice && (
+                <div role="status" className="mt-4 rounded-xl border border-[#bfe3d0] bg-[#e8f7f1] px-4 py-3 text-sm text-[#1f8a5f]">{notice}</div>
+              )}
               {actionError && (
                 <div role="alert" className="mt-4 rounded-xl border border-[#f7c9c9] bg-[#fdecec] px-4 py-3 text-sm text-qa-warning">{actionError}</div>
               )}
@@ -166,7 +173,19 @@ export function MembersPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3.5">
-                            <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_BADGE[m.role] ?? 'bg-gray-100 text-gray-600'}`}>{ROLE_LABELS[m.role] ?? m.role}</span>
+                            {isOwner ? (
+                              <select aria-label={`${m.name} 역할`} value={m.role ?? ''} disabled={busy !== null}
+                                onChange={(e) => {
+                                  const role = e.target.value as MemberRole
+                                  run(`role-${m.id}`, () => changeMemberRole(projectId, m.id, role), `${m.name} 님의 역할을 ${ROLE_LABELS[role]}(으)로 바꿨어요.`)
+                                }}
+                                className={`rounded-full border-0 px-2.5 py-1 text-xs font-medium outline-none ring-1 ring-transparent focus:ring-qa-primary disabled:opacity-60 ${m.role ? ROLE_BADGE[m.role] : 'bg-gray-100 text-gray-600'}`}>
+                                {m.role === null && <option value="" disabled>{roleLabel(null)}</option>}
+                                {(Object.keys(ROLE_LABELS) as MemberRole[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                              </select>
+                            ) : (
+                              <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${m.role ? ROLE_BADGE[m.role] : 'bg-gray-100 text-gray-600'}`}>{roleLabel(m.role)}</span>
+                            )}
                           </td>
                           <td className="px-4 py-3.5"><StatusDot color="bg-qa-success" label="참여 완료" /></td>
                           <td className="px-4 py-3.5 text-xs text-qa-sub">-</td>
@@ -198,7 +217,7 @@ export function MembersPage() {
                         <td className="px-4 py-3.5 text-xs text-gray-600">{formatDate(inv.created_at)} 발송 · {formatDate(inv.expires_at)} 만료 예정</td>
                         <td className="px-6 py-3.5 text-right">
                           <div className="flex justify-end gap-3 text-xs font-medium">
-                            <button type="button" disabled={busy !== null} onClick={() => run(`re-${inv.id}`, () => inviteMember(projectId, inv.email))}
+                            <button type="button" disabled={busy !== null} onClick={() => run(`re-${inv.id}`, () => resendInvitation(projectId, inv.id), `${inv.email}에 초대를 다시 보냈어요. 만료가 7일 연장됐고 이전 링크는 더 이상 쓸 수 없어요.`)}
                               className="text-qa-primary hover:underline disabled:opacity-50">{busy === `re-${inv.id}` ? '보내는 중…' : '재전송'}</button>
                             <button type="button" disabled={busy !== null} onClick={() => run(`cx-${inv.id}`, () => cancelInvitation(projectId, inv.id))}
                               className="text-gray-500 hover:underline disabled:opacity-50">{busy === `cx-${inv.id}` ? '취소 중…' : '취소'}</button>
@@ -214,7 +233,7 @@ export function MembersPage() {
               </section>
 
               <p className="mt-4 text-xs text-qa-sub">
-                역할은 프로젝트 단위로 적용돼요. 멤버 내보내기는 소유자만 할 수 있고, 내보낸 멤버가 담당하던 미해결 이슈는 담당자가 비워집니다.
+                역할은 프로젝트 단위로 적용돼요. 역할 변경과 멤버 내보내기는 소유자만 할 수 있고, 내보낸 멤버가 담당하던 미해결 이슈는 담당자가 비워집니다.
               </p>
             </>
           )}

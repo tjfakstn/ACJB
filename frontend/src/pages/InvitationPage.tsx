@@ -6,7 +6,7 @@ import {
 } from '../lib/api'
 import { AppHeader } from '../components/projects/AppHeader'
 import { RoleSelect } from '../components/common/RoleSelect'
-import { Spinner } from '../components/projects/CreateProjectDialog'
+import { Spinner } from '../components/common/Spinner'
 
 // 초대 메일의 수락 링크(/invitations/{token}) — 시안 U02-B2(확인·수락), U02-B3(만료).
 // 시안과 다른 점(스펙에 맞춤): 역할은 초대한 사람이 정한 값을 보여주는 대신 여기서 본인이 고른다(SPEC AC18),
@@ -64,7 +64,7 @@ export function InvitationPage() {
     setError(null)
     try {
       const project = await acceptInvitation(token, role)
-      navigate(`/app/projects/${project.id}/members`, { replace: true })
+      navigate(`/app/projects/${project.id}`, { replace: true })
     } catch (e) {
       if (e instanceof ApiError && e.code === 'INVITATION_CLOSED') {
         await load() // 그사이 만료·취소됐다 — 닫힌 초대 화면으로 바꾼다
@@ -118,6 +118,7 @@ export function InvitationPage() {
                 <Heading tone="primary" eyebrow="프로젝트 초대" title={`${p.invited_by_name}님이 프로젝트에 초대했어요`} />
                 <div className="mt-5 rounded-xl border border-qa-border bg-qa-surface px-4 py-3">
                   <div className="text-sm font-bold text-gray-900">{p.project_name}</div>
+                  {p.project_description && <div className="mt-1 text-xs leading-5 text-gray-600">{p.project_description}</div>}
                 </div>
                 <dl className="mt-5 grid grid-cols-[96px_1fr] gap-y-2.5 text-sm">
                   <dt className="text-gray-500">초대받은 이메일</dt>

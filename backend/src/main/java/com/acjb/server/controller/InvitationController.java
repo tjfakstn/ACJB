@@ -3,6 +3,7 @@ package com.acjb.server.controller;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -33,11 +34,20 @@ public class InvitationController {
         this.currentMember = currentMember;
     }
 
+    /** AC17 — 새 초대는 201, 같은 이메일의 대기 초대를 연장해 다시 보냈으면 200 */
     @PostMapping("/api/v1/projects/{projectId}/invitations")
-    @ResponseStatus(HttpStatus.CREATED)
-    public Map<String, Object> invite(@PathVariable Long projectId, @RequestBody InvitationDtos.CreateRequest request,
+    public ResponseEntity<Map<String, Object>> invite(@PathVariable Long projectId, @RequestBody InvitationDtos.CreateRequest request,
+                                                      @AuthenticationPrincipal OAuth2User principal) {
+        InvitationService.InviteResult result = service.invite(projectId, request == null ? null : request.email(),
+            currentMember.require(principal));
+        return ResponseEntity.status(result.renewed() ? HttpStatus.OK : HttpStatus.CREATED).body(ApiResponses.ok(result.view()));
+    }
+
+    /** AC17 재전송 — 만료 7일 연장, 새 링크로 메일 */
+    @PostMapping("/api/v1/projects/{projectId}/invitations/{invitationId}/resend")
+    public Map<String, Object> resend(@PathVariable Long projectId, @PathVariable String invitationId,
                                       @AuthenticationPrincipal OAuth2User principal) {
-        return ApiResponses.ok(service.invite(projectId, request == null ? null : request.email(), currentMember.require(principal)));
+        return ApiResponses.ok(service.resend(projectId, invitationId, currentMember.require(principal)));
     }
 
     @GetMapping("/api/v1/projects/{projectId}/invitations")

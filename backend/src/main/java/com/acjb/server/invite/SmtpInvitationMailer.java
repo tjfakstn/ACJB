@@ -43,13 +43,15 @@ public class SmtpInvitationMailer implements InvitationMailer {
         message.setSubject("[QAting] " + mail.inviterName() + " 님이 '" + mail.projectName() + "' 프로젝트에 초대했습니다");
         message.setText("""
             %s 님이 QAting의 '%s' 프로젝트에 초대했습니다.
-
+            %s
             아래 링크를 열고, 이 메일을 받은 구글 계정(%s)으로 로그인한 뒤 수락하세요.
             %s
 
             이 초대는 %s(한국 시간)까지 유효합니다.
             다른 구글 계정으로 로그인하면 수락할 수 없습니다.
-            """.formatted(mail.inviterName(), mail.projectName(), mail.to(), mail.acceptUrl(), EXPIRES.format(mail.expiresAt())));
+            """.formatted(mail.inviterName(), mail.projectName(),
+                mail.projectDescription() == null ? "" : "프로젝트 설명: " + mail.projectDescription() + "\n",
+                mail.to(), mail.acceptUrl(), EXPIRES.format(mail.expiresAt())));
         try {
             mailSender.send(message);
             return true;

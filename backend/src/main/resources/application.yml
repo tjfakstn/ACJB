@@ -65,6 +65,11 @@ app:
     access-token: ${FIGMA_ACCESS_TOKEN:}
     base-url: https://api.figma.com
     timeout: 30s
+  # GitHub 저장소 연결(AC21) — 공개 저장소만. 토큰은 선택(backend/.env의 GITHUB_TOKEN, 없으면 익명 — 호출 한도가 낮다)
+  github:
+    token: ${GITHUB_TOKEN:}
+    base-url: https://api.github.com
+    timeout: 15s
   # 단일 컴포넌트 scan — 서버가 target_url을 헤드리스 크로미움으로 연다. 루프백(localhost)은 로컬 개발에서만 허용
   # (backend/.env의 SCAN_ALLOW_LOCALHOST=true). 사설 IP·메타데이터 주소는 항상 막는다(2026-11-04 설만수 결정)
   scan:

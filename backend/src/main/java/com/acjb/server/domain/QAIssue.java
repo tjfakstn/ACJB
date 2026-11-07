@@ -103,6 +103,12 @@ public class QAIssue {
     @Column(name = "status", nullable = false, length = 20)
     private IssueStatus status = IssueStatus.NEEDS_CHECK;
 
+    /** 사람이 등록한 이슈는 manual. first_qa는 첫 QA 구현 때 채운다(AC23, V4) */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "source", nullable = false, length = 10, updatable = false)
+    private IssueSource source = IssueSource.MANUAL;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_to_id")
     private Member assignedTo;

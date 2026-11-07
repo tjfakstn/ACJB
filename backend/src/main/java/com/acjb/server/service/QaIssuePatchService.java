@@ -26,7 +26,7 @@ import com.acjb.server.repository.StatusHistoryRepository;
 import tools.jackson.databind.JsonNode;
 
 /**
- * PATCH /projects/{projectId}/qa-issues/{issueId} — 상태(fixed)·담당자 변경.
+ * PATCH /projects/{projectId}/qa-issues/{issueId} — 상태(in_progress·fixed)·담당자 변경.
  * 검사 순서: 요청 형태(400) → 이슈 존재(404) → 권한(403, AC13) → 전이(409, AC6) → 변경.
  * 어느 단계에서 거부돼도 아무것도 바꾸지 않는다 — 검사를 모두 끝낸 뒤에만 엔티티를 고친다.
  */
@@ -34,8 +34,10 @@ import tools.jackson.databind.JsonNode;
 public class QaIssuePatchService {
 
     private static final Set<String> ALLOWED_FIELDS = Set.of("status", "assigned_to");
-    /** PATCH로 fixed가 될 수 있는 상태(AC6). fixed → resolved/needs_recheck는 재검증 등록으로만 */
-    private static final Set<IssueStatus> FIXABLE_FROM = Set.of(IssueStatus.NEEDS_CHECK, IssueStatus.NEEDS_RECHECK);
+    /** PATCH로 in_progress가 될 수 있는 상태(AC6, 2026-11-07) */
+    private static final Set<IssueStatus> STARTABLE_FROM = Set.of(IssueStatus.NEEDS_CHECK, IssueStatus.NEEDS_RECHECK);
+    /** PATCH로 fixed가 될 수 있는 상태(AC6) — in_progress를 건너뛰는 것도 허용. fixed → resolved/needs_recheck는 재검증 등록으로만 */
+    private static final Set<IssueStatus> FIXABLE_FROM = Set.of(IssueStatus.NEEDS_CHECK, IssueStatus.NEEDS_RECHECK, IssueStatus.IN_PROGRESS);
     private static final String IN_APP = "in_app";
 
     private final QAIssueRepository issues;
@@ -87,10 +89,17 @@ public class QaIssuePatchService {
             if (current == null || !current.getId().equals(actor.getId())) {
                 throw ApiException.forbidden("상태는 이 이슈의 담당자만 바꿀 수 있습니다.");
             }
-            // 4) 전이(AC6) — PATCH는 needs_check/needs_recheck → fixed만. 같은 상태로의 전이(fixed → fixed)도 409(N7)
-            if (requestedStatus != IssueStatus.FIXED || !FIXABLE_FROM.contains(issue.getStatus())) {
+            // 4) 전이(AC6) — PATCH는 needs_check/needs_recheck → in_progress, needs_check/needs_recheck/in_progress → fixed만.
+            //    같은 상태로의 전이(in_progress → in_progress, fixed → fixed)도 409(N7)
+            boolean allowed = switch (requestedStatus) {
+                case IN_PROGRESS -> STARTABLE_FROM.contains(issue.getStatus());
+                case FIXED -> FIXABLE_FROM.contains(issue.getStatus());
+                default -> false;
+            };
+            if (!allowed) {
                 throw ApiException.conflict("허용되지 않은 상태 전이입니다: " + lower(issue.getStatus()) + " → " + lower(requestedStatus)
-                    + ". PATCH는 needs_check·needs_recheck → fixed만 가능하고, resolved·needs_recheck는 재검증으로만 바뀝니다.");
+                    + ". PATCH는 needs_check·needs_recheck → in_progress, needs_check·needs_recheck·in_progress → fixed만 가능하고,"
+                    + " resolved·needs_recheck는 재검증으로만 바뀝니다.");
             }
         }
 
@@ -102,10 +111,12 @@ public class QaIssuePatchService {
             notifications.save(new Notification(issue, NotificationEvent.ISSUE_CREATED, newAssignee, IN_APP));
         }
         if (requestedStatus != null) {
-            issue.changeStatus(IssueStatus.FIXED);
-            histories.save(new StatusHistory(issue, IssueStatus.FIXED, actor));
-            // AC4: 등록자에게 1건
-            notifications.save(new Notification(issue, NotificationEvent.FIXED, issue.getReportedBy(), IN_APP));
+            issue.changeStatus(requestedStatus);
+            histories.save(new StatusHistory(issue, requestedStatus, actor));
+            if (requestedStatus == IssueStatus.FIXED) {
+                // AC4: 등록자에게 1건. in_progress는 알림을 만들지 않는다(N5 — 알림 종류 3개 고정)
+                notifications.save(new Notification(issue, NotificationEvent.FIXED, issue.getReportedBy(), IN_APP));
+            }
         }
         issues.flush();
         return QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()));

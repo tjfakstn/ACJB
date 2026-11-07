@@ -124,21 +124,76 @@ class InvitationApiTest {
         assertThat(events.stream(InvitationCreated.class)).isEmpty();
     }
 
+    /** iv-003(2026-11-07 교체, 설만수 승인) — 재초대는 새 초대 대신 같은 초대를 연장한다 */
     @Test
-    void ac17_같은_이메일을_다시_초대하면_이전_초대는_취소되고_새_초대만_대기한다() throws Exception {
+    void ac17_같은_이메일을_다시_초대하면_같은_초대가_7일_연장되고_이전_링크는_무효다() throws Exception {
         invite(dev, "again@test.dev").andExpect(status().isCreated());
         String first = lastToken();
-        invite(owner, "again@test.dev").andExpect(status().isCreated());
+        Invitation old = invitations.findAll().getFirst();
+        // 3일 전에 만든 초대로 맞춘다
+        em.createNativeQuery("update invitations set created_at = :c, expires_at = :e where id = :id")
+            .setParameter("c", Instant.now().minus(Duration.ofDays(3)))
+            .setParameter("e", Instant.now().plus(Duration.ofDays(4)))
+            .setParameter("id", old.getId()).executeUpdate();
+        em.clear();
+
+        Instant before = Instant.now();
+        invite(owner, "again@test.dev")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(String.valueOf(old.getId())))
+            .andExpect(jsonPath("$.data.status").value("pending"));
         String second = lastToken();
 
         em.flush();
         em.clear();
-        assertThat(invitations.findByTokenHash(InvitationTokens.hash(first)).orElseThrow().getStatus()).isEqualTo(InvitationStatus.CANCELED);
+        assertThat(invitations.count()).isEqualTo(1);
+        Invitation renewed = invitations.findById(old.getId()).orElseThrow();
+        assertThat(renewed.getStatus()).isEqualTo(InvitationStatus.PENDING);
+        assertThat(renewed.getExpiresAt()).isBetween(before.plus(Duration.ofDays(7)).minusSeconds(5), Instant.now().plus(Duration.ofDays(7)));
+        assertThat(events.stream(InvitationCreated.class)).hasSize(2);
         mvc.perform(as(get("/api/v1/projects/" + project.getId() + "/invitations"), dev.getEmail()))
-            .andExpect(jsonPath("$.data.items.length()").value(1))
-            .andExpect(jsonPath("$.data.items[0].invited_by").value(String.valueOf(owner.getId())));
-        accept(first, "again@test.dev", "designer").andExpect(status().isConflict());
+            .andExpect(jsonPath("$.data.items.length()").value(1));
+        accept(first, "again@test.dev", "designer").andExpect(status().isNotFound());
         accept(second, "again@test.dev", "designer").andExpect(status().isOk());
+    }
+
+    /** iv-008 — 재전송은 초대하지 않은 멤버도 할 수 있고, 만료를 7일 늘리고 메일 1통. 응답에 토큰이 없다(N14) */
+    @Test
+    void ac17_재전송하면_만료가_7일_연장되고_새_링크로_메일_1통() throws Exception {
+        Member designer = members.save(new Member("inv-des2@test.dev", "디자이너"));
+        projectMembers.save(new ProjectMember(project, designer, MemberRole.DESIGNER));
+        invite(dev, "resend@test.dev").andExpect(status().isCreated());
+        String first = lastToken();
+        Long id = invitations.findAll().getFirst().getId();
+
+        Instant before = Instant.now();
+        String body = mvc.perform(as(post("/api/v1/projects/" + project.getId() + "/invitations/" + id + "/resend"), designer.getEmail()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("pending"))
+            .andReturn().getResponse().getContentAsString();
+        String second = lastToken();
+
+        assertThat(second).isNotEqualTo(first);
+        assertThat(body).doesNotContain(second).doesNotContain("token");
+        assertThat(events.stream(InvitationCreated.class)).hasSize(2);
+        em.flush();
+        em.clear();
+        assertThat(invitations.findById(id).orElseThrow().getExpiresAt()).isAfterOrEqualTo(before.plus(Duration.ofDays(7)).minusSeconds(5));
+        accept(first, "resend@test.dev", "designer").andExpect(status().isNotFound());
+    }
+
+    /** iv-009 — 대기 중이 아닌 초대의 재전송은 409이고 메일을 보내지 않는다 */
+    @Test
+    void ac17_수락된_초대는_재전송할_수_없다() throws Exception {
+        invite(dev, "done@test.dev").andExpect(status().isCreated());
+        Long id = invitations.findAll().getFirst().getId();
+        accept(lastToken(), "done@test.dev", "designer").andExpect(status().isOk());
+        long mails = events.stream(InvitationCreated.class).count();
+
+        mvc.perform(as(post("/api/v1/projects/" + project.getId() + "/invitations/" + id + "/resend"), dev.getEmail()))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error.code").value("INVITATION_CLOSED"));
+        assertThat(events.stream(InvitationCreated.class).count()).isEqualTo(mails);
     }
 
     @Test

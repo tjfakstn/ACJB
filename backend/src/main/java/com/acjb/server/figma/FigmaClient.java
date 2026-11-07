@@ -12,6 +12,15 @@ public interface FigmaClient {
     /** 토큰이 설정돼 호출할 수 있는 상태인지 — 요청 단계에서 미리 거부하는 데 쓴다 */
     boolean isConfigured();
 
+    /** 파일 이름과 페이지 목록 — GET /v1/files/{key}?depth=1. 연결할 때 보기 권한과 페이지 링크인지 확인하는 데 쓴다(AC21) */
+    FileOutline outline(String fileKey);
+
+    record Page(String id, String name) {
+    }
+
+    record FileOutline(String name, List<Page> pages) {
+    }
+
     /** 파일의 각 페이지 바로 아래 노드(화면 단위 프레임 후보) — GET /v1/files/{key}?depth=2 */
     List<FigmaNode> topLevelNodes(String fileKey);
 

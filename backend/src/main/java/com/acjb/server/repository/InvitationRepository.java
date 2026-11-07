@@ -34,4 +34,7 @@ public interface InvitationRepository extends JpaRepository<Invitation, Long> {
 
     /** 같은 이메일 재초대 시 이전 대기 초대를 취소하려고 찾는다(AC17) */
     List<Invitation> findByProjectIdAndEmailAndStatus(Long projectId, String email, InvitationStatus status);
+
+    /** 작업공간 홈의 대기 초대 수(AC25) — 상태가 pending이어도 만료가 지났으면 세지 않는다 */
+    long countByProjectIdAndStatusAndExpiresAtAfter(Long projectId, InvitationStatus status, java.time.Instant now);
 }

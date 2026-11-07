@@ -1,6 +1,7 @@
 package com.acjb.server.service;
 
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import com.acjb.server.domain.MemberRole;
 import com.acjb.server.domain.Project;
 import com.acjb.server.domain.ProjectMember;
 import com.acjb.server.domain.QAIssue;
+import com.acjb.server.dto.MemberResponse;
 import com.acjb.server.dto.ProjectResponse;
 import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRepository;
@@ -23,7 +25,11 @@ import com.acjb.server.repository.QAIssueRepository;
 @Service
 public class ProjectCommandService {
 
-    private static final int NAME_MAX = 100;
+    /** 이름 규칙(시안 PRJ-02·SPEC AC16): 공백을 뺀 길이 2~40자, 한글·영문·숫자·공백·-·_ */
+    private static final int NAME_MIN = 2;
+    private static final int NAME_MAX = 40;
+    private static final Pattern NAME_CHARS = Pattern.compile("[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9 _-]+");
+    private static final int DESCRIPTION_MAX = 200;
 
     private final ProjectRepository projects;
     private final ProjectMemberRepository projectMembers;
@@ -35,19 +41,28 @@ public class ProjectCommandService {
         this.issues = issues;
     }
 
-    /** AC16 — 요청자가 소유자이자 고른 role의 첫 멤버. 검사를 모두 통과한 뒤에만 저장한다 */
+    /**
+     * AC16 — 요청자가 소유자이자 역할 미지정(null)의 첫 멤버(2026-11-07). 역할은 이후 소유자가 정한다(AC24).
+     * 검사를 모두 통과한 뒤에만 저장한다
+     */
     @Transactional
-    public ProjectResponse create(String name, String role, Member requester) {
+    public ProjectResponse create(String name, String description, Member requester) {
         String trimmed = name == null ? "" : name.trim();
         if (trimmed.isEmpty()) {
             throw ApiException.badRequest("필수 항목이 비어 있습니다: name");
         }
-        if (trimmed.length() > NAME_MAX) {
-            throw ApiException.badRequest("name은 " + NAME_MAX + "자 이하여야 합니다.");
+        if (trimmed.length() < NAME_MIN || trimmed.length() > NAME_MAX) {
+            throw ApiException.badRequest("name은 " + NAME_MIN + "~" + NAME_MAX + "자여야 합니다.");
         }
-        MemberRole memberRole = parseRole(role);
-        Project project = projects.save(new Project(trimmed, requester));
-        projectMembers.save(new ProjectMember(project, requester, memberRole));
+        if (!NAME_CHARS.matcher(trimmed).matches()) {
+            throw ApiException.badRequest("name에는 한글·영문·숫자·공백·-·_만 쓸 수 있습니다.");
+        }
+        String desc = description == null || description.isBlank() ? null : description.trim();
+        if (desc != null && desc.length() > DESCRIPTION_MAX) {
+            throw ApiException.badRequest("description은 " + DESCRIPTION_MAX + "자 이하여야 합니다.");
+        }
+        Project project = projects.save(new Project(trimmed, desc, requester));
+        projectMembers.save(new ProjectMember(project, requester, null));
         return ProjectResponse.of(project);
     }
 
@@ -73,6 +88,26 @@ public class ProjectCommandService {
             issue.assignTo(null);
         }
         projectMembers.delete(membership);
+    }
+
+    /**
+     * AC24 — 소유자만(본인 역할 포함). 이슈·담당자·알림은 바꾸지 않는다(알림 종류 3개 고정, N5).
+     * 검사 순서: 소유자(403) → 역할 값(400) → 대상 멤버(404)
+     */
+    @Transactional
+    public MemberResponse changeRole(Long projectId, String memberId, String role, Member requester) {
+        Project project = projects.findById(projectId).orElseThrow(() -> ApiException.notFound("프로젝트를 찾을 수 없습니다."));
+        if (!project.getOwner().getId().equals(requester.getId())) {
+            throw ApiException.forbidden("역할은 프로젝트 소유자만 바꿀 수 있습니다.");
+        }
+        MemberRole memberRole = parseRole(role);
+        Long targetId = parseIdOrNull(memberId);
+        ProjectMember membership = targetId == null ? null : projectMembers.findByProjectIdAndMemberId(projectId, targetId).orElse(null);
+        if (membership == null) {
+            throw ApiException.notFound("이 프로젝트의 멤버가 아닙니다.");
+        }
+        membership.changeRole(memberRole);
+        return MemberResponse.of(membership);
     }
 
     static MemberRole parseRole(String raw) {

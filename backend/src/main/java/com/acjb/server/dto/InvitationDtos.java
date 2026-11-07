@@ -35,9 +35,10 @@ public final class InvitationDtos {
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record Preview(String projectName, String invitedByName, String email, String status, Instant expiresAt) {
+    public record Preview(String projectName, String projectDescription, String invitedByName, String email, String status,
+                          Instant expiresAt) {
         public static Preview of(Invitation i, Instant now) {
-            return new Preview(i.getProject().getName(), i.getInvitedBy().getName(), i.getEmail(),
+            return new Preview(i.getProject().getName(), i.getProject().getDescription(), i.getInvitedBy().getName(), i.getEmail(),
                 i.effectiveStatus(now).name().toLowerCase(Locale.ROOT), i.getExpiresAt());
         }
     }

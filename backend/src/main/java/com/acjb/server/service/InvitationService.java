@@ -57,9 +57,16 @@ public class InvitationService {
         this.acceptUrlTemplate = acceptUrlTemplate;
     }
 
-    /** AC17 — 같은 이메일의 대기 초대는 취소하고 새로 만든다(재발송). 메일은 커밋 뒤 보낸다 */
+    /** invite 결과 — renewed면 기존 대기 초대를 연장한 것(200), 아니면 새로 만든 것(201) */
+    public record InviteResult(InvitationDtos.View view, boolean renewed) {
+    }
+
+    /**
+     * AC17 — 같은 이메일에 대기 중(만료 전) 초대가 있으면 새로 만들지 않고 그 초대를 연장해 다시 보낸다(2026-11-07).
+     * 만료됐지만 상태가 pending으로 남은 행은 취소하고 새로 만든다 — 대기 초대가 이메일당 하나만 남게. 메일은 커밋 뒤 보낸다
+     */
     @Transactional
-    public InvitationDtos.View invite(Long projectId, String rawEmail, Member inviter) {
+    public InviteResult invite(Long projectId, String rawEmail, Member inviter) {
         String email = rawEmail == null ? "" : rawEmail.trim().toLowerCase(Locale.ROOT);
         if (email.isEmpty()) {
             throw ApiException.badRequest("필수 항목이 비어 있습니다: email");
@@ -71,14 +78,50 @@ public class InvitationService {
         if (projectMembers.existsByProjectIdAndMemberEmail(projectId, email)) {
             throw new ApiException(HttpStatus.CONFLICT, ErrorCodes.ALREADY_MEMBER, "이미 이 프로젝트의 멤버입니다.");
         }
-        invitations.findByProjectIdAndEmailAndStatus(projectId, email, InvitationStatus.PENDING).forEach(Invitation::cancel);
-
         Instant now = clock.instant();
+        Invitation open = null;
+        for (Invitation pending : invitations.findByProjectIdAndEmailAndStatus(projectId, email, InvitationStatus.PENDING)) {
+            if (open == null && pending.isOpen(now)) {
+                open = pending;
+            } else {
+                pending.cancel();
+            }
+        }
+        if (open != null) {
+            return new InviteResult(renewAndSend(open, inviter, now), true);
+        }
         String token = InvitationTokens.newToken();
         Invitation invitation = invitations.save(new Invitation(project, email, InvitationTokens.hash(token), inviter, now));
-        events.publishEvent(new InvitationCreated(new InvitationMail(email, project.getName(), inviter.getName(),
-            acceptUrlTemplate.replace("{token}", token), invitation.getExpiresAt())));
+        sendMail(invitation, token, inviter);
+        return new InviteResult(InvitationDtos.View.of(invitation, now), false);
+    }
+
+    /** AC17 재전송 — 프로젝트 멤버 누구나(멤버 여부는 Security 단계, AC12). 대기 중이 아니면 409 */
+    @Transactional
+    public InvitationDtos.View resend(Long projectId, String invitationId, Member requester) {
+        Long id = parseIdOrNull(invitationId);
+        Invitation invitation = id == null ? null : invitations.findByIdForUpdate(id).orElse(null);
+        if (invitation == null || !invitation.getProject().getId().equals(projectId)) {
+            throw ApiException.notFound("초대를 찾을 수 없습니다.");
+        }
+        Instant now = clock.instant();
+        if (!invitation.isOpen(now)) {
+            throw new ApiException(HttpStatus.CONFLICT, ErrorCodes.INVITATION_CLOSED, "대기 중인 초대가 아닙니다.");
+        }
+        return renewAndSend(invitation, requester, now);
+    }
+
+    /** 새 토큰을 발급해 만료를 7일 늘리고 메일을 다시 보낸다. 이전 링크는 무효(N14 — 토큰은 메일에만) */
+    private InvitationDtos.View renewAndSend(Invitation invitation, Member sender, Instant now) {
+        String token = InvitationTokens.newToken();
+        invitation.renew(InvitationTokens.hash(token), now);
+        sendMail(invitation, token, sender);
         return InvitationDtos.View.of(invitation, now);
+    }
+
+    private void sendMail(Invitation invitation, String token, Member sender) {
+        events.publishEvent(new InvitationCreated(new InvitationMail(invitation.getEmail(), invitation.getProject().getName(), invitation.getProject().getDescription(),
+            sender.getName(), acceptUrlTemplate.replace("{token}", token), invitation.getExpiresAt())));
     }
 
     /** 이 프로젝트의 대기 중(만료 전) 초대 */

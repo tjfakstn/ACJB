@@ -51,7 +51,8 @@ public class Invitation {
     @Column(nullable = false, updatable = false)
     private String email;
 
-    @Column(name = "token_hash", nullable = false, length = 64, updatable = false)
+    /** 재전송하면 새 토큰의 해시로 바뀐다 — 이전 링크는 더 이상 찾을 수 없다(AC17, 2026-11-07) */
+    @Column(name = "token_hash", nullable = false, length = 64)
     private String tokenHash;
 
     @Enumerated(EnumType.STRING)
@@ -63,7 +64,7 @@ public class Invitation {
     @JoinColumn(name = "invited_by_id", updatable = false)
     private Member invitedBy;
 
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false)
     private Instant expiresAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -91,6 +92,12 @@ public class Invitation {
 
     public boolean isOpen(Instant now) {
         return effectiveStatus(now) == InvitationStatus.PENDING;
+    }
+
+    /** AC17 재전송 — 대기 중 초대만(서비스에서 확인). 만료를 지금부터 7일로 늘리고 수락 링크 토큰을 바꾼다 */
+    public void renew(String newTokenHash, Instant now) {
+        this.tokenHash = newTokenHash;
+        this.expiresAt = now.plus(TTL);
     }
 
     public void cancel() {

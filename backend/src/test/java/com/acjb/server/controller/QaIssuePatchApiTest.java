@@ -334,4 +334,63 @@ class QaIssuePatchApiTest {
     private Member owner() {
         return members.save(new Member("owner-" + java.util.UUID.randomUUID() + "@test.dev", "소유자"));
     }
+
+    // --- AC6 · AC13: in_progress(수정 중, 2026-11-07) ---
+
+    @Test
+    void st004_담당자가_needs_check를_in_progress로_바꾸면_이력에_남고_알림은_없다() throws Exception {
+        QAIssue issue = issue(assignee, IssueStatus.NEEDS_CHECK);
+        patchAs(assignee, issue, "{\"status\":\"in_progress\"}")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("in_progress"))
+            .andExpect(jsonPath("$.data.status_history[1].status").value("in_progress"))
+            .andExpect(jsonPath("$.data.status_history[1].changed_by").value(String.valueOf(assignee.getId())))
+            .andExpect(jsonPath("$.data.status_history[1].changed_at").exists());
+        assertThat(notifications.count()).isZero();
+    }
+
+    @Test
+    void st004_needs_recheck에서도_in_progress로_바꿀_수_있다() throws Exception {
+        QAIssue issue = issue(assignee, IssueStatus.NEEDS_RECHECK);
+        patchAs(assignee, issue, "{\"status\":\"in_progress\"}").andExpect(status().isOk());
+        assertThat(reloadStatus(issue)).isEqualTo(IssueStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void st005_in_progress에서_fixed로_바꾸면_등록자에게_fixed_알림_1건() throws Exception {
+        QAIssue issue = issue(assignee, IssueStatus.IN_PROGRESS);
+        patchAs(assignee, issue, "{\"status\":\"fixed\"}")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("fixed"));
+        assertThat(notifications.findAll()).singleElement().satisfies(n -> {
+            assertThat(n.getEvent()).isEqualTo(NotificationEvent.FIXED);
+            assertThat(n.getRecipient().getId()).isEqualTo(reporter.getId());
+        });
+    }
+
+    @Test
+    void st006_fixed를_in_progress로_되돌리면_409이고_이력이_늘지_않는다() throws Exception {
+        QAIssue issue = issue(assignee, IssueStatus.FIXED);
+        long before = historyCount(issue);
+        patchAs(assignee, issue, "{\"status\":\"in_progress\"}")
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.success").value(false));
+        assertThat(historyCount(issue)).isEqualTo(before);
+        assertThat(reloadStatus(issue)).isEqualTo(IssueStatus.FIXED);
+    }
+
+    @Test
+    void st007_in_progress에서_in_progress는_409() throws Exception {
+        QAIssue issue = issue(assignee, IssueStatus.IN_PROGRESS);
+        patchAs(assignee, issue, "{\"status\":\"in_progress\"}").andExpect(status().isConflict());
+    }
+
+    @Test
+    void au010_담당자가_아닌_멤버의_in_progress는_403이고_상태와_이력이_그대로다() throws Exception {
+        QAIssue issue = issue(assignee, IssueStatus.NEEDS_CHECK);
+        long before = historyCount(issue);
+        patchAs(other, issue, "{\"status\":\"in_progress\"}").andExpect(status().isForbidden());
+        assertThat(historyCount(issue)).isEqualTo(before);
+        assertThat(reloadStatus(issue)).isEqualTo(IssueStatus.NEEDS_CHECK);
+    }
 }

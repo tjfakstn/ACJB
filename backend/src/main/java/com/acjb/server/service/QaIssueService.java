@@ -13,6 +13,7 @@ import com.acjb.server.common.ApiException;
 import com.acjb.server.domain.DeployStage;
 import com.acjb.server.domain.EnvPlatform;
 import com.acjb.server.domain.Environment;
+import com.acjb.server.domain.IssueSource;
 import com.acjb.server.domain.IssueStatus;
 import com.acjb.server.domain.Member;
 import com.acjb.server.domain.Notification;
@@ -153,10 +154,11 @@ public class QaIssueService {
     }
 
     @Transactional(readOnly = true)
-    public QaIssueListResponse list(Long projectId, String status, String assignedTo) {
+    public QaIssueListResponse list(Long projectId, String status, String source, String assignedTo) {
         IssueStatus statusFilter = status == null ? null : parseEnum(IssueStatus.class, status, "status");
+        IssueSource sourceFilter = source == null ? null : parseEnum(IssueSource.class, source, "source");
         Long assigneeFilter = assignedTo == null ? null : parseId(assignedTo, "assigned_to");
-        List<QaIssueResponse> items = issues.search(projectId, statusFilter, assigneeFilter).stream()
+        List<QaIssueResponse> items = issues.search(projectId, statusFilter, sourceFilter, assigneeFilter).stream()
             .map(issue -> QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId())))
             .toList();
         return new QaIssueListResponse(items, items.size());

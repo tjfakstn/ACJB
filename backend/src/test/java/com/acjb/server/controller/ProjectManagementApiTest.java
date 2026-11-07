@@ -311,6 +311,16 @@ class ProjectManagementApiTest {
     }
 
     @Test
+    void ws001b_상세는_프로젝트를_만든_시각을_준다() throws Exception {
+        Team t = team();
+        em.flush();
+
+        mvc.perform(as(get("/api/v1/projects/" + t.project().getId()), t.dev().getEmail()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.created_at").value(t.project().getCreatedAt().toString()));
+    }
+
+    @Test
     void ws002_비멤버의_상세_요청은_403이고_데이터가_없다() throws Exception {
         Team t = team();
         members.save(new Member("rm-out@test.dev", "외부"));

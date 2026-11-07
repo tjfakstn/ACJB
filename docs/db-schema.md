@@ -62,9 +62,11 @@ erDiagram
 | name | VARCHAR(100) | NOT NULL | 사용자가 만드는 이름이라 UNIQUE를 두지 않는다(2026-11-04). 규칙(2~40자·허용 문자)은 서비스에서 검사 |
 | description | VARCHAR(200) | NULL | 선택(2026-11-07, V5) |
 | owner_id | BIGINT | FK→members, NOT NULL | 소유자. 만든 사람(AC16). 멤버 제거는 소유자만(AC19) |
-| figma_url | VARCHAR(500) | NULL | 연결한 Figma 링크(AC21). 접근 확인에 성공했을 때만 채운다 — 아래 figma_* 셋은 함께 채워지고 함께 비어 있다 |
+| figma_url | VARCHAR(500) | NULL | 연결한 Figma 페이지 링크(AC21). 접근 확인에 성공했을 때만 채운다 — figma_* 컬럼은 함께 채워지고 함께 비어 있다 |
 | figma_file_key | VARCHAR(100) | NULL | 링크에서 뽑은 파일 키 |
 | figma_file_name | VARCHAR(255) | NULL | Figma API가 돌려준 파일 이름 |
+| figma_page_id | VARCHAR(50) | NULL | 분석할 페이지 노드 id(예 `424:2`) — 2026-11-07, V6 |
+| figma_page_name | VARCHAR(255) | NULL | 그 페이지 이름 |
 | figma_connected_at | DATETIME(6) | NULL | |
 | github_url | VARCHAR(500) | NULL | 연결한 공개 저장소 링크(AC21) — github_* 넷도 함께 채워진다 |
 | github_repo | VARCHAR(200) | NULL | `owner/repo` |

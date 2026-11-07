@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.5.1
+  version: 0.5.2
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -111,11 +111,13 @@ paths:
   /projects/{projectId}/connections/figma:
     put:
       tags: [Project]
-      summary: Figma 파일 연결 (SPEC AC21)
+      summary: Figma 페이지 연결 (SPEC AC21)
       description: >-
-        소유자만(그 외 403). url은 figma.com/design/{key} 또는 figma.com/file/{key} 형식이어야 한다(400).
+        소유자만(그 외 403). url은 Figma 앱의 페이지 [공유하기]에서 복사한 페이지 링크(figma.com/design/{key}/{이름}?node-id={페이지 id})만 받는다(2026-11-07).
+        node-id가 없거나 페이지가 아니면(프레임·섹션) 400. 파일 이름과 페이지 id·이름을 저장하고 이후 분석은 이 페이지 안만 본다.
         서버 Figma 토큰으로 파일을 읽을 수 있는지 확인한 뒤에만 저장한다 — 보기 권한이 없으면 422 CONNECTION_FORBIDDEN,
-        없는 파일·응답 지연이면 502 CONNECTION_FAILED, 서버에 토큰이 없으면 503 FIGMA_UNAVAILABLE이고 기존 연결은 그대로다.
+        없는 파일·응답 지연이면 502 CONNECTION_FAILED, 서버 Figma 토큰이 없거나 만료·잘못됐으면 503 FIGMA_UNAVAILABLE이고(Figma는 만료 토큰도 403으로 주지만
+        본문의 "Token expired"·"Invalid token"으로 구분해 사용자 권한 문제로 안내하지 않는다) 기존 연결은 그대로다.
         비교 분석이 성공한 뒤에는 바꿀 수 없다(409 NOT_READY).
       parameters:
         - $ref: '#/components/parameters/ProjectId'
@@ -1470,11 +1472,13 @@ components:
 
     FigmaConnection:
       type: object
-      required: [url, file_key, file_name, connected_at]
+      required: [url, file_key, file_name, page_id, page_name, connected_at]
       properties:
         url: { type: string }
         file_key: { type: string }
         file_name: { type: string }
+        page_id: { type: string, description: '분석할 페이지 노드 id(예 424:2)' }
+        page_name: { type: string }
         connected_at: { type: string, format: date-time }
 
     GithubConnection:

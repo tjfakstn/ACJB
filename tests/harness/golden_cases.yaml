@@ -989,17 +989,33 @@ cases:
         mail_sent_count: 0
 
   # --- AC21: Figma·GitHub 연결 ---
-  - id: cn-001
+  - id: cn-001   # 2026-11-07 수정(설만수 지시): 페이지 공유 링크만 받고 페이지를 함께 저장
     ac: AC21
-    description: 소유자가 접근 가능한 Figma 링크를 연결하면 파일 이름과 함께 저장된다
+    description: 소유자가 접근 가능한 Figma 페이지 공유 링크를 연결하면 파일 이름과 페이지 id·이름이 함께 저장된다
     input:
       endpoint: PUT /projects/{projectId}/connections/figma
       actor: 소유자
-      figma_stub: { file: { key: "AbC123", name: "멤버십 앱 리뉴얼" } }
-      body: { url: "https://www.figma.com/design/AbC123/membership" }
+      figma_stub: { file: { key: "AbC123", name: "멤버십 앱 리뉴얼", pages: [{ id: "0:1", name: "Archive" }, { id: "424:2", name: "UI Design - Refined" }] } }
+      body: { url: "https://www.figma.com/design/AbC123/membership?node-id=424-2&t=abc-1" }
     expected:
       status: 200
-      body: { data: { file_key: "AbC123", file_name: "멤버십 앱 리뉴얼" } }
+      body: { data: { file_key: "AbC123", file_name: "멤버십 앱 리뉴얼", page_id: "424:2", page_name: "UI Design - Refined" } }
+
+  - id: cn-006
+    ac: AC21
+    description: 페이지 공유 링크가 아니면 400이다 — node-id 없는 파일 링크(외부 호출 없음), 프레임·섹션을 가리키는 node-id(파일의 페이지 목록에 없음)
+    input:
+      endpoint: PUT /projects/{projectId}/connections/figma
+      actor: 소유자
+      figma_stub: { file: { key: "AbC123", name: "멤버십 앱 리뉴얼", pages: [{ id: "424:2", name: "UI Design - Refined" }] } }
+      bodies:
+        - { url: "https://www.figma.com/design/AbC123/membership" }
+        - { url: "https://www.figma.com/design/AbC123/membership?node-id=605-30464" }
+        - { url: "https://www.figma.com/proto/AbC123/membership?node-id=424-2" }
+    expected:
+      status: 400
+      followup:
+        expected_figma_connection: null
 
   - id: cn-002
     ac: AC21

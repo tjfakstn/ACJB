@@ -1174,13 +1174,14 @@ cases:
 
   - id: ws-002
     ac: AC25
-    description: 비멤버가 프로젝트 상세를 요청하면 403이고 데이터를 담지 않는다(AC12)
+    description: 비멤버가 프로젝트 상세를 요청하면 403이고 데이터를 담지 않는다(AC12, au-002와 같은 형태 — 2026-11-07 설만수 승인으로 data null → data 키 없음)
     input:
       endpoint: GET /projects/{projectId}
       actor: 그 프로젝트 멤버가 아닌 로그인 사용자
     expected:
       status: 403
-      body: { success: false, data: null }
+      body: { success: false }
+      body_not_has: [data]
 
   # --- 6.1절 금지 기준 N17 ---
   - id: ng-017

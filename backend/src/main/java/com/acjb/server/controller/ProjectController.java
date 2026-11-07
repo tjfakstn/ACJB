@@ -21,6 +21,7 @@ import com.acjb.server.auth.CurrentMember;
 import com.acjb.server.common.ApiResponses;
 import com.acjb.server.dto.ChangeRoleRequest;
 import com.acjb.server.dto.ConnectRequest;
+import com.acjb.server.dto.GithubConnectRequest;
 import com.acjb.server.dto.CreateProjectRequest;
 import com.acjb.server.service.ConnectionService;
 import com.acjb.server.service.ProjectCommandService;
@@ -56,9 +57,10 @@ public class ProjectController {
 
     /** AC21 — GitHub 공개 저장소 연결(소유자만, 읽기 확인 후 저장) */
     @PutMapping("/{projectId}/connections/github")
-    public Map<String, Object> connectGithub(@PathVariable Long projectId, @RequestBody(required = false) ConnectRequest request,
+    public Map<String, Object> connectGithub(@PathVariable Long projectId, @RequestBody(required = false) GithubConnectRequest request,
                                              @AuthenticationPrincipal OAuth2User principal) {
-        return ApiResponses.ok(connections.connectGithub(projectId, request == null ? null : request.url(), currentMember.require(principal)));
+        return ApiResponses.ok(connections.connectGithub(projectId, request == null ? null : request.url(),
+            request == null ? null : request.branch(), currentMember.require(principal)));
     }
 
     @PostMapping

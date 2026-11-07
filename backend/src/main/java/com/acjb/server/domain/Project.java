@@ -71,6 +71,10 @@ public class Project {
     @Column(name = "github_default_branch", length = 100)
     private String githubDefaultBranch;
 
+    /** 분석할 브랜치 — 사용자가 고름, 기본값은 기본 브랜치(2026-11-07, V7) */
+    @Column(name = "github_branch", length = 100)
+    private String githubBranch;
+
     @Column(name = "github_connected_at")
     private Instant githubConnectedAt;
 
@@ -97,10 +101,11 @@ public class Project {
         this.figmaConnectedAt = now;
     }
 
-    public void connectGithub(String url, String repo, String defaultBranch, Instant now) {
+    public void connectGithub(String url, String repo, String defaultBranch, String branch, Instant now) {
         this.githubUrl = url;
         this.githubRepo = repo;
         this.githubDefaultBranch = defaultBranch;
+        this.githubBranch = branch;
         this.githubConnectedAt = now;
     }
 

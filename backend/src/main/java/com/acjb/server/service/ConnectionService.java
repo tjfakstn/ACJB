@@ -2,6 +2,7 @@ package com.acjb.server.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -17,6 +18,7 @@ import com.acjb.server.domain.Member;
 import com.acjb.server.domain.Project;
 import com.acjb.server.domain.RunKind;
 import com.acjb.server.domain.RunStatus;
+import com.acjb.server.dto.GithubConnectResponse;
 import com.acjb.server.dto.ProjectDetailResponse;
 import com.acjb.server.figma.FigmaApiException;
 import com.acjb.server.figma.FigmaClient;
@@ -100,18 +102,30 @@ public class ConnectionService {
         return new ProjectDetailResponse.FigmaConnection(url, fileKey, outline.name(), page.id(), page.name(), now);
     }
 
+    /** 브랜치 이름 — GitHub가 허용하는 문자만 대략 거른다(실제 존재는 GitHub로 확인) */
+    private static final Pattern BRANCH_NAME = Pattern.compile("^[A-Za-z0-9._/-]{1,100}$");
+
     @Transactional
-    public ProjectDetailResponse.GithubConnection connectGithub(Long projectId, String rawUrl, Member requester) {
+    public GithubConnectResponse connectGithub(Long projectId, String rawUrl, String rawBranch, Member requester) {
         Project project = ownedProject(projectId, requester);
         String url = trimmed(rawUrl);
         Matcher m = url == null ? null : GITHUB_URL.matcher(url);
         if (m == null || !m.matches()) {
             throw ApiException.badRequest("올바른 GitHub 저장소 링크가 아니에요 (예: https://github.com/조직/저장소)");
         }
+        String requestedBranch = rawBranch == null || rawBranch.isBlank() ? null : rawBranch.trim();
+        if (requestedBranch != null && !BRANCH_NAME.matcher(requestedBranch).matches()) {
+            throw ApiException.badRequest("브랜치 이름이 올바르지 않아요.");
+        }
         rejectAfterAnalysis(projectId);
         GithubClient.RepoInfo repo;
+        List<String> branches;
+        boolean branchOk;
         try {
             repo = github.repository(m.group(1), m.group(2));
+            branches = github.branches(m.group(1), m.group(2)).stream().sorted().toList();
+            branchOk = requestedBranch == null || branches.contains(requestedBranch)
+                || github.branchExists(m.group(1), m.group(2), requestedBranch);
         } catch (GithubApiException e) {
             log.warn("GitHub 저장소 확인 실패: status={} message={} cause={}", e.status(), e.getMessage(),
                 e.getCause() == null ? null : e.getCause().toString());
@@ -127,9 +141,13 @@ public class ConnectionService {
             // 서버 토큰이 비공개 저장소를 읽을 수 있어도 v1은 공개 저장소만 연결한다(N13)
             throw new ApiException(UNPROCESSABLE, ErrorCodes.CONNECTION_FORBIDDEN, "비공개 저장소예요. 공개 저장소만 연결할 수 있어요.");
         }
+        if (!branchOk) {
+            throw ApiException.badRequest("저장소에 '" + requestedBranch + "' 브랜치가 없어요.");
+        }
+        String branch = requestedBranch == null ? repo.defaultBranch() : requestedBranch;
         Instant now = clock.instant();
-        project.connectGithub(url, repo.fullName(), repo.defaultBranch(), now);
-        return new ProjectDetailResponse.GithubConnection(url, repo.fullName(), repo.defaultBranch(), now);
+        project.connectGithub(url, repo.fullName(), repo.defaultBranch(), branch, now);
+        return new GithubConnectResponse(url, repo.fullName(), repo.defaultBranch(), branch, branches, now);
     }
 
     private Project ownedProject(Long projectId, Member requester) {

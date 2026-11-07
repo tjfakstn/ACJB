@@ -42,6 +42,54 @@ public class GithubRestClient implements GithubClient {
     }
 
     @Override
+    public java.util.List<String> branches(String owner, String repo) {
+        JsonNode root = read(() -> http.get().uri("/repos/{owner}/{repo}/branches?per_page=100", owner, repo).retrieve().body(String.class));
+        if (root == null || !root.isArray()) {
+            throw new GithubApiException("GitHub 응답 형식이 올바르지 않습니다.", 0, null);
+        }
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (JsonNode b : root) {
+            JsonNode name = b.get("name");
+            if (name == null || !name.isString()) {
+                throw new GithubApiException("GitHub 응답 형식이 올바르지 않습니다.", 0, null);
+            }
+            names.add(name.asString());
+        }
+        return names;
+    }
+
+    @Override
+    public boolean branchExists(String owner, String repo, String branch) {
+        try {
+            http.get().uri("/repos/{owner}/{repo}/branches/{branch}", owner, repo, branch).retrieve().toBodilessEntity();
+            return true;
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == 404) {
+                return false;
+            }
+            throw new GithubApiException("GitHub 호출이 실패했습니다(HTTP " + e.getStatusCode().value() + ").", e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            throw new GithubApiException("GitHub에 연결하지 못했습니다(시간 초과 또는 네트워크 오류).", 0, e);
+        }
+    }
+
+    private JsonNode read(java.util.function.Supplier<String> call) {
+        String body;
+        try {
+            body = call.get();
+        } catch (RestClientResponseException e) {
+            throw new GithubApiException("GitHub 호출이 실패했습니다(HTTP " + e.getStatusCode().value() + ").", e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            throw new GithubApiException("GitHub에 연결하지 못했습니다(시간 초과 또는 네트워크 오류).", 0, e);
+        }
+        try {
+            return json.readTree(body);
+        } catch (JacksonException e) {
+            throw new GithubApiException("GitHub 응답이 JSON이 아닙니다.", 0, e);
+        }
+    }
+
+    @Override
     public RepoInfo repository(String owner, String repo) {
         String body;
         try {

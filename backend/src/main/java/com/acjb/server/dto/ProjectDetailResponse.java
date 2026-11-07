@@ -35,6 +35,6 @@ public record ProjectDetailResponse(
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record GithubConnection(String url, String repo, String defaultBranch, Instant connectedAt) {
+    public record GithubConnection(String url, String repo, String defaultBranch, String branch, Instant connectedAt) {
     }
 }

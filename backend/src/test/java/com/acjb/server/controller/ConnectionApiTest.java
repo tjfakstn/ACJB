@@ -141,7 +141,7 @@ class ConnectionApiTest {
 
     @Test
     void cn003_비공개이거나_없는_저장소는_422이고_기존_연결을_바꾸지_않는다() throws Exception {
-        project.connectGithub("https://github.com/team/old", "team/old", "main", Instant.now());
+        project.connectGithub("https://github.com/team/old", "team/old", "main", "main", Instant.now());
         projects.saveAndFlush(project);
         when(github.repository("team", "private-app")).thenThrow(new GithubApiException("404", 404, null));
         connect("github", owner, "https://github.com/team/private-app")
@@ -212,5 +212,36 @@ class ConnectionApiTest {
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.error.code").value("FIGMA_UNAVAILABLE"));
         assertThat(reload().getFigmaFileKey()).isNull();
+    }
+
+    /** cn-007 — 브랜치를 고른다: 빼면 기본 브랜치, 있는 브랜치는 저장, 없는 브랜치는 400이고 기존 연결 유지 */
+    @Test
+    void cn007_GitHub_연결_때_브랜치를_고른다() throws Exception {
+        when(github.repository("team", "app")).thenReturn(new GithubClient.RepoInfo("team/app", "main", false));
+        when(github.branches("team", "app")).thenReturn(java.util.List.of("main", "develop"));
+        String path = "/api/v1/projects/" + project.getId() + "/connections/github";
+
+        connect("github", owner, "https://github.com/team/app")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.branch").value("main"))
+            .andExpect(jsonPath("$.data.default_branch").value("main"))
+            .andExpect(jsonPath("$.data.branches[0]").value("develop"))
+            .andExpect(jsonPath("$.data.branches[1]").value("main"));
+
+        mvc.perform(put(path).with(oauth2Login().attributes(a -> a.put("email", owner.getEmail())))
+                .cookie(new Cookie("XSRF-TOKEN", "t")).header("X-XSRF-TOKEN", "t").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"url\":\"https://github.com/team/app\",\"branch\":\"develop\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.branch").value("develop"));
+
+        when(github.branchExists("team", "app", "no-such-branch")).thenReturn(false);
+        mvc.perform(put(path).with(oauth2Login().attributes(a -> a.put("email", owner.getEmail())))
+                .cookie(new Cookie("XSRF-TOKEN", "t")).header("X-XSRF-TOKEN", "t").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"url\":\"https://github.com/team/app\",\"branch\":\"no-such-branch\"}"))
+            .andExpect(status().isBadRequest());
+
+        assertThat(reload().getGithubBranch()).isEqualTo("develop");
+        mvc.perform(get("/api/v1/projects/" + project.getId()).with(oauth2Login().attributes(a -> a.put("email", member.getEmail()))))
+            .andExpect(jsonPath("$.data.github.branch").value("develop"));
     }
 }

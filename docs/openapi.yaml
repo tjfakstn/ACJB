@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.4.0
+  version: 0.4.1
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -60,7 +60,7 @@ paths:
               required: [name, role]
               properties:
                 name: { type: string, maxLength: 100 }
-                role: { type: string, enum: [designer, developer, planner], description: 이 프로젝트에서 내 역할 }
+                role: { type: string, enum: [designer, frontend, backend, planner], description: 이 프로젝트에서 내 역할 }
       responses:
         '201':
           description: Created
@@ -1138,7 +1138,7 @@ components:
       type: object
       required: [role]
       properties:
-        role: { type: string, enum: [designer, developer, planner], description: 이 프로젝트에서 내 역할 }
+        role: { type: string, enum: [designer, frontend, backend, planner], description: 이 프로젝트에서 내 역할 }
 
     Member:
       type: object
@@ -1150,7 +1150,7 @@ components:
         id: { type: string }
         name: { type: string }
         email: { type: string }
-        role: { type: string, enum: [designer, developer, planner] }
+        role: { type: string, enum: [designer, frontend, backend, planner] }
 
     Notification:
       type: object

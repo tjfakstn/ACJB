@@ -514,7 +514,7 @@ cases:
     description: 멤버 목록은 그 프로젝트 멤버에게만 반환하고 각 멤버의 프로젝트별 role을 담는다
     input:
       endpoint: GET /projects/{projectId}/members
-      precondition: member-1(developer), member-2(designer)가 멤버
+      precondition: member-1(backend), member-2(designer)가 멤버
       actor: member-1
     expected:
       status: 200

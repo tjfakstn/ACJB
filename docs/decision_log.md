@@ -227,3 +227,10 @@
   - 골든 케이스: `rs-001`~`rs-004`(AC20), `ng-014`~`ng-016`(N16)은 같은 날 설만수 승인으로 추가. 구현 전이라 지금은 통과하지 않는다
   - AC13 소유자 재검증은 server에 반영됨(`864b34d`, dev 통합 전)
 - **결정자**: 설만수
+
+## 2026-11-07 역할 developer를 frontend·backend로 나눔
+
+- **결정**: 프로젝트별 역할 값을 `designer`/`developer`/`planner`에서 `designer`/`frontend`/`backend`/`planner`로 바꾼다(SPEC·openapi v0.4.1·db-schema·ontology). `developer`는 더 이상 받지 않는다(400). 기존에 저장된 `DEVELOPER`는 마이그레이션 V3에서 `BACKEND`로 바꾼다
+- **왜**: 팀 안에서 같은 개발이라도 프론트와 백엔드가 맡는 이슈가 달라, 담당자를 고를 때 역할만 보고도 구분할 수 있어야 한다. 아직 배포 전이라 기존 데이터는 로컬 DB뿐이어서 일괄 `BACKEND` 변환으로 충분하다(본인이 바꾸는 기능은 아직 없다)
+- **영향**: 테스트·골든 케이스에서 역할 입력값과 기대값을 `developer`→`backend`로 바꾸는 것은 같은 날 설만수 승인(단언 논리·상태 코드·skip 조건은 그대로)
+- **결정자**: 설만수

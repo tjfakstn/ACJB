@@ -77,7 +77,7 @@ erDiagram
 | id | BIGINT | PK | |
 | project_id | BIGINT | FK→projects, NOT NULL | |
 | member_id | BIGINT | FK→members, NOT NULL | |
-| role | VARCHAR(20) | NOT NULL | designer / developer / planner — 이 프로젝트에서의 역할. 만들 때·수락할 때 본인이 고른다 |
+| role | VARCHAR(20) | NOT NULL | designer / frontend / backend / planner — 이 프로젝트에서의 역할. 만들 때·수락할 때 본인이 고른다 |
 | joined_at | DATETIME(6) | NOT NULL | |
 | | | **UNIQUE(project_id, member_id)** | 중복 가입 방지 |
 

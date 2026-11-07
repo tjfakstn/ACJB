@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ApiError, inviteMember } from '../../lib/api'
-import { Spinner } from '../projects/CreateProjectDialog'
+import { Spinner } from '../common/Spinner'
 
 // 멤버 초대 — 이메일만 받는다(SPEC AC17).
 // 시안 U02-01~05는 초대하는 사람이 멤버별 역할을 정하고 여러 명을 한 번에 보내지만,
@@ -76,7 +76,7 @@ export function InviteDialog({ projectId, onClose, onInvited }: InviteDialogProp
               placeholder="name@example.com" aria-invalid={invalid || !!error}
               className={`mt-1.5 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-qa-primary ${invalid || error ? 'border-red-300' : 'border-qa-border'}`} />
             <div role={error ? 'alert' : undefined} className={`mt-1.5 text-xs ${invalid || error ? 'text-qa-warning' : 'text-qa-sub'}`}>
-              {invalid ? '이메일 형식을 확인해 주세요' : error ?? '같은 이메일로 다시 보내면 이전 초대는 취소되고 새 초대가 나가요.'}
+              {invalid ? '이메일 형식을 확인해 주세요' : error ?? '같은 이메일로 다시 보내면 기존 초대가 7일 연장되고 새 링크가 나가요.'}
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" onClick={onClose} disabled={sending}

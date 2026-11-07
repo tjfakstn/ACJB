@@ -90,32 +90,111 @@ export const ROLE_LABELS: Record<MemberRole, string> = {
   planner: '기획',
 }
 
+/** 역할이 없는 멤버(프로젝트를 만든 사람, 소유자가 정하기 전)를 보여줄 때 쓰는 이름 */
+export const ROLE_UNSET_LABEL = '미지정'
+
+export function roleLabel(role: MemberRole | null | undefined): string {
+  return role ? ROLE_LABELS[role] : ROLE_UNSET_LABEL
+}
+
 export interface Project {
   id: string
   name: string
+  description: string | null
   owner_id: string
+  created_at: string
+}
+
+export type RunStatus = 'none' | 'queued' | 'running' | 'succeeded' | 'failed'
+
+/** 프로젝트 목록 카드(시안 PRJ-01, SPEC AC15) — issue_count="QA 결과 n건", open_issue_count="FAIL n건" */
+export interface ProjectSummary {
+  id: string
+  name: string
+  description: string | null
+  owner_id: string
+  figma_connected: boolean
+  github_connected: boolean
+  analysis_status: RunStatus
+  last_analyzed_at: string | null
+  issue_count: number
+  open_issue_count: number
+  member_count: number
+  members_preview: { id: string; name: string }[]
 }
 
 export interface ProjectMember {
   id: string
   name: string
   email: string
-  role: MemberRole
+  /** null=미지정 — 프로젝트를 만든 사람은 역할 없이 시작한다(2026-11-07) */
+  role: MemberRole | null
 }
 
 /** 내가 속한 프로젝트 — 서버가 name asc, id asc로 고정해 돌려준다 */
-export async function listProjects(): Promise<Project[]> {
-  const data = await request<{ items: Project[] }>('GET', '/api/v1/projects')
+export async function listProjects(): Promise<ProjectSummary[]> {
+  const data = await request<{ items: ProjectSummary[] }>('GET', '/api/v1/projects')
   return data.items
 }
 
-export function createProject(name: string, role: MemberRole): Promise<Project> {
-  return request<Project>('POST', '/api/v1/projects', { name, role })
+/** 이름(필수)·설명(선택)만 받는다(시안 PRJ-02). 만든 사람은 소유자이자 역할 미지정 멤버가 된다(SPEC AC16) */
+export function createProject(name: string, description: string | null): Promise<Project> {
+  return request<Project>('POST', '/api/v1/projects', description ? { name, description } : { name })
 }
 
 export async function listMembers(projectId: string): Promise<ProjectMember[]> {
   const data = await request<{ items: ProjectMember[] }>('GET', `/api/v1/projects/${projectId}/members`)
   return data.items
+}
+
+export interface FigmaConnection { url: string; file_key: string; file_name: string; connected_at: string }
+export interface GithubConnection { url: string; repo: string; default_branch: string; connected_at: string }
+
+/** 소유자만. 서버가 보기 권한을 확인한 뒤에만 저장한다 — 422 CONNECTION_FORBIDDEN, 502 CONNECTION_FAILED(SPEC AC21) */
+export function connectFigma(projectId: string, url: string): Promise<FigmaConnection> {
+  return request<FigmaConnection>('PUT', `/api/v1/projects/${projectId}/connections/figma`, { url })
+}
+
+/** 소유자만. 공개 저장소만 — GitHub 404(비공개·없는 저장소)는 422(SPEC AC21) */
+export function connectGithub(projectId: string, url: string): Promise<GithubConnection> {
+  return request<GithubConnection>('PUT', `/api/v1/projects/${projectId}/connections/github`, { url })
+}
+
+/** 소유자만 — 소유자 본인 역할도 바꿀 수 있다(SPEC AC24) */
+export function changeMemberRole(projectId: string, memberId: string, role: MemberRole): Promise<ProjectMember> {
+  return request<ProjectMember>('PATCH', `/api/v1/projects/${projectId}/members/${memberId}`, { role })
+}
+
+// ---------------------------------------------------------------- 작업공간 홈 (SPEC AC25)
+
+export type IssueStatus = 'needs_check' | 'in_progress' | 'fixed' | 'needs_recheck' | 'resolved'
+
+export const ISSUE_STATUS_LABELS: Record<IssueStatus, string> = {
+  needs_check: '확인 필요',
+  in_progress: '수정 중',
+  fixed: '수정 완료',
+  needs_recheck: '재확인 필요',
+  resolved: '해결',
+}
+
+export interface ProjectDetail {
+  id: string
+  name: string
+  description: string | null
+  owner_id: string
+  /** null=미지정 */
+  my_role: MemberRole | null
+  figma: FigmaConnection | null
+  github: GithubConnection | null
+  analysis_status: RunStatus
+  first_qa_status: RunStatus
+  member_count: number
+  pending_invitation_count: number
+  issue_counts: Record<IssueStatus, number>
+}
+
+export function getProjectDetail(projectId: string): Promise<ProjectDetail> {
+  return request<ProjectDetail>('GET', `/api/v1/projects/${projectId}`)
 }
 
 export function removeMember(projectId: string, memberId: string): Promise<void> {
@@ -141,15 +220,21 @@ export interface Invitation {
 /** 메일의 수락 링크로 들어왔을 때 보이는 미리보기 — 토큰은 응답에 담기지 않는다(N14) */
 export interface InvitationPreview {
   project_name: string
+  project_description: string | null
   invited_by_name: string
   email: string
   status: InvitationStatus
   expires_at: string
 }
 
-/** 같은 이메일에 대기 중 초대가 있으면 서버가 그 초대를 취소하고 새로 만든다(재발송) */
+/** 같은 이메일에 대기 중 초대가 있으면 서버가 새로 만들지 않고 그 초대를 7일 연장해 다시 보낸다(200) */
 export function inviteMember(projectId: string, email: string): Promise<Invitation> {
   return request<Invitation>('POST', `/api/v1/projects/${projectId}/invitations`, { email })
+}
+
+/** 대기 중 초대의 만료를 7일 늘리고 새 링크로 다시 보낸다 — 이전 링크는 무효(SPEC AC17) */
+export function resendInvitation(projectId: string, invitationId: string): Promise<Invitation> {
+  return request<Invitation>('POST', `/api/v1/projects/${projectId}/invitations/${invitationId}/resend`)
 }
 
 export async function listInvitations(projectId: string): Promise<Invitation[]> {

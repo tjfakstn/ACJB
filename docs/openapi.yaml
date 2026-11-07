@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.5.4
+  version: 0.5.5
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -1532,11 +1532,12 @@ components:
 
     ProjectDetail:
       type: object
-      required: [id, name, owner_id, my_role, analysis_status, first_qa_status, member_count, pending_invitation_count, issue_counts]
+      required: [id, name, owner_id, created_at, my_role, analysis_status, first_qa_status, member_count, pending_invitation_count, issue_counts]
       properties:
         id: { type: string }
         name: { type: string }
         owner_id: { type: string }
+        created_at: { type: string, format: date-time, description: 만든 시각(시안 WS 프로젝트 정보 "생성일", 2026-11-07 추가) }
         description: { type: string, nullable: true }
         my_role: { type: string, enum: [designer, frontend, backend, planner], nullable: true, description: null=미지정 }
         figma: { allOf: [{ $ref: '#/components/schemas/FigmaConnection' }], nullable: true }

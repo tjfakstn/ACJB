@@ -70,7 +70,8 @@ erDiagram
 | figma_connected_at | DATETIME(6) | NULL | |
 | github_url | VARCHAR(500) | NULL | 연결한 공개 저장소 링크(AC21) — github_* 넷도 함께 채워진다 |
 | github_repo | VARCHAR(200) | NULL | `owner/repo` |
-| github_default_branch | VARCHAR(100) | NULL | 접근 확인 때 받은 기본 브랜치. 분석·첫 QA는 그 시점 커밋을 읽는다 |
+| github_default_branch | VARCHAR(100) | NULL | 접근 확인 때 받은 저장소 기본 브랜치 |
+| github_branch | VARCHAR(100) | NULL | 분석할 브랜치(사용자가 고름, 기본값은 기본 브랜치 — 2026-11-07, V7). 분석·첫 QA는 그 시점 이 브랜치의 커밋을 읽는다 |
 | github_connected_at | DATETIME(6) | NULL | |
 | created_at | DATETIME(6) | NOT NULL | |
 

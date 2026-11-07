@@ -1017,6 +1017,24 @@ cases:
       followup:
         expected_figma_connection: null
 
+  - id: cn-007
+    ac: AC21
+    description: GitHub 연결 때 브랜치를 고른다 — 빼면 기본 브랜치, 있는 브랜치는 저장되고 없는 브랜치는 400이며 기존 연결을 바꾸지 않는다
+    input:
+      endpoint: PUT /projects/{projectId}/connections/github
+      actor: 소유자
+      github_stub: { repo: { full_name: "team/app", default_branch: "main", private: false }, branches: ["develop", "main"] }
+      bodies:
+        - { url: "https://github.com/team/app" }
+        - { url: "https://github.com/team/app", branch: "develop" }
+        - { url: "https://github.com/team/app", branch: "no-such-branch" }
+    expected:
+      statuses: [200, 200, 400]
+      body_0: { data: { branch: "main", default_branch: "main", branches: ["develop", "main"] } }
+      body_1: { data: { branch: "develop" } }
+      followup:
+        expected_github_branch: "develop"
+
   - id: cn-002
     ac: AC21
     description: 형식이 틀린 링크는 400이고 외부 호출을 하지 않는다

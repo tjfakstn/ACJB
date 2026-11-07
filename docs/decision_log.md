@@ -283,3 +283,10 @@
 - **왜**: 한 파일에 시안·아카이브·작업 중 페이지가 섞여 있어 파일 단위로는 대조 범위가 모호하다. 페이지 공유 링크는 파일 키와 페이지 id를 함께 담아 범위가 하나로 정해진다
 - **영향**: SPEC AC21, openapi v0.5.2(`FigmaConnection.page_id`·`page_name`), db-schema `projects.figma_page_*`, 골든 케이스 `cn-001` 기대값 수정·`cn-006` 추가(설만수 지시)
 - **결정자**: 설만수
+
+## 2026-11-07 GitHub 연결 때 브랜치를 고른다
+
+- **결정**: GitHub 저장소를 연결하면 서버가 브랜치 목록(이름순, 최대 100개)을 돌려주고 사용자가 분석할 브랜치를 고른다. 처음에는 저장소 기본 브랜치로 연결되고, 바꾸면 같은 링크와 새 브랜치로 다시 연결한다. 저장소에 없는 브랜치는 400. 고른 브랜치는 `projects.github_branch`(V7)에 저장하고 비교 분석·첫 QA는 이 브랜치를 읽는다
+- **왜**: 구현이 기본 브랜치가 아니라 develop·release 같은 다른 브랜치에 먼저 올라가는 팀이 많다(이 저장소도 main은 배포 때만 갱신한다)
+- **영향**: SPEC AC21, openapi v0.5.3(`GithubConnectRequest.branch`, `GithubConnection.branch`·`branches`), db-schema, 골든 케이스 `cn-007` 추가(설만수 지시)
+- **결정자**: 설만수

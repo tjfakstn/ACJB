@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.4.1
+  version: 0.5.0
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -88,6 +88,163 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /projects/{projectId}:
+    get:
+      tags: [Project]
+      summary: 프로젝트 상세 — 작업공간 홈 (SPEC AC25)
+      description: >-
+        프로젝트 멤버만(AC12). 연결·비교 분석·첫 QA 상태와 멤버 수·대기 초대 수·상태별 이슈 수를 한 번에 돌려준다.
+        issue_counts는 5개 상태를 모두 담는다(0 포함).
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetailResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /projects/{projectId}/connections/figma:
+    put:
+      tags: [Project]
+      summary: Figma 파일 연결 (SPEC AC21)
+      description: >-
+        소유자만(그 외 403). url은 figma.com/design/{key} 또는 figma.com/file/{key} 형식이어야 한다(400).
+        서버 Figma 토큰으로 파일을 읽을 수 있는지 확인한 뒤에만 저장한다 — 보기 권한이 없으면 422 CONNECTION_FORBIDDEN,
+        없는 파일·응답 지연이면 502 CONNECTION_FAILED, 서버에 토큰이 없으면 503 FIGMA_UNAVAILABLE이고 기존 연결은 그대로다.
+        비교 분석이 성공한 뒤에는 바꿀 수 없다(409 NOT_READY).
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectRequest'
+      responses:
+        '200':
+          description: 연결됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FigmaConnectionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ConnectionForbidden'
+        '502':
+          $ref: '#/components/responses/ConnectionFailed'
+
+  /projects/{projectId}/connections/github:
+    put:
+      tags: [Project]
+      summary: GitHub 공개 저장소 연결 (SPEC AC21)
+      description: >-
+        소유자만(그 외 403). url은 github.com/{owner}/{repo} 형식이어야 한다(400). 서버 토큰(없으면 익명)으로 저장소를 읽을 수 있는지
+        확인한 뒤에만 저장한다 — 비공개·접근 불가면 422 CONNECTION_FORBIDDEN, 없는 저장소·응답 지연이면 502 CONNECTION_FAILED.
+        코드만 읽고 이슈·PR은 다루지 않는다(N13). 비교 분석이 성공한 뒤에는 바꿀 수 없다(409 NOT_READY).
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectRequest'
+      responses:
+        '200':
+          description: 연결됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubConnectionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ConnectionForbidden'
+        '502':
+          $ref: '#/components/responses/ConnectionFailed'
+
+  /projects/{projectId}/analysis:
+    post:
+      tags: [Project]
+      summary: 비교 분석 시작 — Figma 노드 ↔ 코드 위치 매핑 (SPEC AC22)
+      description: >-
+        소유자만(403). Figma·GitHub가 둘 다 연결돼 있어야 하고, 실행 중이거나 이미 성공했으면 409 NOT_READY.
+        실패하면 다시 시작할 수 있다. 이슈·StyleMismatch를 만들지 않는다(N16).
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '202':
+          description: 접수됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRunResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [Project]
+      summary: 최근 비교 분석 상태
+      description: 프로젝트 멤버 누구나. 실행한 적이 없으면 data가 null이다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRunResponse'
+
+  /projects/{projectId}/first-qa:
+    post:
+      tags: [Project]
+      summary: 첫 QA 실행 — 차이를 이슈로 자동 저장 (SPEC AC23)
+      description: >-
+        소유자만(403). 비교 분석이 성공했고 첫 QA가 아직 성공하지 않았을 때만 실행한다(그 외 409 NOT_READY). 실패하면 다시 실행할 수 있다.
+        매핑된 짝마다 Figma 노드 값과 코드 값을 비교해, 둘 다 실제로 확인된 차이만 이슈(source first_qa, status needs_check,
+        reported_by=요청자, assigned_to 없음, platform_scope common)로 저장한다(N17). 실패한 실행은 이슈를 하나도 남기지 않는다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '202':
+          description: 접수됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRunResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [Project]
+      summary: 최근 첫 QA 상태와 만든 이슈 수
+      description: 프로젝트 멤버 누구나. 실행한 적이 없으면 data가 null이다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRunResponse'
+
   /projects/{projectId}/members:
     get:
       tags: [Project]
@@ -110,6 +267,40 @@ paths:
           $ref: '#/components/responses/Forbidden'
 
   /projects/{projectId}/members/{memberId}:
+    patch:
+      tags: [Project]
+      summary: 멤버 역할 변경 (SPEC AC24)
+      description: >-
+        소유자만(그 외 403). 소유자 본인 역할도 바꿀 수 있다. 그 프로젝트 멤버가 아니면 404, role이 정해진 값이 아니면 400.
+        이슈·담당자·알림은 바꾸지 않는다(알림 종류 3개 고정 — N5).
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: memberId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [designer, frontend, backend, planner] }
+      responses:
+        '200':
+          description: 바뀐 멤버
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
     delete:
       tags: [Project]
       summary: 멤버 제거 (SPEC AC19)
@@ -138,7 +329,8 @@ paths:
       summary: 구글 이메일로 초대 (SPEC AC17)
       description: >-
         프로젝트 멤버 누구나 초대할 수 있다. 7일 뒤 만료되는 pending 초대를 1건 만들고 그 이메일로 초대 메일을 1통 보낸다.
-        이미 멤버인 이메일이면 409. 같은 이메일에 pending 초대가 있으면 그 초대를 canceled로 바꾸고 새로 만든다(재발송).
+        이미 멤버인 이메일이면 409. 같은 이메일에 pending 초대가 있으면 새로 만들지 않고 그 초대의 만료를 지금부터 7일로 늘리고
+        수락 링크 토큰을 새로 발급해 메일을 다시 보낸다(200, 이전 링크 무효 — 2026-11-07).
         메일 발송이 실패해도 초대는 남는다(초대받은 사람은 로그인 후 GET /invitations/mine으로 수락 가능).
       parameters:
         - $ref: '#/components/parameters/ProjectId'
@@ -154,6 +346,12 @@ paths:
       responses:
         '201':
           description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponse'
+        '200':
+          description: 대기 중 초대를 연장해 다시 보냄
           content:
             application/json:
               schema:
@@ -192,6 +390,31 @@ paths:
           description: 취소됨
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /projects/{projectId}/invitations/{invitationId}/resend:
+    post:
+      tags: [Invitation]
+      summary: 초대 재전송 — 만료 7일 연장 (SPEC AC17)
+      description: >-
+        프로젝트 멤버 누구나. pending 초대만(그 외 409 INVITATION_CLOSED). 새 초대를 만들지 않고 expires_at을 지금부터 7일로 늘리고,
+        수락 링크 토큰을 새로 발급해 메일을 1통 보낸다(이전 링크 무효). 토큰은 응답에 담지 않는다(N14).
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: invitationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 연장된 초대
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponse'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -721,14 +944,19 @@ paths:
           $ref: '#/components/responses/BadRequest'
     get:
       tags: [QAIssue]
-      summary: QA Issue 목록 조회 (status=fixed → 재확인 대기 이슈)
+      summary: QA Issue 목록 조회 (status=fixed → 재확인 대기 이슈, source=first_qa → 첫 QA 결과)
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - name: status
           in: query
           schema:
             type: string
-            enum: [needs_check, fixed, needs_recheck, resolved]
+            enum: [needs_check, in_progress, fixed, needs_recheck, resolved]
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [manual, first_qa]
         - name: assigned_to
           in: query
           schema:
@@ -761,10 +989,10 @@ paths:
       tags: [QAIssue]
       summary: 상태·담당자 수정 (SPEC AC4·AC6)
       description: >-
-        PATCH로 허용되는 상태 전이는 needs_check → fixed, needs_recheck → fixed 뿐이다(AC6).
+        PATCH로 허용되는 상태 전이는 needs_check·needs_recheck → in_progress, in_progress → fixed, needs_check·needs_recheck → fixed 뿐이다(AC6, in_progress 2026-11-07).
         fixed → resolved / needs_recheck는 재검증 등록으로만 바뀐다. 그 밖의 전이는 409.
         fixed로 바뀌면 등록자에게 Notification(event: fixed)이 생성된다(AC4).
-        status: fixed는 그 이슈의 assigned_to만 요청할 수 있다(그 외 403, AC13). 권한 검사가 전이 검사보다 먼저다.
+        status(in_progress·fixed)는 그 이슈의 assigned_to만 요청할 수 있다(그 외 403, AC13). in_progress는 알림을 만들지 않는다. 권한 검사가 전이 검사보다 먼저다.
         `assigned_to`는 `GET /projects/{projectId}/members`의 멤버 id다. 프로젝트 멤버가 아니면 400,
         null로 담당자를 비우는 요청도 400이다(담당자는 지정·변경만 가능). body에 status·assigned_to 외의 필드가 오면 400(N6).
       parameters:
@@ -779,7 +1007,7 @@ paths:
               properties:
                 status:
                   type: string
-                  enum: [fixed]
+                  enum: [in_progress, fixed]
                 assigned_to:
                   type: string
                   description: 멤버 id. null 불가
@@ -984,8 +1212,20 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    ConnectionForbidden:
+      description: 연결하려는 Figma 파일·GitHub 저장소에 접근 권한이 없음 (SPEC AC21, CONNECTION_FORBIDDEN)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConnectionFailed:
+      description: 연결 확인 실패 — 없는 파일·저장소 또는 응답 지연 (SPEC AC21, CONNECTION_FAILED)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     Conflict:
-      description: 허용되지 않은 상태 전이 (SPEC AC6)
+      description: 허용되지 않은 상태 전이(AC6) 또는 지금 할 수 없는 요청(NOT_READY 등)
       content:
         application/json:
           schema:
@@ -999,11 +1239,12 @@ components:
         code:
           type: string
           description: >-
-            서비스가 정한 오류 코드(2026-11-05 확정, 11-06 1개 추가 — 13개) — UNAUTHORIZED(401), FORBIDDEN(403), NOT_FOUND(404),
+            서비스가 정한 오류 코드(2026-11-05 확정, 11-06 1개·11-07 3개 추가 — 16개) — UNAUTHORIZED(401), FORBIDDEN(403), NOT_FOUND(404),
             VALIDATION_FAILED(400), INVALID_TRANSITION(409, AC6), CONCURRENT_UPDATE(409, 동시 요청 — 다시 시도),
             ALREADY_MEMBER(409), INVITATION_CLOSED(409, 만료·취소·이미 수락된 초대), OWNER_NOT_REMOVABLE(409),
             PARSE_FAILED(502, parse LLM 실패·스키마 위반), SUGGESTION_FAILED(502, 재검증 범위 제안의 임베딩·LLM 실패·스키마 위반, 2026-11-06 추가), FIGMA_UNAVAILABLE(503, 서버에 Figma 토큰 미설정),
-            INTERNAL_ERROR(500). 프론트는 이 값으로 분기한다. 요청이 컨트롤러에 닿기 전 프레임워크 단계에서 거부되면
+            CONNECTION_FORBIDDEN(422, Figma 파일 보기 권한 없음·비공개 저장소 — AC21), CONNECTION_FAILED(502, 없는 파일·저장소·응답 지연 — AC21),
+            NOT_READY(409, 연결·분석 전 실행, 실행 중 중복, 이미 성공한 첫 QA·분석, 분석 후 링크 변경 — AC21~AC23), INTERNAL_ERROR(500). 프론트는 이 값으로 분기한다. 요청이 컨트롤러에 닿기 전 프레임워크 단계에서 거부되면
             HTTP 상태 이름이 온다(예 METHOD_NOT_ALLOWED) — 그래서 enum으로 막지 않는다.
           example: VALIDATION_FAILED
         message:
@@ -1050,15 +1291,20 @@ components:
           nullable: true
         status:
           type: string
-          enum: [needs_check, fixed, needs_recheck, resolved]
+          enum: [needs_check, in_progress, fixed, needs_recheck, resolved]
           default: needs_check
-          description: 확인 필요 → 조치 완료 → (재검증 pass) 해결 완료 / (fail) 재확인 필요 → 조치 완료
+          description: 확인 필요 → (수정 중, 건너뛸 수 있음) → 조치 완료 → (재검증 pass) 해결 완료 / (fail) 재확인 필요 → 수정 중·조치 완료
+        source:
+          type: string
+          enum: [manual, first_qa]
+          default: manual
+          description: manual=사람이 등록, first_qa=첫 QA가 근거로 자동 저장(AC23)
         status_history:
           type: array
           items:
             type: object
             properties:
-              status: { type: string, enum: [needs_check, fixed, needs_recheck, resolved] }
+              status: { type: string, enum: [needs_check, in_progress, fixed, needs_recheck, resolved] }
               changed_by: { type: string }
               changed_at: { type: string, format: date-time }
         assigned_to: { type: string, nullable: true, description: 담당자(고치는 사람)의 멤버 id }
@@ -1184,6 +1430,108 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/Project'
+        error: { type: object, nullable: true, example: null }
+
+    ConnectRequest:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, maxLength: 500 }
+
+    FigmaConnection:
+      type: object
+      required: [url, file_key, file_name, connected_at]
+      properties:
+        url: { type: string }
+        file_key: { type: string }
+        file_name: { type: string }
+        connected_at: { type: string, format: date-time }
+
+    GithubConnection:
+      type: object
+      required: [url, repo, default_branch, connected_at]
+      properties:
+        url: { type: string }
+        repo: { type: string, description: owner/repo }
+        default_branch: { type: string }
+        connected_at: { type: string, format: date-time }
+
+    ProjectRun:
+      type: object
+      required: [id, kind, status, created_count, dropped_count, created_at]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [analysis, first_qa] }
+        status: { type: string, enum: [queued, running, succeeded, failed] }
+        created_count: { type: integer, description: analysis는 매핑 수, first_qa는 만든 이슈 수 }
+        dropped_count: { type: integer, description: 근거가 모자라 버린 수(N17) }
+        error_message: { type: string, nullable: true, description: 사용자에게 보여 줄 실패 사유 }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+
+    ProjectDetail:
+      type: object
+      required: [id, name, owner_id, my_role, analysis_status, first_qa_status, member_count, pending_invitation_count, issue_counts]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        owner_id: { type: string }
+        my_role: { type: string, enum: [designer, frontend, backend, planner] }
+        figma: { allOf: [{ $ref: '#/components/schemas/FigmaConnection' }], nullable: true }
+        github: { allOf: [{ $ref: '#/components/schemas/GithubConnection' }], nullable: true }
+        analysis_status: { type: string, enum: [none, queued, running, succeeded, failed] }
+        first_qa_status: { type: string, enum: [none, queued, running, succeeded, failed] }
+        member_count: { type: integer }
+        pending_invitation_count: { type: integer }
+        issue_counts:
+          type: object
+          required: [needs_check, in_progress, fixed, needs_recheck, resolved]
+          properties:
+            needs_check: { type: integer }
+            in_progress: { type: integer }
+            fixed: { type: integer }
+            needs_recheck: { type: integer }
+            resolved: { type: integer }
+
+    ProjectDetailResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          $ref: '#/components/schemas/ProjectDetail'
+        error: { type: object, nullable: true, example: null }
+
+    FigmaConnectionResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          $ref: '#/components/schemas/FigmaConnection'
+        error: { type: object, nullable: true, example: null }
+
+    GithubConnectionResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          $ref: '#/components/schemas/GithubConnection'
+        error: { type: object, nullable: true, example: null }
+
+    ProjectRunResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          allOf: [{ $ref: '#/components/schemas/ProjectRun' }]
+          nullable: true
+        error: { type: object, nullable: true, example: null }
+
+    MemberResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          $ref: '#/components/schemas/Member'
         error: { type: object, nullable: true, example: null }
 
     ProjectResponse:

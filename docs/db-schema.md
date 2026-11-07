@@ -29,7 +29,7 @@ erDiagram
     members ||--o{ notifications : receives
 ```
 
-## 2. 테이블 요약 (14개 + 설계 확정 1개)
+## 2. 테이블 요약 (15개 + 2026-11-07 설계 2개)
 
 | 테이블 | 역할 | 관련 API / AC |
 | --- | --- | --- |
@@ -47,9 +47,11 @@ erDiagram
 | `figma_frames` | 동기화된 프레임 | `GET /figma/frames` |
 | `style_scans` | scan 작업 | `POST/GET /style-mismatches/scan(s)` |
 | `style_mismatches` | 스타일 차이(수동·scan 공통) | `GET /style-mismatches` 목록·상세 · AC2 |
-| `embeddings` | 재검증 범위 제안 검색용 벡터 (2026-11-06 설계 확정, **아직 V2 마이그레이션·엔티티 없음**) | `POST .../recheck-suggestions` · AC20 |
+| `embeddings` | 재검증 범위 제안 검색용 벡터 (`V2__embeddings.sql`) | `POST .../recheck-suggestions` · AC20 |
+| `project_runs` | 비교 분석·첫 QA 실행 기록 (2026-11-07 설계, V4 예정) | `/analysis`, `/first-qa` · AC22, AC23 |
+| `design_code_mappings` | Figma 노드 ↔ 코드 위치 매핑 (2026-11-07 설계, 형태는 스파이크 후 확정, V4 예정) | AC22, AC23 |
 
-(`github_*` 컬럼은 v1 비포함이라 만들지 않는다. 세션은 서버 메모리 — 별도 테이블 없음.)
+(`github_issue_url` 등 GitHub 이슈·PR 컬럼은 v1 비포함이라 만들지 않는다. 저장소 연결 컬럼(`projects.github_*`)은 2026-11-07부터 있다. 세션은 서버 메모리 — 별도 테이블 없음.)
 
 ## 3. 테이블 정의
 
@@ -59,7 +61,17 @@ erDiagram
 | id | BIGINT | PK | |
 | name | VARCHAR(100) | NOT NULL | 사용자가 만드는 이름이라 UNIQUE를 두지 않는다(2026-11-04) |
 | owner_id | BIGINT | FK→members, NOT NULL | 소유자. 만든 사람(AC16). 멤버 제거는 소유자만(AC19) |
+| figma_url | VARCHAR(500) | NULL | 연결한 Figma 링크(AC21). 접근 확인에 성공했을 때만 채운다 — 아래 figma_* 셋은 함께 채워지고 함께 비어 있다 |
+| figma_file_key | VARCHAR(100) | NULL | 링크에서 뽑은 파일 키 |
+| figma_file_name | VARCHAR(255) | NULL | Figma API가 돌려준 파일 이름 |
+| figma_connected_at | DATETIME(6) | NULL | |
+| github_url | VARCHAR(500) | NULL | 연결한 공개 저장소 링크(AC21) — github_* 넷도 함께 채워진다 |
+| github_repo | VARCHAR(200) | NULL | `owner/repo` |
+| github_default_branch | VARCHAR(100) | NULL | 접근 확인 때 받은 기본 브랜치. 분석·첫 QA는 그 시점 커밋을 읽는다 |
+| github_connected_at | DATETIME(6) | NULL | |
 | created_at | DATETIME(6) | NOT NULL | |
+
+비교 분석이 성공한 뒤에는 링크를 바꿀 수 없다(409, AC21) — 매핑이 가리키는 파일·노드가 바뀌기 때문.
 
 ### members
 | 컬럼 | 타입 | 제약 | 비고 |
@@ -92,12 +104,12 @@ erDiagram
 | token_hash | CHAR(64) | NOT NULL, **UNIQUE** | 수락 링크 토큰의 SHA-256. 원문 토큰은 메일에만 있고 DB·로그·응답에 남기지 않는다(N14) |
 | status | VARCHAR(10) | NOT NULL | pending / accepted / canceled / expired |
 | invited_by_id | BIGINT | FK→members, NOT NULL | |
-| expires_at | DATETIME(6) | NOT NULL | 만든 시각 + 7일 |
+| expires_at | DATETIME(6) | NOT NULL | 만든 시각 + 7일. 재전송하면 재전송 시각 + 7일 |
 | created_at | DATETIME(6) | NOT NULL | |
 | accepted_at | DATETIME(6) | NULL | |
 | accepted_member_id | BIGINT | FK→members, NULL | 수락한 멤버 |
 
-만료는 조회·수락할 때 `expires_at`으로 판정한다(배치 작업 없이). 같은 이메일로 다시 초대하면 이전 pending 행을 canceled로 바꾸고 새 행을 만든다(AC17).
+만료는 조회·수락할 때 `expires_at`으로 판정한다(배치 작업 없이). 같은 이메일로 다시 초대하거나 재전송하면 새 행을 만들지 않고 그 pending 행의 `token_hash`와 `expires_at`을 바꾼다 — 이전 링크는 무효가 된다(AC17, 2026-11-07. 이전에는 canceled로 바꾸고 새 행을 만들었다).
 
 ### qa_issues
 | 컬럼 | 타입 | 제약 | 비고 |
@@ -112,8 +124,10 @@ erDiagram
 | env_browser | VARCHAR(100) | NULL | |
 | env_deploy_stage | VARCHAR(10) | NULL | local / staging / production |
 | figma_link | VARCHAR(500) | NULL | |
-| style_mismatch_id | BIGINT | FK→style_mismatches, NULL | 스타일 차이 이슈일 때만. 수동 입력도 mismatch 행을 만들어 연결 |
-| status | VARCHAR(20) | NOT NULL, default needs_check | needs_check / fixed / needs_recheck / resolved |
+| style_mismatch_id | BIGINT | FK→style_mismatches, NULL | 스타일 차이 이슈일 때만. 수동 입력도 mismatch 행을 만들어 연결. source=first_qa면 NOT NULL(서비스에서 검사) |
+| status | VARCHAR(20) | NOT NULL, default needs_check | needs_check / in_progress / fixed / needs_recheck / resolved (in_progress 2026-11-07) |
+| source | VARCHAR(10) | NOT NULL, default manual | manual / first_qa (2026-11-07) |
+| first_qa_run_id | BIGINT | FK→project_runs, NULL | source=first_qa일 때 만든 실행 |
 | reported_by_id | BIGINT | FK→members, NOT NULL | 등록자(로그인 사용자) |
 | assigned_to_id | BIGINT | FK→members, NULL | 담당자(고치는 사람). 프로젝트 멤버만(AC13) |
 | created_at / updated_at | DATETIME(6) | NOT NULL | |
@@ -209,8 +223,10 @@ erDiagram
 | --- | --- | --- | --- |
 | id | BIGINT | PK | `mismatchId` |
 | project_id | BIGINT | FK, NOT NULL | |
-| source | VARCHAR(10) | NOT NULL | manual(사람 입력) / scan |
+| source | VARCHAR(10) | NOT NULL | manual(사람 입력) / scan / first_qa(2026-11-07) |
 | scan_id | BIGINT | FK→style_scans, NULL | source=scan일 때 |
+| code_path | VARCHAR(500) | NULL | source=first_qa일 때 actual_value를 확인한 파일 경로(N17) |
+| code_line | INT | NULL | 그 파일의 줄 번호 |
 | frame_id | VARCHAR(50) | NULL | 기준 Figma 프레임(목록 필터용). figma_frames와 논리 참조 |
 | node_id | VARCHAR(50) | NULL | scan일 때 |
 | screen | VARCHAR(1000) | NULL | 비교한 화면(scan이면 target_url) |
@@ -235,6 +251,34 @@ erDiagram
 
 임베딩 텍스트 규칙·대상(`verification`은 fail만)·생성 시점은 `docs/design-recheck-suggestions.md` 3·4절. 원본 셋 다 생성 후 텍스트가 바뀌지 않아 갱신 컬럼은 두지 않는다. `source_id`에 FK를 걸지 않는 이유: 세 테이블을 가리키고, 원본은 v1에서 삭제되지 않는다. 모델을 바꾸면 `model`이 달라 새 행이 생기고 검색은 현재 모델 행만 쓴다. 제안 결과는 저장하지 않으므로(2026-11-06) 제안용 테이블은 없다.
 
+### project_runs (2026-11-07 설계 — V4 예정)
+| 컬럼 | 타입 | 제약 | 비고 |
+| --- | --- | --- | --- |
+| id | BIGINT | PK | |
+| project_id | BIGINT | FK→projects, NOT NULL | |
+| kind | VARCHAR(10) | NOT NULL, CHECK | analysis / first_qa |
+| status | VARCHAR(10) | NOT NULL, CHECK | queued / running / succeeded / failed |
+| requested_by_id | BIGINT | FK→members, NOT NULL | 소유자 |
+| commit_sha | VARCHAR(40) | NULL | 읽은 GitHub 커밋 |
+| created_count | INT | NOT NULL, default 0 | analysis면 매핑 수, first_qa면 만든 이슈 수 |
+| dropped_count | INT | NOT NULL, default 0 | 근거가 모자라 버린 수(N17) |
+| error_message | VARCHAR(500) | NULL | 사용자에게 보여 줄 실패 사유. 내부 상세·토큰은 담지 않는다 |
+| created_at / finished_at | DATETIME(6) | NOT NULL / NULL | |
+
+같은 프로젝트·kind에 queued/running 행이 있으면 새로 만들지 않고(409), first_qa는 succeeded가 하나라도 있으면 새로 만들지 않는다(AC23). first_qa가 실패하면 그 실행으로 만든 이슈·스타일 차이를 한 트랜잭션으로 되돌린다(N17 — 일부만 남기지 않는다). `ProjectDetail`의 `analysis_status`·`first_qa_status`는 kind별 최근 행의 status(없으면 none).
+
+### design_code_mappings (2026-11-07 설계 — 컬럼은 스파이크 후 확정, V4 예정)
+| 컬럼 | 타입 | 제약 | 비고 |
+| --- | --- | --- | --- |
+| id | BIGINT | PK | |
+| project_id | BIGINT | FK→projects, NOT NULL | 다른 프로젝트 매핑을 쓰지 않는 근거(N17) |
+| run_id | BIGINT | FK→project_runs, NOT NULL | 만든 비교 분석 실행 |
+| frame_id / frame_name | VARCHAR(50) / VARCHAR(255) | NOT NULL | Figma 프레임 |
+| node_id / node_name | VARCHAR(50) / VARCHAR(255) | NOT NULL | Figma 노드 |
+| code_path | VARCHAR(500) | NOT NULL | 저장소 안 파일 경로 |
+| code_symbol | VARCHAR(255) | NULL | 컴포넌트·클래스 이름 |
+| created_at | DATETIME(6) | NOT NULL | |
+
 ## 4. 인덱스 (목록 정렬·조회용)
 
 | 테이블 | 인덱스 | 이유 |
@@ -253,6 +297,9 @@ erDiagram
 | invitations | (email, status) | `GET /invitations/mine`, 같은 이메일 재초대 |
 | embeddings | UNIQUE(source_type, source_id, model) | 같은 원본 중복 생성 방지, 누락분 찾기 |
 | embeddings | (project_id, model) | 프로젝트 문서만 읽어 유사도 계산 |
+| project_runs | (project_id, kind, created_at DESC, id DESC) | kind별 최근 실행 |
+| design_code_mappings | (project_id, run_id) | 첫 QA가 매핑을 읽을 때 |
+| qa_issues | (project_id, source) | 첫 QA 결과 목록(`source=first_qa`) |
 
 ## 5. 엔티티 반영 상태
 

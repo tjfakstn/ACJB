@@ -33,6 +33,7 @@ import com.acjb.server.domain.RunKind;
 import com.acjb.server.domain.RunStatus;
 import com.acjb.server.figma.FigmaApiException;
 import com.acjb.server.figma.FigmaClient;
+import com.acjb.server.figma.FigmaNode;
 import com.acjb.server.github.GithubApiException;
 import com.acjb.server.github.GithubClient;
 import com.acjb.server.repository.MemberRepository;
@@ -99,6 +100,7 @@ class ConnectionApiTest {
             .andExpect(jsonPath("$.data.file_name").value("멤버십 앱 리뉴얼"))
             .andExpect(jsonPath("$.data.page_id").value("424:2"))
             .andExpect(jsonPath("$.data.page_name").value("UI Design - Refined"))
+            .andExpect(jsonPath("$.data.scope").value("page"))
             .andExpect(jsonPath("$.data.url").value(FIGMA_URL));
         Project saved = reload();
         assertThat(saved.getFigmaFileName()).isEqualTo("멤버십 앱 리뉴얼");
@@ -107,17 +109,36 @@ class ConnectionApiTest {
             .andExpect(jsonPath("$.data.figma.page_name").value("UI Design - Refined"));
     }
 
-    /** cn-006 — 페이지 공유 링크만 받는다 */
+    /** cn-006 — 페이지·섹션 링크만 받는다(2026-11-07 설만수 결정으로 섹션 허용 — 거부 예는 프레임 링크로 바꿈) */
     @Test
-    void cn006_페이지_링크가_아니면_400이고_연결하지_않는다() throws Exception {
+    void cn006_페이지_섹션_링크가_아니면_400이고_연결하지_않는다() throws Exception {
         when(figma.outline("AbC123")).thenReturn(OUTLINE);
+        when(figma.nodes("AbC123", java.util.List.of("607:36215")))
+            .thenReturn(java.util.Map.of("607:36215", java.util.Optional.of(new FigmaNode("607:36215", "WS-01", "FRAME"))));
         connect("figma", owner, "https://www.figma.com/design/AbC123/membership").andExpect(status().isBadRequest());
         connect("figma", owner, "https://www.figma.com/proto/AbC123/membership?node-id=424-2").andExpect(status().isBadRequest());
         connect("figma", owner, "https://www.figma.com/file/AbC123/membership?node-id=424-2").andExpect(status().isBadRequest());
         verify(figma, never()).outline(any());   // 형식이 틀리면 외부 호출 없음
-        connect("figma", owner, "https://www.figma.com/design/AbC123/membership?node-id=605-30464")   // 섹션·프레임
+        connect("figma", owner, "https://www.figma.com/design/AbC123/membership?node-id=607-36215")   // 프레임
             .andExpect(status().isBadRequest());
         assertThat(reload().getFigmaFileKey()).isNull();
+    }
+
+    /** cn-008 — 섹션 링크는 섹션 id·이름과 scope section으로 저장된다 */
+    @Test
+    void cn008_섹션_링크를_연결하면_섹션과_scope가_저장된다() throws Exception {
+        when(figma.outline("AbC123")).thenReturn(OUTLINE);
+        when(figma.nodes("AbC123", java.util.List.of("605:30464")))
+            .thenReturn(java.util.Map.of("605:30464", java.util.Optional.of(new FigmaNode("605:30464", "전체 서비스 최종 통합 UI", "SECTION"))));
+        connect("figma", owner, "https://www.figma.com/design/AbC123/membership?node-id=605-30464&t=x-1")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.page_id").value("605:30464"))
+            .andExpect(jsonPath("$.data.page_name").value("전체 서비스 최종 통합 UI"))
+            .andExpect(jsonPath("$.data.scope").value("section"));
+        Project saved = reload();
+        assertThat(saved.getFigmaScope()).isEqualTo(com.acjb.server.domain.FigmaScope.SECTION);
+        mvc.perform(get("/api/v1/projects/" + project.getId()).with(oauth2Login().attributes(a -> a.put("email", member.getEmail()))))
+            .andExpect(jsonPath("$.data.figma.scope").value("section"));
     }
 
     @Test

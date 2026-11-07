@@ -77,7 +77,7 @@ public class FigmaRestClient implements FigmaClient {
 
     @Override
     public Map<String, Optional<FigmaNode>> nodes(String fileKey, List<String> ids) {
-        JsonNode root = get("/v1/files/{key}/nodes?ids={ids}", fileKey, String.join(",", ids));
+        JsonNode root = get("/v1/files/{key}/nodes?ids={ids}&depth=1", fileKey, String.join(",", ids));
         JsonNode nodes = requireObject(root, "nodes");
         Map<String, Optional<FigmaNode>> result = new LinkedHashMap<>();
         for (String id : ids) {
@@ -103,6 +103,40 @@ public class FigmaRestClient implements FigmaClient {
         requireText(document, "id");
         requireText(document, "type");
         return Optional.of(document);
+    }
+
+    @Override
+    public Optional<List<FigmaNode>> children(String fileKey, String nodeId) {
+        JsonNode nodes = requireObject(get("/v1/files/{key}/nodes?ids={ids}&depth=1", fileKey, nodeId), "nodes");
+        JsonNode entry = nodes.get(nodeId);
+        if (entry == null || entry.isNull()) {
+            return Optional.empty();
+        }
+        JsonNode document = requireObject(entry, "document");
+        List<FigmaNode> result = new ArrayList<>();
+        JsonNode children = document.get("children");
+        if (children != null && children.isArray()) {
+            for (JsonNode child : children) {
+                result.add(toNode(child));
+            }
+        }
+        return Optional.of(result);
+    }
+
+    @Override
+    public Map<String, JsonNode> nodeDocuments(String fileKey, List<String> ids) {
+        JsonNode nodes = requireObject(get("/v1/files/{key}/nodes?ids={ids}", fileKey, String.join(",", ids)), "nodes");
+        Map<String, JsonNode> result = new LinkedHashMap<>();
+        for (String id : ids) {
+            JsonNode entry = nodes.get(id);
+            if (entry != null && !entry.isNull()) {
+                JsonNode document = requireObject(entry, "document");
+                requireText(document, "id");
+                requireText(document, "type");
+                result.put(id, document);
+            }
+        }
+        return result;
     }
 
     private JsonNode get(String path, String fileKey, String ids) {

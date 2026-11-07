@@ -24,7 +24,7 @@ public interface FigmaClient {
     /** 파일의 각 페이지 바로 아래 노드(화면 단위 프레임 후보) — GET /v1/files/{key}?depth=2 */
     List<FigmaNode> topLevelNodes(String fileKey);
 
-    /** 지정한 노드들 — GET /v1/files/{key}/nodes?ids=… 없는 id는 Optional.empty() */
+    /** 지정한 노드들(이름·종류만) — GET /v1/files/{key}/nodes?ids=…&depth=1. 없는 id는 Optional.empty() */
     Map<String, Optional<FigmaNode>> nodes(String fileKey, List<String> ids);
 
     /**
@@ -32,4 +32,13 @@ public interface FigmaClient {
      * 없는 id는 Optional.empty()
      */
     Optional<JsonNode> nodeDocument(String fileKey, String nodeId);
+
+    /**
+     * 노드의 바로 아래 자식(이름·종류만) — GET /v1/files/{key}/nodes?ids={id}&depth=1. 비교 분석이 페이지·섹션 안을 한 단계씩 내려가는 데 쓴다(AC22).
+     * 노드가 없으면 Optional.empty()
+     */
+    Optional<List<FigmaNode>> children(String fileKey, String nodeId);
+
+    /** 여러 노드의 원본 document(하위 트리 전체) — GET /v1/files/{key}/nodes?ids=a,b,… 없는 id는 결과에서 빠진다 */
+    Map<String, JsonNode> nodeDocuments(String fileKey, List<String> ids);
 }

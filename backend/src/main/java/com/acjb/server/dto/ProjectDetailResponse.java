@@ -33,7 +33,7 @@ public record ProjectDetailResponse(
 ) {
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record FigmaConnection(String url, String fileKey, String fileName, String pageId, String pageName, Instant connectedAt) {
+    public record FigmaConnection(String url, String fileKey, String fileName, String pageId, String pageName, String scope, Instant connectedAt) {
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

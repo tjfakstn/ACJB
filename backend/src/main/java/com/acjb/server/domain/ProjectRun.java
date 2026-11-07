@@ -23,7 +23,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 비교 분석(AC22)·첫 QA(AC23) 실행 한 건(V4). kind별 최근 행의 status가 작업공간의 analysis_status·first_qa_status다(AC25).
- * 실행 로직은 스파이크 후 구현한다 — 지금은 상태 조회에만 쓴다
+ * 비교 분석 실행은 analysis 패키지가 한다(2026-11-07). 첫 QA는 다음 스파이크 후 구현한다
  */
 @Entity
 @Table(name = "project_runs", indexes = {
@@ -77,6 +77,25 @@ public class ProjectRun {
     public void finish(RunStatus result, Instant now) {
         this.status = result;
         this.finishedAt = now;
+    }
+
+    public void start() {
+        this.status = RunStatus.RUNNING;
+    }
+
+    /** 성공 — 저장한 수·버린 수와 읽은 커밋을 함께 남긴다 */
+    public void succeed(String commitSha, int created, int dropped, Instant now) {
+        this.commitSha = commitSha;
+        this.createdCount = created;
+        this.droppedCount = dropped;
+        this.errorMessage = null;
+        finish(RunStatus.SUCCEEDED, now);
+    }
+
+    /** 실패 — 사용자에게 보여 줄 사유만(내부 상세·토큰은 담지 않는다) */
+    public void fail(String message, Instant now) {
+        this.errorMessage = message == null ? null : message.length() > 500 ? message.substring(0, 500) : message;
+        finish(RunStatus.FAILED, now);
     }
 
     public ProjectRun(Project project, RunKind kind, Member requestedBy, Instant now) {

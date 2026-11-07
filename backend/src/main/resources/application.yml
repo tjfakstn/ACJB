@@ -84,6 +84,14 @@ app:
     model: claude-sonnet-5
     api-key: ${ANTHROPIC_API_KEY:}
     timeout: 60s
+  # 비교 분석(AC22) — Figma 프레임·노드 ↔ 코드 매핑. Sonnet + 코드 부분 프롬프트 캐시(2026-11-07 결정, 정확도는 Opus로 잰 스파이크 기준 — 크레딧 충전 뒤 Sonnet으로 다시 잰다)
+  analysis:
+    model: claude-sonnet-5-5
+    api-key: ${ANTHROPIC_API_KEY:}
+    timeout: 10m
+    # 노드 단계를 동시에 부르는 수와 넘길 코드 총량(넘으면 잘라 넣지 않고 실패한다)
+    node-concurrency: 4
+    max-code-chars: 400000
   voyage:
     api-key: ${VOYAGE_API_KEY:}
     base-url: https://api.voyageai.com

@@ -90,6 +90,57 @@ public class GithubRestClient implements GithubClient {
     }
 
     @Override
+    public String commitSha(String owner, String repo, String branch) {
+        JsonNode root = read(() -> http.get().uri("/repos/{owner}/{repo}/commits/{branch}", owner, repo, branch).retrieve().body(String.class));
+        JsonNode sha = root == null ? null : root.get("sha");
+        if (sha == null || !sha.isString() || !sha.asString().matches("[0-9a-f]{40}")) {
+            throw new GithubApiException("GitHub 응답 형식이 올바르지 않습니다.", 0, null);
+        }
+        return sha.asString();
+    }
+
+    @Override
+    public java.util.List<TreeFile> tree(String owner, String repo, String sha) {
+        JsonNode root = read(() -> http.get().uri("/repos/{owner}/{repo}/git/trees/{sha}?recursive=1", owner, repo, sha).retrieve().body(String.class));
+        JsonNode entries = root == null ? null : root.get("tree");
+        JsonNode truncated = root == null ? null : root.get("truncated");
+        if (entries == null || !entries.isArray()) {
+            throw new GithubApiException("GitHub 응답 형식이 올바르지 않습니다.", 0, null);
+        }
+        if (truncated != null && truncated.asBoolean(false)) {
+            // 목록이 잘리면 "저장소에 없는 경로" 검사를 믿을 수 없다 — 실패로 끝낸다
+            throw new GithubApiException("저장소 파일이 너무 많아 목록을 다 읽지 못했어요.", 0, null);
+        }
+        java.util.List<TreeFile> files = new java.util.ArrayList<>();
+        for (JsonNode e : entries) {
+            JsonNode type = e.get("type");
+            JsonNode path = e.get("path");
+            if (type == null || !type.isString() || path == null || !path.isString()) {
+                throw new GithubApiException("GitHub 응답 형식이 올바르지 않습니다.", 0, null);
+            }
+            if ("blob".equals(type.asString())) {
+                JsonNode size = e.get("size");
+                files.add(new TreeFile(path.asString(), size != null && size.isNumber() ? size.asLong() : 0L));
+            }
+        }
+        return files;
+    }
+
+    @Override
+    public String fileContent(String owner, String repo, String sha, String path) {
+        try {
+            // path의 "/"는 경로 구분자로 그대로 둬야 해서 템플릿 변수가 아니라 경로 문자열로 붙인다(중괄호만 막는다)
+            String literal = path.replace("{", "%7B").replace("}", "%7D");
+            return http.get().uri(b -> b.path("/repos/{owner}/{repo}/contents/" + literal).queryParam("ref", sha).build(owner, repo))
+                .header("Accept", "application/vnd.github.raw+json").retrieve().body(String.class);
+        } catch (RestClientResponseException e) {
+            throw new GithubApiException("GitHub 호출이 실패했습니다(HTTP " + e.getStatusCode().value() + ").", e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            throw new GithubApiException("GitHub에 연결하지 못했습니다(시간 초과 또는 네트워크 오류).", 0, e);
+        }
+    }
+
+    @Override
     public RepoInfo repository(String owner, String repo) {
         String body;
         try {

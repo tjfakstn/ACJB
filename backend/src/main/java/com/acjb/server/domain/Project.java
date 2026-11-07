@@ -33,6 +33,10 @@ public class Project {
     @Column(nullable = false, length = 100)
     private String name;
 
+    /** 선택, 200자 이하(2026-11-07, V5). 작업공간·초대 미리보기·초대 메일에 보인다 */
+    @Column(length = 200)
+    private String description;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "owner_id", nullable = false)
     private Member owner;
@@ -67,8 +71,28 @@ public class Project {
     private Instant createdAt;
 
     public Project(String name, Member owner) {
+        this(name, null, owner);
+    }
+
+    public Project(String name, String description, Member owner) {
         this.name = name;
+        this.description = description;
         this.owner = owner;
+    }
+
+    /** AC21 — 접근 확인에 성공한 값만 넘긴다(서비스에서 확인) */
+    public void connectFigma(String url, String fileKey, String fileName, Instant now) {
+        this.figmaUrl = url;
+        this.figmaFileKey = fileKey;
+        this.figmaFileName = fileName;
+        this.figmaConnectedAt = now;
+    }
+
+    public void connectGithub(String url, String repo, String defaultBranch, Instant now) {
+        this.githubUrl = url;
+        this.githubRepo = repo;
+        this.githubDefaultBranch = defaultBranch;
+        this.githubConnectedAt = now;
     }
 
     @PrePersist

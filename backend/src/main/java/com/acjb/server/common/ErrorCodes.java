@@ -1,7 +1,7 @@
 package com.acjb.server.common;
 
 /**
- * ErrorResponse.error.code 값(13개, 2026-11-05 확정·11-06 SUGGESTION_FAILED 추가). openapi Error.code 설명에 상태 코드와 함께 적혀 있다 —
+ * ErrorResponse.error.code 값(16개, 2026-11-05 확정·11-06 SUGGESTION_FAILED·11-07 연결·실행 3개 추가). openapi Error.code 설명에 상태 코드와 함께 적혀 있다 —
  * 값을 추가하면 그 설명도 같이 고친다. enum이 아닌 이유: 프레임워크 단계 오류는 HTTP 상태 이름이 온다.
  */
 public final class ErrorCodes {
@@ -25,6 +25,12 @@ public final class ErrorCodes {
     public static final String PARSE_FAILED = "PARSE_FAILED";
     /** 재검증 범위 제안(AC20): 임베딩·LLM 호출 실패·스키마 위반 */
     public static final String SUGGESTION_FAILED = "SUGGESTION_FAILED";
+    /** 연결하려는 Figma 파일·GitHub 저장소에 접근 권한이 없음 — GitHub 404(비공개·없는 저장소 구분 불가) 포함(AC21, 422) */
+    public static final String CONNECTION_FORBIDDEN = "CONNECTION_FORBIDDEN";
+    /** 연결 확인 실패 — 없는 Figma 파일·응답 지연·외부 서버 오류(AC21, 502) */
+    public static final String CONNECTION_FAILED = "CONNECTION_FAILED";
+    /** 지금은 할 수 없는 요청 — 연결·분석 전 실행, 실행 중 중복, 이미 성공한 실행, 분석 후 링크 변경(AC21~AC23, 409) */
+    public static final String NOT_READY = "NOT_READY";
     /** Figma 연동이 설정되지 않음(FIGMA_ACCESS_TOKEN 없음) */
     public static final String FIGMA_UNAVAILABLE = "FIGMA_UNAVAILABLE";
 

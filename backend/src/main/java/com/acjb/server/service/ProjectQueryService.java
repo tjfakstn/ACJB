@@ -8,7 +8,10 @@ import com.acjb.server.domain.InvitationStatus;
 import com.acjb.server.domain.IssueStatus;
 import com.acjb.server.domain.Project;
 import com.acjb.server.domain.ProjectMember;
+import com.acjb.server.domain.ProjectRun;
 import com.acjb.server.domain.RunKind;
+import com.acjb.server.domain.RunStatus;
+import com.acjb.server.dto.ProjectSummaryResponse;
 import com.acjb.server.dto.ProjectDetailResponse;
 import com.acjb.server.repository.InvitationRepository;
 import com.acjb.server.repository.ProjectRepository;
@@ -28,7 +31,6 @@ import com.acjb.server.dto.ItemsResponse;
 import com.acjb.server.dto.MemberResponse;
 import com.acjb.server.dto.NotificationListResponse;
 import com.acjb.server.dto.NotificationResponse;
-import com.acjb.server.dto.ProjectResponse;
 import com.acjb.server.repository.NotificationRepository;
 import com.acjb.server.repository.ProjectMemberRepository;
 
@@ -75,8 +77,8 @@ public class ProjectQueryService {
             : new ProjectDetailResponse.FigmaConnection(p.getFigmaUrl(), p.getFigmaFileKey(), p.getFigmaFileName(), p.getFigmaConnectedAt());
         ProjectDetailResponse.GithubConnection github = p.getGithubRepo() == null ? null
             : new ProjectDetailResponse.GithubConnection(p.getGithubUrl(), p.getGithubRepo(), p.getGithubDefaultBranch(), p.getGithubConnectedAt());
-        return new ProjectDetailResponse(String.valueOf(p.getId()), p.getName(), String.valueOf(p.getOwner().getId()),
-            lower(mine.getRole()), figma, github, runStatus(projectId, RunKind.ANALYSIS), runStatus(projectId, RunKind.FIRST_QA),
+        return new ProjectDetailResponse(String.valueOf(p.getId()), p.getName(), p.getDescription(), String.valueOf(p.getOwner().getId()),
+            mine.getRole() == null ? null : lower(mine.getRole()), figma, github, runStatus(projectId, RunKind.ANALYSIS), runStatus(projectId, RunKind.FIRST_QA),
             projectMembers.countByProjectId(projectId),
             invitations.countByProjectIdAndStatusAndExpiresAtAfter(projectId, InvitationStatus.PENDING, clock.instant()),
             counts);
@@ -94,11 +96,27 @@ public class ProjectQueryService {
      * AC15 — 로그인한 구글 이메일이 Member인 프로젝트만. Member로 등록되지 않은 이메일이면 빈 목록이다
      * (403이 아니다 — "속한 프로젝트가 없다"는 정상 응답이고, 다른 프로젝트의 존재도 드러내지 않는다)
      */
-    public ItemsResponse<ProjectResponse> myProjects(String email) {
+    public ItemsResponse<ProjectSummaryResponse> myProjects(String email) {
         if (email == null || email.isBlank()) {
             return new ItemsResponse<>(List.of());
         }
-        return new ItemsResponse<>(projectMembers.findProjectsOfMemberEmail(email).stream().map(ProjectResponse::of).toList());
+        return new ItemsResponse<>(projectMembers.findProjectsOfMemberEmail(email).stream().map(this::summary).toList());
+    }
+
+    /** 목록 카드 값(시안 PRJ-01). 한 사람이 속한 프로젝트 수가 적어 프로젝트마다 조회한다 */
+    private ProjectSummaryResponse summary(Project p) {
+        List<ProjectMember> memberList = projectMembers.findMembersOfProject(p.getId());   // name asc, id asc
+        return new ProjectSummaryResponse(String.valueOf(p.getId()), p.getName(), p.getDescription(), String.valueOf(p.getOwner().getId()),
+            p.getFigmaFileKey() != null, p.getGithubRepo() != null,
+            runStatus(p.getId(), RunKind.ANALYSIS),
+            runs.findFirstByProjectIdAndKindAndStatusOrderByFinishedAtDescIdDesc(p.getId(), RunKind.ANALYSIS, RunStatus.SUCCEEDED)
+                .map(ProjectRun::getFinishedAt).orElse(null),
+            issues.countByProjectId(p.getId()),
+            issues.countByProjectIdAndStatusNot(p.getId(), IssueStatus.RESOLVED),
+            memberList.size(),
+            memberList.stream().limit(3)
+                .map(pm -> new ProjectSummaryResponse.MemberPreview(String.valueOf(pm.getMember().getId()), pm.getMember().getName()))
+                .toList());
     }
 
     /** AC15 — 프로젝트 멤버 여부는 Security 단계(AC12)에서 이미 확인했다 */

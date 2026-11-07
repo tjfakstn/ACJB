@@ -47,7 +47,8 @@ public class ProjectMember {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
-    @Column(nullable = false, length = 20)
+    /** null=미지정 — 만든 사람은 역할 없이 시작한다(2026-11-07, V5) */
+    @Column(length = 20)
     private MemberRole role;
 
     @Column(nullable = false, updatable = false)

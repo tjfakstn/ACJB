@@ -50,6 +50,11 @@ public class FigmaRestClient implements FigmaClient {
     }
 
     @Override
+    public String fileName(String fileKey) {
+        return requireText(get("/v1/files/{key}?depth=1", fileKey, null), "name");
+    }
+
+    @Override
     public List<FigmaNode> topLevelNodes(String fileKey) {
         JsonNode root = get("/v1/files/{key}?depth=2", fileKey, null);
         JsonNode pages = requireArray(requireObject(root, "document"), "children");
@@ -105,7 +110,7 @@ public class FigmaRestClient implements FigmaClient {
                 ? http.get().uri(path, fileKey).retrieve().body(String.class)
                 : http.get().uri(path, fileKey, ids).retrieve().body(String.class);
         } catch (RestClientResponseException e) {
-            throw new FigmaApiException(describe(e.getStatusCode()), e);
+            throw new FigmaApiException(describe(e.getStatusCode()), e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
             throw new FigmaApiException("Figma에 연결하지 못했습니다(시간 초과 또는 네트워크 오류).", e);
         }

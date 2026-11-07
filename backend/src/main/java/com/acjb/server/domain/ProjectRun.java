@@ -73,6 +73,12 @@ public class ProjectRun {
     @Column(name = "finished_at")
     private Instant finishedAt;
 
+    /** 실행이 끝났을 때(성공·실패) — 실행 로직(AC22·AC23)이 부른다 */
+    public void finish(RunStatus result, Instant now) {
+        this.status = result;
+        this.finishedAt = now;
+    }
+
     public ProjectRun(Project project, RunKind kind, Member requestedBy, Instant now) {
         this.project = project;
         this.kind = kind;

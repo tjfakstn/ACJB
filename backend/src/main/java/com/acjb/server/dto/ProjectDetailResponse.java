@@ -17,7 +17,9 @@ import tools.jackson.databind.annotation.JsonNaming;
 public record ProjectDetailResponse(
     String id,
     String name,
+    String description,
     String ownerId,
+    /** null=미지정 */
     String myRole,
     FigmaConnection figma,
     GithubConnection github,

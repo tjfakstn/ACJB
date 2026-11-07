@@ -50,4 +50,9 @@ public interface QAIssueRepository extends JpaRepository<QAIssue, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select i from QAIssue i where i.id = :id and i.project.id = :projectId")
     Optional<QAIssue> findForUpdate(@Param("id") Long id, @Param("projectId") Long projectId);
+
+    /** 목록 카드(AC15) — 전체 이슈 수와 미해결(resolved가 아닌) 이슈 수 */
+    long countByProjectId(Long projectId);
+
+    long countByProjectIdAndStatusNot(Long projectId, IssueStatus status);
 }

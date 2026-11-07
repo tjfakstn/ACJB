@@ -1,0 +1,67 @@
+package com.acjb.server.github;
+
+import java.net.http.HttpClient;
+import java.time.Duration;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * 공개 저장소를 읽는 GitHub 클라이언트(2026-11-07 결정 — 공개 저장소 + 서버 토큰 하나, GitHub App 없음).
+ * 토큰(GITHUB_TOKEN)은 선택이다 — 없으면 익명으로 읽고 호출 한도가 낮다
+ */
+@Component
+public class GithubRestClient implements GithubClient {
+
+    private final RestClient http;
+    private final JsonMapper json;
+
+    public GithubRestClient(JsonMapper json,
+                            @Value("${app.github.base-url:https://api.github.com}") String baseUrl,
+                            @Value("${app.github.token:}") String token,
+                            @Value("${app.github.timeout:15s}") Duration timeout) {
+        this.json = json;
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
+            HttpClient.newBuilder().connectTimeout(timeout).build());
+        factory.setReadTimeout(timeout);
+        RestClient.Builder builder = RestClient.builder().baseUrl(baseUrl).requestFactory(factory)
+            .defaultHeader("Accept", "application/vnd.github+json")
+            .defaultHeader("User-Agent", "QAting");
+        if (token != null && !token.isBlank()) {
+            builder.defaultHeader("Authorization", "Bearer " + token);
+        }
+        this.http = builder.build();
+    }
+
+    @Override
+    public RepoInfo repository(String owner, String repo) {
+        String body;
+        try {
+            body = http.get().uri("/repos/{owner}/{repo}", owner, repo).retrieve().body(String.class);
+        } catch (RestClientResponseException e) {
+            throw new GithubApiException("GitHub 호출이 실패했습니다(HTTP " + e.getStatusCode().value() + ").", e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            throw new GithubApiException("GitHub에 연결하지 못했습니다(시간 초과 또는 네트워크 오류).", 0, e);
+        }
+        try {
+            JsonNode root = json.readTree(body);
+            JsonNode name = root == null ? null : root.get("full_name");
+            JsonNode branch = root == null ? null : root.get("default_branch");
+            JsonNode priv = root == null ? null : root.get("private");
+            if (name == null || !name.isString() || branch == null || !branch.isString() || priv == null || !priv.isBoolean()) {
+                throw new GithubApiException("GitHub 응답 형식이 올바르지 않습니다.", 0, null);
+            }
+            return new RepoInfo(name.asString(), branch.asString(), priv.asBoolean());
+        } catch (JacksonException e) {
+            throw new GithubApiException("GitHub 응답이 JSON이 아닙니다.", 0, e);
+        }
+    }
+}

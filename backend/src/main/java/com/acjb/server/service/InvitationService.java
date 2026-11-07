@@ -120,7 +120,7 @@ public class InvitationService {
     }
 
     private void sendMail(Invitation invitation, String token, Member sender) {
-        events.publishEvent(new InvitationCreated(new InvitationMail(invitation.getEmail(), invitation.getProject().getName(),
+        events.publishEvent(new InvitationCreated(new InvitationMail(invitation.getEmail(), invitation.getProject().getName(), invitation.getProject().getDescription(),
             sender.getName(), acceptUrlTemplate.replace("{token}", token), invitation.getExpiresAt())));
     }
 

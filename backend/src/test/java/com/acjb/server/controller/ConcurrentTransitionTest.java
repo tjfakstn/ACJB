@@ -72,7 +72,7 @@ class ConcurrentTransitionTest {
         reporter = members.save(new Member("cc-rep-" + System.nanoTime() + "@test.dev", "등록자"));
         assignee = members.save(new Member("cc-asg-" + System.nanoTime() + "@test.dev", "담당자"));
         projectMembers.save(new ProjectMember(project, reporter, MemberRole.DESIGNER));
-        projectMembers.save(new ProjectMember(project, assignee, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(project, assignee, MemberRole.BACKEND));
     }
 
     @AfterEach

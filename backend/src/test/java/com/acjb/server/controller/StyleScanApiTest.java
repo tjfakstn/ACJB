@@ -156,7 +156,7 @@ class StyleScanApiTest {
             .andExpect(jsonPath("$.data.error_message", containsString("selector")));
 
         StyleScan others = scans.save(new StyleScan(otherProject, "84:759", "84:760", "http://localhost:5173", "button", me));
-        projectMembers.save(new ProjectMember(otherProject, members.save(new Member("scan-other@test.dev", "남")), MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(otherProject, members.save(new Member("scan-other@test.dev", "남")), MemberRole.BACKEND));
         mvc.perform(get("/api/v1/projects/" + project.getId() + "/style-mismatches/scans/" + others.getId())
                 .with(oauth2Login().attributes(a -> a.put("email", me.getEmail()))))
             .andExpect(status().isNotFound());

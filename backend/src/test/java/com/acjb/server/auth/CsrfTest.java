@@ -49,7 +49,7 @@ class CsrfTest {
     void setUp() {
         project = projects.save(new Project("csrf-test", owner()));
         Member me = members.save(new Member("csrf@test.dev", "멤버"));
-        projectMembers.save(new ProjectMember(project, me, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(project, me, MemberRole.BACKEND));
     }
 
     private static OAuth2LoginRequestPostProcessor member() {

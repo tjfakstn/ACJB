@@ -62,9 +62,9 @@ class LookupApiTest {
         me = members.save(new Member("l-me@test.dev", "나나"));
         kim = members.save(new Member("l-kim@test.dev", "가가"));
         outsider = members.save(new Member("l-out@test.dev", "다다"));
-        projectMembers.save(new ProjectMember(alpha, me, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(alpha, me, MemberRole.BACKEND));
         projectMembers.save(new ProjectMember(alpha, kim, MemberRole.DESIGNER));
-        projectMembers.save(new ProjectMember(beta, me, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(beta, me, MemberRole.BACKEND));
         projectMembers.save(new ProjectMember(beta, outsider, MemberRole.PLANNER));
         projectMembers.save(new ProjectMember(gamma, outsider, MemberRole.PLANNER));
     }

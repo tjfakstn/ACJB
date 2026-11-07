@@ -78,8 +78,8 @@ class QaIssuePatchApiTest {
         other = members.save(new Member("p-other@test.dev", "다른 멤버"));
         outsider = members.save(new Member("p-outsider@test.dev", "외부"));
         projectMembers.save(new ProjectMember(project, reporter, MemberRole.DESIGNER));
-        projectMembers.save(new ProjectMember(project, assignee, MemberRole.DEVELOPER));
-        projectMembers.save(new ProjectMember(project, other, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(project, assignee, MemberRole.BACKEND));
+        projectMembers.save(new ProjectMember(project, other, MemberRole.BACKEND));
         projectMembers.save(new ProjectMember(otherProject, outsider, MemberRole.PLANNER));
     }
 

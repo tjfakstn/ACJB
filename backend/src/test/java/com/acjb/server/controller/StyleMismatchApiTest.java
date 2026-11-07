@@ -164,7 +164,7 @@ class StyleMismatchApiTest {
     @Test
     void body의_assigned_to와_reported_by는_받지_않는다() throws Exception {
         Member other = members.save(new Member("sm-other@test.dev", "다른"));
-        projectMembers.save(new ProjectMember(project, other, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(project, other, MemberRole.BACKEND));
         StyleMismatch m = mismatches.save(StyleMismatch.manual(project, null, null, StyleProperty.COLOR, "a", "b"));
         createIssue(m, """
             {"description":"d","screen_location":"홈","repro_steps":["홈 진입"],"platform_scope":"common",

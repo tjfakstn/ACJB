@@ -84,7 +84,7 @@ public class ProjectCommandService {
                 return r;
             }
         }
-        throw ApiException.badRequest("role 값이 올바르지 않습니다: " + raw + " (designer, developer, planner)");
+        throw ApiException.badRequest("role 값이 올바르지 않습니다: " + raw + " (designer, frontend, backend, planner)");
     }
 
     private static Long parseIdOrNull(String raw) {

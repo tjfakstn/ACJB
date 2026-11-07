@@ -68,7 +68,7 @@ class InvitationApiTest {
         dev = members.save(new Member("inv-dev@test.dev", "개발자"));
         project = projects.save(new Project("inv-project", owner));
         projectMembers.save(new ProjectMember(project, owner, MemberRole.PLANNER));
-        projectMembers.save(new ProjectMember(project, dev, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(project, dev, MemberRole.BACKEND));
     }
 
     private MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder r, String email) {
@@ -184,7 +184,7 @@ class InvitationApiTest {
     @Test
     void ac18_다른_구글_계정으로는_수락할_수_없다_403이고_멤버를_만들지_않는다() throws Exception {
         invite(dev, "real@test.dev").andExpect(status().isCreated());
-        accept(lastToken(), "forwarded@test.dev", "developer")
+        accept(lastToken(), "forwarded@test.dev", "backend")
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.success").value(false));
         assertThat(members.findByEmail("forwarded@test.dev")).hasValueSatisfying(m ->
@@ -199,7 +199,7 @@ class InvitationApiTest {
             Instant.now().minus(Duration.ofDays(8))));
 
         mvc.perform(as(get("/api/v1/invitations/" + token), "late@test.dev")).andExpect(jsonPath("$.data.status").value("expired"));
-        accept(token, "late@test.dev", "developer")
+        accept(token, "late@test.dev", "backend")
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.error.code").value("INVITATION_CLOSED"));
         assertThat(members.findByEmail("late@test.dev")).hasValueSatisfying(m ->
@@ -210,8 +210,8 @@ class InvitationApiTest {
     void ac18_이미_수락한_초대를_다시_수락하면_409() throws Exception {
         invite(dev, "twice@test.dev").andExpect(status().isCreated());
         String token = lastToken();
-        accept(token, "twice@test.dev", "developer").andExpect(status().isOk());
-        accept(token, "twice@test.dev", "developer").andExpect(status().isConflict());
+        accept(token, "twice@test.dev", "backend").andExpect(status().isOk());
+        accept(token, "twice@test.dev", "backend").andExpect(status().isConflict());
     }
 
     @Test
@@ -226,7 +226,7 @@ class InvitationApiTest {
     @Test
     void 없는_토큰은_404() throws Exception {
         mvc.perform(as(get("/api/v1/invitations/no-such-token"), "a@test.dev")).andExpect(status().isNotFound());
-        accept("no-such-token", "a@test.dev", "developer").andExpect(status().isNotFound());
+        accept("no-such-token", "a@test.dev", "backend").andExpect(status().isNotFound());
     }
 
     // --- 앱 안 초대함 ---

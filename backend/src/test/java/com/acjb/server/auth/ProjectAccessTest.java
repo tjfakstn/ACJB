@@ -47,7 +47,7 @@ class ProjectAccessTest {
         other = projects.save(new Project("ac12-other", owner()));
         Member me = members.save(new Member("me@test.dev", "멤버"));
         Member outsider = members.save(new Member("outsider@test.dev", "다른 프로젝트 멤버"));
-        projectMembers.save(new ProjectMember(mine, me, MemberRole.DEVELOPER));
+        projectMembers.save(new ProjectMember(mine, me, MemberRole.BACKEND));
         projectMembers.save(new ProjectMember(other, outsider, MemberRole.DESIGNER));
     }
 

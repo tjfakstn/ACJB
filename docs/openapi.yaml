@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.5.5
+  version: 0.6.0
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -127,10 +127,10 @@ paths:
   /projects/{projectId}/connections/figma:
     put:
       tags: [Project]
-      summary: Figma 페이지 연결 (SPEC AC21)
+      summary: Figma 페이지·섹션 연결 (SPEC AC21)
       description: >-
-        소유자만(그 외 403). url은 Figma 앱의 페이지 [공유하기]에서 복사한 페이지 링크(figma.com/design/{key}/{이름}?node-id={페이지 id})만 받는다(2026-11-07).
-        node-id가 없거나 페이지가 아니면(프레임·섹션) 400. 파일 이름과 페이지 id·이름을 저장하고 이후 분석은 이 페이지 안만 본다.
+        소유자만(그 외 403). url은 최종 시안만 담은 페이지([공유하기]) 또는 섹션([링크 복사])의 링크(figma.com/design/{key}/{이름}?node-id={페이지·섹션 id})다(2026-11-07).
+        node-id가 없거나 페이지·섹션이 아니면(프레임 등) 400. 파일 이름과 그 페이지·섹션의 id·이름·scope를 저장하고 이후 분석은 그 안만 본다.
         서버 Figma 토큰으로 파일을 읽을 수 있는지 확인한 뒤에만 저장한다 — 보기 권한이 없으면 422 CONNECTION_FORBIDDEN,
         없는 파일·응답 지연이면 502 CONNECTION_FAILED, 서버 Figma 토큰이 없거나 만료·잘못됐으면 503 FIGMA_UNAVAILABLE이고(Figma는 만료 토큰도 403으로 주지만
         본문의 "Token expired"·"Invalid token"으로 구분해 사용자 권한 문제로 안내하지 않는다) 기존 연결은 그대로다.
@@ -231,6 +231,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProjectRunResponse'
+
+  /projects/{projectId}/analysis/mappings:
+    get:
+      tags: [Project]
+      summary: 디자인-코드 매핑 조회 (SPEC AC27)
+      description: >-
+        프로젝트 멤버 누구나(비멤버 403). 가장 최근에 성공한 비교 분석의 매핑을 frame_name asc, frame_id asc로,
+        프레임마다 nodes를 node_name asc, node_id asc로 돌려준다. 성공한 분석이 없으면 items는 빈 배열이고 run은 null이다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DesignCodeMappingListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /projects/{projectId}/first-qa:
     post:
@@ -1490,13 +1509,14 @@ components:
 
     FigmaConnection:
       type: object
-      required: [url, file_key, file_name, page_id, page_name, connected_at]
+      required: [url, file_key, file_name, page_id, page_name, scope, connected_at]
       properties:
         url: { type: string }
         file_key: { type: string }
         file_name: { type: string }
-        page_id: { type: string, description: '분석할 페이지 노드 id(예 424:2)' }
-        page_name: { type: string }
+        page_id: { type: string, description: '분석할 페이지 또는 섹션의 노드 id(예 424:2) — 이름은 호환을 위해 그대로 둔다' }
+        page_name: { type: string, description: 그 페이지·섹션 이름 }
+        scope: { type: string, enum: [page, section], description: page_id가 가리키는 노드 종류(2026-11-07) }
         connected_at: { type: string, format: date-time }
 
     GithubConnectRequest:
@@ -1578,6 +1598,42 @@ components:
         success: { type: boolean, example: true }
         data:
           $ref: '#/components/schemas/GithubConnection'
+        error: { type: object, nullable: true, example: null }
+
+    FrameMapping:
+      type: object
+      required: [frame_id, frame_name, code_path, nodes]
+      properties:
+        frame_id: { type: string }
+        frame_name: { type: string }
+        code_path: { type: string, description: 그 화면을 그리는 파일(저장소 안 경로) }
+        nodes:
+          type: array
+          items:
+            type: object
+            required: [node_id, node_name, code_path, code_symbol]
+            properties:
+              node_id: { type: string }
+              node_name: { type: string }
+              code_path: { type: string }
+              code_symbol: { type: string, description: 그 블록을 그리는 컴포넌트·함수 이름 }
+
+    DesignCodeMappingListResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          required: [run, commit_sha, items]
+          properties:
+            run:
+              allOf: [{ $ref: '#/components/schemas/ProjectRun' }]
+              nullable: true
+              description: 매핑을 만든 비교 분석 실행(없으면 null)
+            commit_sha: { type: string, nullable: true, description: 분석이 읽은 GitHub 커밋 }
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/FrameMapping' }
         error: { type: object, nullable: true, example: null }
 
     ProjectRunResponse:

@@ -1039,16 +1039,16 @@ cases:
       status: 200
       body: { data: { file_key: "AbC123", file_name: "멤버십 앱 리뉴얼", page_id: "424:2", page_name: "UI Design - Refined" } }
 
-  - id: cn-006
+  - id: cn-006   # 2026-11-07 수정(설만수 결정): 섹션 링크 허용 — 두 번째 body를 프레임 id로 바꿈
     ac: AC21
-    description: 페이지 공유 링크가 아니면 400이다 — node-id 없는 파일 링크(외부 호출 없음), 프레임·섹션을 가리키는 node-id(파일의 페이지 목록에 없음)
+    description: 페이지·섹션 링크가 아니면 400이다 — node-id 없는 파일 링크(외부 호출 없음), 프레임을 가리키는 node-id, 프로토타입 링크
     input:
       endpoint: PUT /projects/{projectId}/connections/figma
       actor: 소유자
-      figma_stub: { file: { key: "AbC123", name: "멤버십 앱 리뉴얼", pages: [{ id: "424:2", name: "UI Design - Refined" }] } }
+      figma_stub: { file: { key: "AbC123", name: "멤버십 앱 리뉴얼", pages: [{ id: "424:2", name: "UI Design - Refined" }] }, nodes: { "607:36215": { type: "FRAME", name: "WS-01" } } }
       bodies:
         - { url: "https://www.figma.com/design/AbC123/membership" }
-        - { url: "https://www.figma.com/design/AbC123/membership?node-id=605-30464" }
+        - { url: "https://www.figma.com/design/AbC123/membership?node-id=607-36215" }
         - { url: "https://www.figma.com/proto/AbC123/membership?node-id=424-2" }
     expected:
       status: 400
@@ -1072,6 +1072,18 @@ cases:
       body_1: { data: { branch: "develop" } }
       followup:
         expected_github_branch: "develop"
+
+  - id: cn-008
+    ac: AC21
+    description: 섹션 링크를 연결하면 섹션 id·이름과 scope section이 저장된다(페이지 링크는 scope page — cn-001)
+    input:
+      endpoint: PUT /projects/{projectId}/connections/figma
+      actor: 소유자
+      figma_stub: { file: { key: "AbC123", name: "멤버십 앱 리뉴얼", pages: [{ id: "424:2", name: "UI Design - Refined" }] }, nodes: { "605:30464": { type: "SECTION", name: "전체 서비스 최종 통합 UI" } } }
+      body: { url: "https://www.figma.com/design/AbC123/membership?node-id=605-30464&t=x-1" }
+    expected:
+      status: 200
+      body: { data: { page_id: "605:30464", page_name: "전체 서비스 최종 통합 UI", scope: "section" } }
 
   - id: cn-002
     ac: AC21
@@ -1161,6 +1173,52 @@ cases:
       status: 409
       followup:
         expected_run_count_delta: 0
+
+  - id: an-004
+    ac: AC22
+    description: 섹션 안 프레임까지 읽어 LLM에 넘기고, 저장소에 없는 경로·입력에 없는 노드를 가리킨 짝은 버리고 센다
+    input:
+      endpoint: POST /projects/{projectId}/analysis
+      actor: 소유자
+      precondition: Figma(scope page, 페이지 > 섹션 > 프레임 F1·F2), GitHub(트리에 src/A.tsx만) 연결됨
+      llm_stub:
+        frames: [{ frame_id: "F1", file: "src/A.tsx" }, { frame_id: "F2", file: "src/Missing.tsx" }]
+        nodes: { F1: [{ node_id: "N1", file: "src/A.tsx", symbol: "Card" }, { node_id: "N9", file: "src/A.tsx", symbol: "Ghost" }] }
+    expected:
+      status: 202
+      followup:
+        expected_run_status: "succeeded"
+        expected_llm_input_frame_ids: ["F1", "F2"]
+        expected_mappings: [{ frame_id: "F1", node_id: null, code_path: "src/A.tsx" }, { frame_id: "F1", node_id: "N1", code_path: "src/A.tsx", code_symbol: "Card" }]
+        expected_created_count: 2
+        expected_dropped_count: 2
+
+  - id: an-005
+    ac: AC27
+    description: 매핑 조회는 최근 성공한 분석의 매핑을 프레임 이름순, 노드 이름순으로 준다
+    input:
+      endpoint: GET /projects/{projectId}/analysis/mappings
+      actor: 프로젝트 멤버(소유자 아님)
+      precondition: 성공한 분석 1건 — 프레임 "B 화면"(파일 b.tsx, 노드 "카드 2"·"카드 1"), "A 화면"(파일 a.tsx, 노드 없음)
+    expected:
+      status: 200
+      body:
+        data:
+          items:
+            - { frame_name: "A 화면", code_path: "a.tsx", nodes: [] }
+            - { frame_name: "B 화면", code_path: "b.tsx", nodes: [{ node_name: "카드 1" }, { node_name: "카드 2" }] }
+
+  - id: an-006
+    ac: AC27
+    description: 성공한 분석이 없으면 빈 목록이고, 비멤버는 403이다
+    input:
+      endpoint: GET /projects/{projectId}/analysis/mappings
+      cases:
+        - { actor: 프로젝트 멤버, precondition: 분석 없음 또는 failed만 }
+        - { actor: 비멤버 }
+    expected:
+      - { status: 200, body: { data: { run: null, items: [] } } }
+      - { status: 403, body_not_has: [data] }
 
   # --- AC23: 첫 QA ---
   - id: fq-001

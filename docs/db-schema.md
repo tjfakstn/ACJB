@@ -49,7 +49,7 @@ erDiagram
 | `style_mismatches` | 스타일 차이(수동·scan 공통) | `GET /style-mismatches` 목록·상세 · AC2 |
 | `embeddings` | 재검증 범위 제안 검색용 벡터 (`V2__embeddings.sql`) | `POST .../recheck-suggestions` · AC20 |
 | `project_runs` | 비교 분석·첫 QA 실행 기록 (2026-11-07 설계, V4 예정) | `/analysis`, `/first-qa` · AC22, AC23 |
-| `design_code_mappings` | Figma 노드 ↔ 코드 위치 매핑 (2026-11-07 설계, 형태는 스파이크 후 확정, V4 예정) | AC22, AC23 |
+| `design_code_mappings` | Figma 프레임·노드 ↔ 코드 파일·컴포넌트 매핑 (2026-11-07 스파이크 후 확정, V8) | `/analysis/mappings` · AC22, AC23, AC27 |
 
 (`github_issue_url` 등 GitHub 이슈·PR 컬럼은 v1 비포함이라 만들지 않는다. 저장소 연결 컬럼(`projects.github_*`)은 2026-11-07부터 있다. 세션은 서버 메모리 — 별도 테이블 없음.)
 
@@ -65,8 +65,9 @@ erDiagram
 | figma_url | VARCHAR(500) | NULL | 연결한 Figma 페이지 링크(AC21). 접근 확인에 성공했을 때만 채운다 — figma_* 컬럼은 함께 채워지고 함께 비어 있다 |
 | figma_file_key | VARCHAR(100) | NULL | 링크에서 뽑은 파일 키 |
 | figma_file_name | VARCHAR(255) | NULL | Figma API가 돌려준 파일 이름 |
-| figma_page_id | VARCHAR(50) | NULL | 분석할 페이지 노드 id(예 `424:2`) — 2026-11-07, V6 |
-| figma_page_name | VARCHAR(255) | NULL | 그 페이지 이름 |
+| figma_page_id | VARCHAR(50) | NULL | 분석할 페이지 노드 id(예 `424:2`) — 2026-11-07, V6. 섹션 링크면 섹션 id(V8) |
+| figma_page_name | VARCHAR(255) | NULL | 그 페이지·섹션 이름 |
+| figma_scope | VARCHAR(10) | NULL, CHECK | `page`/`section` — figma_page_id가 가리키는 노드 종류(2026-11-07, V8. 기존 연결은 `page`로 채움) |
 | figma_connected_at | DATETIME(6) | NULL | |
 | github_url | VARCHAR(500) | NULL | 연결한 공개 저장소 링크(AC21) — github_* 넷도 함께 채워진다 |
 | github_repo | VARCHAR(200) | NULL | `owner/repo` |
@@ -271,17 +272,19 @@ erDiagram
 
 같은 프로젝트·kind에 queued/running 행이 있으면 새로 만들지 않고(409), first_qa는 succeeded가 하나라도 있으면 새로 만들지 않는다(AC23). first_qa가 실패하면 그 실행으로 만든 이슈·스타일 차이를 한 트랜잭션으로 되돌린다(N17 — 일부만 남기지 않는다). `ProjectDetail`의 `analysis_status`·`first_qa_status`는 kind별 최근 행의 status(없으면 none).
 
-### design_code_mappings (2026-11-07 설계 — 컬럼은 스파이크 후 확정, V4 예정)
+### design_code_mappings (2026-11-07 확정 — V8)
 | 컬럼 | 타입 | 제약 | 비고 |
 | --- | --- | --- | --- |
 | id | BIGINT | PK | |
 | project_id | BIGINT | FK→projects, NOT NULL | 다른 프로젝트 매핑을 쓰지 않는 근거(N17) |
 | run_id | BIGINT | FK→project_runs, NOT NULL | 만든 비교 분석 실행 |
 | frame_id / frame_name | VARCHAR(50) / VARCHAR(255) | NOT NULL | Figma 프레임 |
-| node_id / node_name | VARCHAR(50) / VARCHAR(255) | NOT NULL | Figma 노드 |
-| code_path | VARCHAR(500) | NOT NULL | 저장소 안 파일 경로 |
-| code_symbol | VARCHAR(255) | NULL | 컴포넌트·클래스 이름 |
+| node_id / node_name | VARCHAR(50) / VARCHAR(255) | NULL | 프레임 안 블록 노드. **NULL이면 프레임 자체의 짝**(프레임 → 파일) |
+| code_path | VARCHAR(500) | NOT NULL | 저장소 안 파일 경로 — 분석 커밋의 트리에 있는 경로만 저장 |
+| code_symbol | VARCHAR(255) | NULL | 컴포넌트·함수 이름. 프레임 짝이면 NULL, 노드 짝이면 NOT NULL(서비스에서 검사) |
 | created_at | DATETIME(6) | NOT NULL | |
+
+프레임 짝이 없는 노드 짝은 만들지 않는다(구현 없는 프레임은 행이 없다). `project_runs.commit_sha`에 분석이 읽은 커밋을 남긴다.
 
 ## 4. 인덱스 (목록 정렬·조회용)
 
@@ -295,6 +298,7 @@ erDiagram
 | verifications | (qa_issue_id, verified_at DESC, id DESC) | 재검증 목록 |
 | style_mismatches | (project_id, created_at DESC, id DESC), (project_id, frame_id), (project_id, property) | 목록 + 필터 |
 | figma_frames | UNIQUE(project_id, frame_id) | upsert |
+| design_code_mappings | (run_id, frame_name, frame_id, node_name, node_id) | AC27 고정 정렬 조회 |
 | project_members | UNIQUE(project_id, member_id) | AC12 멤버 확인 |
 | invitations | UNIQUE(token_hash) | 수락 링크로 찾기 |
 | invitations | (project_id, status, created_at DESC, id DESC) | 프로젝트의 대기 초대 목록 |

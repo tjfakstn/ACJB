@@ -147,10 +147,10 @@ export async function listMembers(projectId: string): Promise<ProjectMember[]> {
   return data.items
 }
 
-export interface FigmaConnection { url: string; file_key: string; file_name: string; connected_at: string }
+export interface FigmaConnection { url: string; file_key: string; file_name: string; page_id: string; page_name: string; connected_at: string }
 export interface GithubConnection { url: string; repo: string; default_branch: string; connected_at: string }
 
-/** 소유자만. 서버가 보기 권한을 확인한 뒤에만 저장한다 — 422 CONNECTION_FORBIDDEN, 502 CONNECTION_FAILED(SPEC AC21) */
+/** 소유자만. Figma 앱 페이지 [공유하기]로 복사한 페이지 링크만 받는다. 보기 권한 확인 후 저장 — 400 페이지 링크 아님, 422, 502(SPEC AC21) */
 export function connectFigma(projectId: string, url: string): Promise<FigmaConnection> {
   return request<FigmaConnection>('PUT', `/api/v1/projects/${projectId}/connections/figma`, { url })
 }

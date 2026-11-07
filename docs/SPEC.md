@@ -38,7 +38,8 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
   - 프로젝트·멤버 관리 (2026-11-04 팀 결정 — 시드 데이터로 넣던 방식은 폐기)
     - 로그인한 사용자 누구나 프로젝트를 만든다. 만든 사람이 그 프로젝트의 소유자(owner)이자 첫 멤버다
     - 프로젝트 멤버 누구나 다른 사람을 구글 이메일로 초대한다. 서버가 그 이메일로 초대 메일을 보내고, 초대받은 사람이 **같은 구글 계정으로 로그인해 수락**하면 멤버가 된다. 초대는 7일 뒤 만료된다. 메일을 못 받아도 로그인하면 앱에서 자기 초대를 보고 수락할 수 있다
-    - 역할(`role`: designer/frontend/backend/planner)은 프로젝트마다 다르고, 만들 때·수락할 때 본인이 고른다. 이후 변경은 소유자만 한다(소유자 본인 포함, 알림 없음 — 2026-11-07)
+    - 역할(`role`: designer/frontend/backend/planner)은 프로젝트마다 다르다. 초대받은 사람은 수락할 때 본인이 고르고, 만든 사람(소유자)은 역할 없이(미지정) 시작한다. 이후 변경은 소유자만 한다(소유자 본인 포함, 알림 없음 — 2026-11-07)
+    - 프로젝트는 이름(필수, 2~40자)과 설명(선택, 200자 이하)으로 만든다. 설명은 작업공간·초대 미리보기·초대 메일에 보인다(2026-11-07 시안 PRJ-02)
     - 대기 중인 초대를 다시 보내면 새 초대를 만들지 않고 그 초대의 만료를 지금부터 7일로 늘리고 새 수락 링크를 메일로 보낸다(이전 링크는 무효 — 2026-11-07)
     - 초대를 수락하면 그 프로젝트 작업공간으로 들어간다
     - 멤버 제거는 소유자만 한다. 제거된 멤버가 담당자인 미해결 이슈는 담당자가 비워진다
@@ -64,8 +65,8 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 
 - `GET /health` → `{status: "ok"}` **(구현됨)**
 - `GET /auth/me` → `{authenticated, id, name, email, picture}` (`id`는 내 멤버 id, 2026-11-05 추가) / 미인증 `{authenticated: false}` **(구현됨)**
-- `GET /projects` → `Project[]` — 내가 속한 프로젝트만 (AC15)
-- `POST /projects` — body `{name, role}` → 201 `Project` — 요청자가 소유자이자 `role` 멤버 (AC16)
+- `GET /projects` → `ProjectSummary[]` — 내가 속한 프로젝트만, 목록 카드용 연결·분석 상태와 이슈 수·멤버 미리보기 포함 (AC15)
+- `POST /projects` — body `{name, description?}` → 201 `Project` — 요청자가 소유자이자 역할 미지정 멤버 (AC16)
 - `GET /projects/{projectId}` → `ProjectDetail` — 작업공간 홈용: 내 역할, Figma·GitHub 연결, 비교 분석·첫 QA 상태, 멤버 수·대기 초대 수, 상태별 이슈 수 (AC25)
 - `PUT /projects/{projectId}/connections/figma` · `PUT .../connections/github` — body `{url}` → 연결 정보(접근 확인 후 저장) — 소유자만 (AC21)
 - `POST /projects/{projectId}/analysis` → 202 `AnalysisRun`(비동기) / `GET .../analysis` → 최근 비교 분석 상태 — 소유자만 시작 (AC22)
@@ -77,7 +78,7 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - `POST /projects/{projectId}/invitations/{invitationId}/resend` → 200 `Invitation` — 대기 중 초대의 만료를 7일 연장하고 새 링크로 다시 보낸다(멤버 누구나) (AC17)
 - `GET /projects/{projectId}/invitations` → 대기 중인 초대 목록 / `DELETE .../invitations/{invitationId}` → 초대 취소(초대한 사람 또는 소유자)
 - `GET /invitations/mine` → 로그인 이메일로 온 대기 중인 초대 / `POST /invitations/mine/{invitationId}/accept` — body `{role}` (메일을 못 받았을 때 앱에서 수락하는 경로, 규칙은 AC18과 같다)
-- `GET /invitations/{token}` → 초대 미리보기(프로젝트 이름·초대한 사람·만료 시각) / `POST /invitations/{token}/accept` — body `{role}` → 멤버가 됨 (AC18). `/invitations/**`는 로그인만 필요하다(아직 그 프로젝트 멤버가 아니므로 AC12 대상 아님)
+- `GET /invitations/{token}` → 초대 미리보기(프로젝트 이름·설명·초대한 사람·만료 시각) / `POST /invitations/{token}/accept` — body `{role}` → 멤버가 됨 (AC18). `/invitations/**`는 로그인만 필요하다(아직 그 프로젝트 멤버가 아니므로 AC12 대상 아님)
 - `GET /projects/{projectId}/notifications?event?` → `Notification[]` — 내게 온 알림만, `created_at desc` (AC14)
 - `POST /projects/{projectId}/qa-issues/parse` — body `{text}` → `{context: IssueReportContext, missing: string[]}` *(신규)*
 - `POST /projects/{projectId}/qa-issues` — body `{description, screen_location, repro_steps[], platform_scope, environment{platform, device, browser, deploy_stage}, screenshots[], figma_link?, style_mismatch?{property, expected_value, actual_value}, assigned_to?}` → `QAIssue` (`status: "needs_check"`, `reported_by`는 로그인 사용자)
@@ -113,9 +114,9 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - **AC13** [상시 적용]: QAting은 항상 역할이 정해진 상태 변경을 정해진 사람에게만 허용한다. `status: in_progress`·`status: fixed` PATCH는 요청자가 그 이슈의 `assigned_to`일 때만(담당자가 없으면 누구도 불가), 재검증 등록은 요청자가 그 이슈의 `reported_by`일 때만 허용하고(단, `reported_by`가 더 이상 그 프로젝트 멤버가 아니면 프로젝트 소유자에게 허용한다 — 2026-11-05), 그 밖에는 403을 반환한다. `assigned_to` 지정·변경은 프로젝트 멤버 누구나 할 수 있으나 그 프로젝트 멤버가 아닌 사람을 지정하면 400을 반환한다. 권한 검사는 상태 전이 검사(AC6)보다 먼저 하며, 403으로 거부된 요청은 상태·`status_history`·`Notification`을 바꾸지 않는다.
 
 - **AC14** [이벤트 기반]: 프로젝트 멤버가 `GET /projects/{projectId}/notifications`를 호출하면, QAting은 그 요청자가 받는 `Notification`(`to_member_id`가 요청자)만 `created_at desc, id desc` 순으로 반환하고, 다른 멤버의 알림은 담지 않는다. (등록·조치 알림 누락 → 알림을 받을 곳이 없으면 목록을 직접 확인하게 된다)
-- **AC15** [이벤트 기반]: 로그인한 사용자가 `GET /projects`를 호출하면, QAting은 그 사용자가 `Member`인 프로젝트만 `name asc, id asc` 순으로 반환한다. `GET /projects/{projectId}/members`는 그 프로젝트의 멤버(AC12)에게만 그 프로젝트 멤버 목록을 반환한다. (재현 정보 부족 → 담당자와 프로젝트를 고를 수단이 없으면 `assigned_to`를 채울 수 없다)
+- **AC15** [이벤트 기반]: 로그인한 사용자가 `GET /projects`를 호출하면, QAting은 그 사용자가 `Member`인 프로젝트만 `name asc, id asc` 순으로 반환한다. 각 항목에는 설명, Figma·GitHub 연결 여부, 비교 분석의 최근 상태와 마지막 성공 시각, 전체 이슈 수(`issue_count`)와 미해결(`resolved`가 아닌) 이슈 수(`open_issue_count`), 멤버 수와 이름순 앞 3명을 담는다(시안 PRJ-01 — "QA 결과 n건"=전체, "FAIL n건"=미해결, 2026-11-07). `GET /projects/{projectId}/members`는 그 프로젝트의 멤버(AC12)에게만 그 프로젝트 멤버 목록을 반환한다. (재현 정보 부족 → 담당자와 프로젝트를 고를 수단이 없으면 `assigned_to`를 채울 수 없다)
 
-- **AC16** [이벤트 기반]: 로그인한 사용자가 `POST /projects`를 호출하면, QAting은 프로젝트를 만들고 요청자를 그 프로젝트의 소유자이자 요청한 `role`의 멤버로 등록한다. `name`이 비었거나 `role`이 정해진 값(designer/frontend/backend/planner)이 아니면 거부하고(400) 아무것도 만들지 않는다. 처음 로그인한 구글 계정은 그때 `Member`로 만들어진다.
+- **AC16** [이벤트 기반]: 로그인한 사용자가 `POST /projects`를 호출하면, QAting은 프로젝트를 만들고 요청자를 그 프로젝트의 소유자이자 역할 미지정(`role: null`)의 멤버로 등록한다(역할은 이후 AC24로 정한다 — 2026-11-07). `name`이 비었거나 공백을 뺀 길이가 2~40자가 아니거나 허용 문자(한글·영문·숫자·공백·`-`·`_`) 밖이면, 또는 `description`이 200자를 넘으면 거부하고(400) 아무것도 만들지 않는다. 처음 로그인한 구글 계정은 그때 `Member`로 만들어진다.
 - **AC17** [이벤트 기반]: 프로젝트 멤버가 구글 이메일로 초대하면, QAting은 7일 뒤 만료되는 대기 중 초대(`Invitation`)를 1건 만들고 그 이메일로 초대 메일을 1통 보낸다. 이미 그 프로젝트 멤버인 이메일이면 거부한다(409). 같은 이메일에 대기 중인 초대가 있거나 재전송(`.../resend`)을 요청하면, 새 초대를 만들지 않고 그 초대의 만료를 요청 시각부터 7일로 늘리고 수락 링크 토큰을 새로 발급해 메일을 1통 보낸다(이전 링크는 무효). 대기 중이 아닌 초대의 재전송은 409다. 메일 발송이 실패해도 초대는 남고, 초대받은 사람은 로그인해 앱에서 수락할 수 있다.
 - **AC18** [예외 대응]: 초대를 수락할 때, QAting은 로그인한 구글 이메일이 초대받은 이메일과 같지 않으면 거부하고(403), 초대가 만료·취소·이미 수락된 상태면 거부하며(409), `role`이 정해진 값이 아니면 거부한다(400). 그 밖에는 요청자를 고른 `role`의 멤버로 등록하고 초대를 수락됨으로 바꾼다. 거부된 요청은 멤버를 만들지 않는다.
 - **AC19** [이벤트 기반]: 소유자가 멤버를 제거하면, QAting은 그 멤버를 프로젝트에서 빼고, 그 멤버가 담당자인 미해결(`resolved`가 아닌) 이슈의 `assigned_to`를 비운다. 상태·`status_history`·알림·재검증 기록은 바꾸지 않는다. 소유자가 아닌 사람의 제거 요청은 403, 소유자 자신을 제거하는 요청은 409다. 제거된 사람은 이후 AC12대로 그 프로젝트에 접근할 수 없다.
@@ -125,8 +126,8 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - **AC22** [이벤트 기반]: 소유자가 비교 분석을 시작하면, QAting은 Figma·GitHub가 둘 다 연결돼 있을 때만 비동기 실행을 1건 만들고(202) Figma 노드와 코드 위치의 매핑을 저장한다. 연결이 덜 됐거나, 실행 중이거나, 이미 성공했으면 409(`NOT_READY`)다. 실패하면 상태가 `failed`가 되고 다시 시작할 수 있다. 비교 분석은 이슈·`StyleMismatch`를 만들지 않는다. (시안 CON-06·06F·06R)
 - **AC23** [이벤트 기반]: 소유자가 첫 QA를 실행하면, QAting은 비교 분석이 성공했고 첫 QA가 아직 성공하지 않았을 때만 비동기 실행을 1건 만들고(202), 매핑된 짝마다 Figma 값과 코드 값을 비교해 다른 항목을 이슈로 저장한다. 각 이슈는 `source: first_qa`, `status: needs_check`, `reported_by`=실행한 소유자, `assigned_to` 없음, `platform_scope: common`이고, `screen_location`은 Figma 프레임·노드 이름, `repro_steps`는 ["'{프레임}' 화면을 연다", "'{노드}'를 확인한다"], `style_mismatch`는 Figma 값(expected)과 코드 값(actual)이다. 근거가 모자란 항목은 저장하지 않고 `dropped_count`에 센다(N17). 실행 중·이미 성공·분석 전이면 409(`NOT_READY`). 실패하면 이슈를 하나도 남기지 않고 상태가 `failed`가 되며 다시 실행할 수 있다. 담당자가 없으므로 알림은 만들지 않는다(AC3). (시안 QA-01~04·02F·04P)
 - **AC24** [이벤트 기반]: 소유자가 멤버의 역할을 바꾸면, QAting은 그 프로젝트에서의 `role`만 바꾼다(소유자 본인 포함). 소유자가 아니면 403, 그 프로젝트 멤버가 아니면 404, 정해진 값이 아니면 400이다. 이슈·담당자·알림은 바꾸지 않는다. (시안 MEM-06)
-- **AC25** [이벤트 기반]: 프로젝트 멤버가 `GET /projects/{projectId}`를 호출하면, QAting은 이름·소유자·내 역할, Figma·GitHub 연결(없으면 null), 비교 분석·첫 QA의 최근 상태(`none`/`queued`/`running`/`succeeded`/`failed`), 멤버 수·대기 중 초대 수, 상태별 이슈 수(5개 상태 모두, 0 포함)를 반환한다. 비멤버는 AC12대로 403. (시안 WS-01·01N·01M·02)
-> AC1~AC8을 실행할 수 있는 골든 케이스는 `tests/harness/golden_cases.yaml`에 둔다(강의 5에서 작성). AC11~AC13과 6.1절 금지 기준의 골든 케이스도 같은 파일에 둔다(2026-10-11 설만수 승인 후 추가). AC14~AC19와 AC13 수정분(등록자 제거 시 소유자 재검증)의 골든 케이스도 같은 파일에 둔다(2026-11-05 설만수 승인 후 추가). AC20과 N16의 골든 케이스(`rs-001`~`rs-004`, `ng-014`~`ng-016`)도 같은 파일에 둔다(2026-11-06 설만수 승인 후 추가). AC21~AC25, AC6·AC13·AC17 수정분, N17의 골든 케이스(`st-004`~`st-007`, `au-010`, `iv-003` 교체, `iv-008`·`iv-009`, `cn-001`~`cn-005`, `an-001`~`an-003`, `fq-001`~`fq-004`, `rl-001`~`rl-003`, `ws-001`·`ws-002`, `ng-017`~`ng-019`)도 같은 파일에 둔다(2026-11-07 설만수 승인 후 추가). AC8은 `src/qating/prompts/parse_query.md`의 실패 모드 점검표와도 연결된다. [상시 적용] AC(AC2, AC6, AC12, AC13)는 `AGENTS.md` 절대 규칙에도 같은 내용으로 둔다.
+- **AC25** [이벤트 기반]: 프로젝트 멤버가 `GET /projects/{projectId}`를 호출하면, QAting은 이름·설명·소유자·내 역할(미지정이면 null), Figma·GitHub 연결(없으면 null), 비교 분석·첫 QA의 최근 상태(`none`/`queued`/`running`/`succeeded`/`failed`), 멤버 수·대기 중 초대 수, 상태별 이슈 수(5개 상태 모두, 0 포함)를 반환한다. 비멤버는 AC12대로 403. (시안 WS-01·01N·01M·02)
+> AC1~AC8을 실행할 수 있는 골든 케이스는 `tests/harness/golden_cases.yaml`에 둔다(강의 5에서 작성). AC11~AC13과 6.1절 금지 기준의 골든 케이스도 같은 파일에 둔다(2026-10-11 설만수 승인 후 추가). AC14~AC19와 AC13 수정분(등록자 제거 시 소유자 재검증)의 골든 케이스도 같은 파일에 둔다(2026-11-05 설만수 승인 후 추가). AC20과 N16의 골든 케이스(`rs-001`~`rs-004`, `ng-014`~`ng-016`)도 같은 파일에 둔다(2026-11-06 설만수 승인 후 추가). AC21~AC25, AC6·AC13·AC17 수정분, N17의 골든 케이스와 AC15·AC16 수정분(`pj-003`·`pj-004` 교체, `pj-007`·`pj-008`)(`st-004`~`st-007`, `au-010`, `iv-003` 교체, `iv-008`·`iv-009`, `cn-001`~`cn-005`, `an-001`~`an-003`, `fq-001`~`fq-004`, `rl-001`~`rl-003`, `ws-001`·`ws-002`, `ng-017`~`ng-019`)도 같은 파일에 둔다(2026-11-07 설만수 승인 후 추가). AC8은 `src/qating/prompts/parse_query.md`의 실패 모드 점검표와도 연결된다. [상시 적용] AC(AC2, AC6, AC12, AC13)는 `AGENTS.md` 절대 규칙에도 같은 내용으로 둔다.
 
 ### 6.1 금지 기준 (구현 중 이탈 방지)
 

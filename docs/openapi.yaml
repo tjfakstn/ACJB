@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.5.0
+  version: 0.5.1
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -49,7 +49,8 @@ paths:
       tags: [Project]
       summary: 프로젝트 만들기 (SPEC AC16)
       description: >-
-        요청자가 소유자(owner)이자 고른 role의 첫 멤버가 된다. name이 비었거나 role이 정해진 값이 아니면 400이고 아무것도 만들지 않는다.
+        요청자가 소유자(owner)이자 역할 미지정(role null)의 첫 멤버가 된다 — 역할은 이후 멤버 역할 변경(AC24)으로 정한다(2026-11-07).
+        name 규칙(2~40자, 허용 문자)이나 description(200자 이하)을 어기면 400이고 아무것도 만들지 않는다.
         처음 로그인한 구글 계정은 이때(또는 다른 첫 요청 때) Member로 만들어진다.
       requestBody:
         required: true
@@ -57,10 +58,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, role]
+              required: [name]
               properties:
-                name: { type: string, maxLength: 100 }
-                role: { type: string, enum: [designer, frontend, backend, planner], description: 이 프로젝트에서 내 역할 }
+                name: { type: string, minLength: 2, maxLength: 40, description: '공백을 뺀 길이 2~40자, 한글·영문·숫자·공백·-·_' }
+                description: { type: string, maxLength: 200, description: 선택. 작업공간·초대 미리보기·초대 메일에 보인다 }
       responses:
         '201':
           description: Created
@@ -1364,7 +1365,35 @@ components:
       properties:
         id: { type: string }
         name: { type: string }
+        description: { type: string, nullable: true }
         owner_id: { type: string, description: 소유자의 멤버 id (멤버 제거 버튼을 보여줄지 판단용) }
+        created_at: { type: string, format: date-time, description: 만든 시각(시안 PRJ-04 생성일) }
+
+    ProjectSummary:
+      type: object
+      description: 프로젝트 목록 카드(시안 PRJ-01, SPEC AC15). issue_count=QA 결과 n건, open_issue_count=FAIL n건(resolved가 아닌 이슈)
+      required: [id, name, owner_id, figma_connected, github_connected, analysis_status, issue_count, open_issue_count, member_count, members_preview]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        owner_id: { type: string }
+        figma_connected: { type: boolean }
+        github_connected: { type: boolean }
+        analysis_status: { type: string, enum: [none, queued, running, succeeded, failed] }
+        last_analyzed_at: { type: string, format: date-time, nullable: true, description: 마지막으로 성공한 비교 분석의 끝난 시각 }
+        issue_count: { type: integer }
+        open_issue_count: { type: integer }
+        member_count: { type: integer }
+        members_preview:
+          type: array
+          maxItems: 3
+          description: 이름순 앞 3명
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
 
     Invitation:
       type: object
@@ -1397,7 +1426,7 @@ components:
         id: { type: string }
         name: { type: string }
         email: { type: string }
-        role: { type: string, enum: [designer, frontend, backend, planner] }
+        role: { type: string, enum: [designer, frontend, backend, planner], nullable: true, description: 'null=미지정(만든 사람은 역할 없이 시작, 2026-11-07)' }
 
     Notification:
       type: object
@@ -1430,7 +1459,7 @@ components:
             items:
               type: array
               items:
-                $ref: '#/components/schemas/Project'
+                $ref: '#/components/schemas/ProjectSummary'
         error: { type: object, nullable: true, example: null }
 
     ConnectRequest:
@@ -1477,7 +1506,8 @@ components:
         id: { type: string }
         name: { type: string }
         owner_id: { type: string }
-        my_role: { type: string, enum: [designer, frontend, backend, planner] }
+        description: { type: string, nullable: true }
+        my_role: { type: string, enum: [designer, frontend, backend, planner], nullable: true, description: null=미지정 }
         figma: { allOf: [{ $ref: '#/components/schemas/FigmaConnection' }], nullable: true }
         github: { allOf: [{ $ref: '#/components/schemas/GithubConnection' }], nullable: true }
         analysis_status: { type: string, enum: [none, queued, running, succeeded, failed] }
@@ -1572,6 +1602,7 @@ components:
           type: object
           properties:
             project_name: { type: string }
+            project_description: { type: string, nullable: true }
             invited_by_name: { type: string }
             email: { type: string }
             status: { type: string, enum: [pending, accepted, canceled, expired] }

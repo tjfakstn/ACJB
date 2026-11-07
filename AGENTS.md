@@ -23,7 +23,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 - **IssueReportContext**: 자유서술 텍스트 파싱 결과 — `screen`, `element`, `symptom`, `repro_steps`, `platform_scope`. 텍스트에 없는 값은 지어내지 않고 비워 `missing`에 담아 되물음
 - **Environment**: `platform`(aos/ios/web), `device`, `browser`, `deploy_stage`(local/staging/production) — QAIssue의 실제 발생 환경
 - **FigmaFrame**(`name`, `frame_url`) / **Screen**(`name`, `entry_condition`): 각각 디자인 기준 화면 / 배포된 실제 구현 화면. `StyleMismatch`가 이 둘을 비교
-- **Member**: QA에 참여하는 팀원 — 구글 로그인 이메일로 식별, 처음 로그인할 때 생성. `role`(designer/frontend/backend/planner)은 **프로젝트마다** 따로 있다(만들 때·수락할 때 본인이 고르고, 이후 변경은 소유자만)
+- **Member**: QA에 참여하는 팀원 — 구글 로그인 이메일로 식별, 처음 로그인할 때 생성. `role`(designer/frontend/backend/planner)은 **프로젝트마다** 따로 있다(초대받은 사람은 수락할 때 고르고, 만든 사람은 미지정으로 시작, 이후 변경은 소유자만)
 - **Project**: QA 단위 — 로그인한 사용자 누구나 만들고, 만든 사람이 소유자(owner). 멤버 제거·역할 변경·Figma/GitHub 연결·비교 분석·첫 QA 실행은 소유자만. 열면 작업공간 홈으로 간다
 - **Invitation**: 멤버가 구글 이메일로 보낸 초대 — `status`(pending/accepted/canceled/expired), 7일 만료(재전송하면 그 초대를 7일 연장). 같은 구글 계정으로 로그인해 수락해야 멤버가 된다. 시드 데이터로 멤버를 넣던 방식은 폐기(2026-11-04)
 

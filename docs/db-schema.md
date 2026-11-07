@@ -59,7 +59,8 @@ erDiagram
 | 컬럼 | 타입 | 제약 | 비고 |
 | --- | --- | --- | --- |
 | id | BIGINT | PK | |
-| name | VARCHAR(100) | NOT NULL | 사용자가 만드는 이름이라 UNIQUE를 두지 않는다(2026-11-04) |
+| name | VARCHAR(100) | NOT NULL | 사용자가 만드는 이름이라 UNIQUE를 두지 않는다(2026-11-04). 규칙(2~40자·허용 문자)은 서비스에서 검사 |
+| description | VARCHAR(200) | NULL | 선택(2026-11-07, V5) |
 | owner_id | BIGINT | FK→members, NOT NULL | 소유자. 만든 사람(AC16). 멤버 제거는 소유자만(AC19) |
 | figma_url | VARCHAR(500) | NULL | 연결한 Figma 링크(AC21). 접근 확인에 성공했을 때만 채운다 — 아래 figma_* 셋은 함께 채워지고 함께 비어 있다 |
 | figma_file_key | VARCHAR(100) | NULL | 링크에서 뽑은 파일 키 |
@@ -89,7 +90,7 @@ erDiagram
 | id | BIGINT | PK | |
 | project_id | BIGINT | FK→projects, NOT NULL | |
 | member_id | BIGINT | FK→members, NOT NULL | |
-| role | VARCHAR(20) | NOT NULL | designer / frontend / backend / planner — 이 프로젝트에서의 역할. 만들 때·수락할 때 본인이 고른다 |
+| role | VARCHAR(20) | **NULL** | designer / frontend / backend / planner — 이 프로젝트에서의 역할. 초대받은 사람은 수락할 때 고르고, 만든 사람은 NULL(미지정)로 시작한다. 이후 변경은 소유자만(2026-11-07, V5에서 NULL 허용) |
 | joined_at | DATETIME(6) | NOT NULL | |
 | | | **UNIQUE(project_id, member_id)** | 중복 가입 방지 |
 

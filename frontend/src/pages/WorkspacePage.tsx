@@ -60,7 +60,7 @@ export function WorkspacePage() {
     { label: '멤버 초대 및 역할 지정', done: hasOthers,
       hint: hasOthers ? `참여 ${detail.member_count}명 · 초대 대기 ${detail.pending_invitation_count}명` : '아직 초대한 멤버가 없어요 · 역할은 초대받은 사람이 수락할 때 골라요' },
     { label: 'Figma 디자인 파일 연결', done: !!detail.figma, hint: detail.figma ? `${detail.figma.file_name} › ${detail.figma.page_name}` : '새 프로젝트 마법사에서 연결해요' },
-    { label: 'GitHub 저장소 연결', done: !!detail.github, hint: detail.github ? `${detail.github.repo} · ${detail.github.default_branch}` : '새 프로젝트 마법사에서 연결해요' },
+    { label: 'GitHub 저장소 연결', done: !!detail.github, hint: detail.github ? `${detail.github.repo} · ${detail.github.branch} 브랜치` : '새 프로젝트 마법사에서 연결해요' },
     { label: '첫 QA 실행', done: detail.first_qa_status === 'succeeded', hint: `상태: ${RUN_LABELS[detail.first_qa_status]}` },
   ] : []
   const doneCount = checklist.filter((c) => c.done).length
@@ -178,7 +178,7 @@ export function WorkspacePage() {
                   <h2 className="text-sm font-bold text-gray-900">연결 상태</h2>
                   <div className="mt-4 space-y-3">
                     <Connection name="Figma" detail={detail.figma ? `${detail.figma.file_name} › ${detail.figma.page_name}` : null} />
-                    <Connection name="GitHub" detail={detail.github ? `${detail.github.repo} · ${detail.github.default_branch}` : null} />
+                    <Connection name="GitHub" detail={detail.github ? `${detail.github.repo} · ${detail.github.branch} 브랜치` : null} />
                   </div>
                   <p className="mt-3 text-xs text-qa-sub">연결은 소유자가 새 프로젝트 마법사에서 해요. 이미 만든 프로젝트의 연결 관리 화면은 아직 없어요.</p>
                 </section>

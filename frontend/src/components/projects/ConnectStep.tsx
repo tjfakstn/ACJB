@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ApiError, connectFigma, connectGithub, type Project } from '../../lib/api'
 import { Icon } from '../common/Icon'
 import { CloseButton, Stepper } from './WizardParts'
@@ -8,6 +8,7 @@ import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './wizardStyles'
 // 링크를 입력하고 칸을 벗어나거나 Enter를 누르면 서버가 실제 접근을 확인한다(SPEC AC21) — 링크 입력만으로는 연결되지 않는다.
 // 시안과 다른 점: GitHub는 공개 저장소만 연결한다(GitHub App 없음, 2026-11-07 결정) — CON-E4의 [GitHub에서 접근 허용] 대신
 // 공개 저장소로 바꾸라고 안내한다. [프로젝트 시작하기] 뒤의 비교 분석(CON-06)은 아직 없어 작업공간 홈으로 간다.
+// GitHub는 연결되면 분석할 브랜치를 고를 수 있다(처음엔 기본 브랜치, 2026-11-07).
 const GITHUB_PATTERN = /^(?:https?:\/\/)?(?:www\.)?github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+?(?:\.git)?\/?(?:[?#].*)?$/
 // Figma는 앱의 페이지 [공유하기]에서 복사한 페이지 링크만 받는다(2026-11-07): figma.com/design/{key}/{이름}?node-id={페이지}&t=…
 // 이 검사는 모양만 본다 — node-id가 실제로 페이지인지(프레임·섹션이 아닌지)는 서버가 Figma로 확인한다
@@ -46,6 +47,9 @@ interface ConnectStepProps {
 
 export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepProps) {
   const [github, setGithub] = useState({ url: '', checked: '', state: { kind: 'idle' } as State })
+  const [branches, setBranches] = useState<string[]>([])
+  const [branchError, setBranchError] = useState<string | null>(null)
+  const [switching, setSwitching] = useState(false)
   const [figma, setFigma] = useState({ url: '', checked: '', state: { kind: 'idle' } as State })
 
   /** force=[다시 시도]·[다시 확인] — 같은 링크도 다시 확인한다. 칸을 벗어날 때는 바뀐 링크만 확인한다 */
@@ -61,7 +65,7 @@ export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepPr
     set({ ...cur, checked: url, state: { kind: 'checking' } })
     try {
       const detail = service === 'github'
-        ? await connectGithub(project.id, url).then((c) => c.default_branch)
+        ? await connectGithub(project.id, url).then((c) => { setBranches(c.branches); setBranchError(null); return c.branch })
         : await connectFigma(project.id, url).then((c) => `${c.file_name} › ${c.page_name}`)
       set({ url, checked: url, state: { kind: 'connected', detail } })
     } catch (e) {
@@ -75,6 +79,20 @@ export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepPr
       }
       // 503 = 서버 Figma 토큰 문제 — 사용자 링크·권한 문제가 아니므로 서버가 준 문구를 그대로 보여준다
       set({ url, checked: url, state: { kind: 'failed', message: e instanceof ApiError && e.status === 503 ? e.message : undefined } })
+    }
+  }
+
+  /** 브랜치를 바꾸면 같은 링크와 새 브랜치로 다시 연결한다 — 서버가 브랜치가 있는지 확인한다 */
+  const changeBranch = async (branch: string) => {
+    setSwitching(true)
+    setBranchError(null)
+    try {
+      const c = await connectGithub(project.id, github.url.trim(), branch)
+      setGithub({ ...github, state: { kind: 'connected', detail: c.branch } })
+    } catch (e) {
+      setBranchError(e instanceof ApiError ? e.message : '브랜치를 바꾸지 못했어요.')
+    } finally {
+      setSwitching(false)
     }
   }
 
@@ -115,6 +133,20 @@ export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepPr
           value={github.url} state={github.state}
           onChange={(url) => setGithub({ ...github, url, state: github.state.kind === 'connected' ? github.state : { kind: 'idle' } })}
           onCheck={(force) => void check('github', force)} onReset={() => reset('github')}
+          extra={github.state.kind === 'connected' && branches.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="connect-github-branch" className="text-xs font-medium text-black">분석할 브랜치</label>
+              <div className="relative">
+                <select id="connect-github-branch" value={github.state.detail} disabled={switching}
+                  onChange={(e) => void changeBranch(e.target.value)}
+                  className="h-10 w-full appearance-none rounded-lg border border-qa-sub bg-white pl-3 pr-9 text-sm text-black outline-none focus:border-qa-primary disabled:bg-qa-surface">
+                  {(branches.includes(github.state.detail) ? branches : [github.state.detail, ...branches]).map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+                <Icon name="chevron-down" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black" />
+              </div>
+              {branchError && <span className="text-xs text-qa-warning">{branchError}</span>}
+            </div>
+          )}
         />
         <ServiceCard
           service="figma" title="Figma 연결" label="Figma 페이지 링크" placeholder="ex: https://www.figma.com/design/…?node-id=…"
@@ -150,12 +182,14 @@ interface ServiceCardProps {
   state: State
   /** 입력 칸 아래 안내 — 연결 전·오류일 때 보인다 */
   guide?: string
+  /** 입력 칸 아래 추가 칸(GitHub 브랜치 선택) */
+  extra?: ReactNode
   onChange: (value: string) => void
   onCheck: (force?: boolean) => void
   onReset: () => void
 }
 
-function ServiceCard({ service, title, label, placeholder, value, state, guide, onChange, onCheck, onReset }: ServiceCardProps) {
+function ServiceCard({ service, title, label, placeholder, value, state, guide, extra, onChange, onCheck, onReset }: ServiceCardProps) {
   const connected = state.kind === 'connected'
   const warn = state.kind === 'forbidden'
   const error = state.kind === 'failed' || state.kind === 'format'
@@ -187,6 +221,7 @@ function ServiceCard({ service, title, label, placeholder, value, state, guide, 
       {guide && state.kind !== 'connected' && state.kind !== 'checking' && (
         <p className="flex gap-1.5 text-xs leading-5 text-qa-text-sub"><Icon name="alert-circle" className="mt-0.5 h-3.5 w-3.5 flex-none" />{guide}</p>
       )}
+      {extra}
       <StatusLine service={service} state={state} onRetry={() => onCheck(true)} onReset={onReset} />
     </div>
   )
@@ -217,7 +252,7 @@ function StatusLine({ service, state, onRetry, onReset }: { service: Service; st
         <div className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1 truncate text-xs text-qa-success">
             <Icon name="check" className="h-3.5 w-3.5 flex-none" />
-            {service === 'figma' ? `보기 권한 확인됨 · ${state.detail}` : `읽기 권한 확인됨 · ${state.detail}`}
+            {service === 'figma' ? `보기 권한 확인됨 · ${state.detail}` : `읽기 권한 확인됨 · ${state.detail} 브랜치`}
           </span>
           {action('변경', onReset)}
         </div>

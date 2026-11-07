@@ -148,7 +148,9 @@ export async function listMembers(projectId: string): Promise<ProjectMember[]> {
 }
 
 export interface FigmaConnection { url: string; file_key: string; file_name: string; page_id: string; page_name: string; connected_at: string }
-export interface GithubConnection { url: string; repo: string; default_branch: string; connected_at: string }
+export interface GithubConnection { url: string; repo: string; default_branch: string; branch: string; connected_at: string }
+/** 연결 응답에만 — 고를 수 있는 브랜치(이름순, 최대 100개) */
+export interface GithubConnectResult extends GithubConnection { branches: string[] }
 
 /** 소유자만. Figma 앱 페이지 [공유하기]로 복사한 페이지 링크만 받는다. 보기 권한 확인 후 저장 — 400 페이지 링크 아님, 422, 502(SPEC AC21) */
 export function connectFigma(projectId: string, url: string): Promise<FigmaConnection> {
@@ -156,8 +158,8 @@ export function connectFigma(projectId: string, url: string): Promise<FigmaConne
 }
 
 /** 소유자만. 공개 저장소만 — GitHub 404(비공개·없는 저장소)는 422(SPEC AC21) */
-export function connectGithub(projectId: string, url: string): Promise<GithubConnection> {
-  return request<GithubConnection>('PUT', `/api/v1/projects/${projectId}/connections/github`, { url })
+export function connectGithub(projectId: string, url: string, branch?: string): Promise<GithubConnectResult> {
+  return request<GithubConnectResult>('PUT', `/api/v1/projects/${projectId}/connections/github`, branch ? { url, branch } : { url })
 }
 
 /** 소유자만 — 소유자 본인 역할도 바꿀 수 있다(SPEC AC24) */

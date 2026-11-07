@@ -19,6 +19,8 @@ public record ProjectDetailResponse(
     String name,
     String description,
     String ownerId,
+    /** 만든 시각 — 시안 WS "프로젝트 정보" 생성일(2026-11-07 추가) */
+    Instant createdAt,
     /** null=미지정 */
     String myRole,
     FigmaConnection figma,

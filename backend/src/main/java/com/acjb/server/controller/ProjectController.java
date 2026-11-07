@@ -25,6 +25,7 @@ import com.acjb.server.dto.GithubConnectRequest;
 import com.acjb.server.dto.CreateProjectRequest;
 import com.acjb.server.service.ConnectionService;
 import com.acjb.server.service.ProjectCommandService;
+import com.acjb.server.service.ProjectDeletionService;
 import com.acjb.server.service.ProjectQueryService;
 
 /**
@@ -38,14 +39,23 @@ public class ProjectController {
     private final ProjectQueryService service;
     private final ProjectCommandService commands;
     private final ConnectionService connections;
+    private final ProjectDeletionService deletion;
     private final CurrentMember currentMember;
 
     public ProjectController(ProjectQueryService service, ProjectCommandService commands, ConnectionService connections,
-                             CurrentMember currentMember) {
+                             ProjectDeletionService deletion, CurrentMember currentMember) {
         this.service = service;
         this.commands = commands;
         this.connections = connections;
+        this.deletion = deletion;
         this.currentMember = currentMember;
+    }
+
+    /** AC26 — 소유자만, 되돌릴 수 없다. 이름 입력 확인은 화면에서 */
+    @DeleteMapping("/{projectId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long projectId, @AuthenticationPrincipal OAuth2User principal) {
+        deletion.delete(projectId, currentMember.require(principal));
     }
 
     /** AC21 — Figma 파일 연결(소유자만, 보기 권한 확인 후 저장) */

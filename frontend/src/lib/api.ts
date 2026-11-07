@@ -199,6 +199,11 @@ export function getProjectDetail(projectId: string): Promise<ProjectDetail> {
   return request<ProjectDetail>('GET', `/api/v1/projects/${projectId}`)
 }
 
+/** 소유자만 — 프로젝트와 그 안의 데이터를 모두 지우고 되돌릴 수 없다. 실행 중이면 409 NOT_READY(SPEC AC26) */
+export function deleteProject(projectId: string): Promise<void> {
+  return request<void>('DELETE', `/api/v1/projects/${projectId}`)
+}
+
 export function removeMember(projectId: string, memberId: string): Promise<void> {
   return request<void>('DELETE', `/api/v1/projects/${projectId}/members/${memberId}`)
 }

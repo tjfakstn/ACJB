@@ -6,6 +6,7 @@ import {
 } from '../lib/api'
 import { AppHeader } from '../components/projects/AppHeader'
 import { WorkspaceSidebar } from '../components/members/WorkspaceSidebar'
+import { DeleteProjectDialog } from '../components/projects/DeleteProjectDialog'
 
 // 프로젝트 작업공간 홈(시안 WS-01·01N·01M·02, SPEC AC25). 프로젝트를 열면 여기로 온다.
 // 시안과 다른 점: Figma·GitHub 연결, 비교 분석, 첫 QA 실행은 아직 서버에 없어(AC21~AC23 구현 전) 상태만 보여주고 버튼은 잠가 둔다.
@@ -27,6 +28,7 @@ export function WorkspacePage() {
   const [me, setMe] = useState<Me | null>(null)
   const [detail, setDetail] = useState<ProjectDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -185,8 +187,25 @@ export function WorkspacePage() {
               </div>
             </div>
           )}
+
+          {/* 프로젝트 삭제(AC26) — 소유자에게만, 맨 아래에 둬서 실수로 누르지 않게 한다 */}
+          {detail && isOwner && (
+            <section className="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-qa-warning/40 bg-white p-6">
+              <div>
+                <h2 className="text-sm font-bold text-qa-warning">프로젝트 삭제</h2>
+                <p className="mt-1 text-xs text-qa-text-sub">프로젝트와 그 안의 이슈·재검증·알림·초대·연결 정보를 모두 지워요. 되돌릴 수 없어요.</p>
+              </div>
+              <button type="button" onClick={() => setDeleteOpen(true)}
+                className="h-10 flex-none whitespace-nowrap rounded-lg border border-qa-warning bg-white px-4 text-sm font-medium text-qa-warning hover:bg-qa-warning/5">
+                프로젝트 삭제
+              </button>
+            </section>
+          )}
         </main>
       </div>
+      {deleteOpen && detail && (
+        <DeleteProjectDialog project={detail} onClose={() => setDeleteOpen(false)} onDeleted={() => navigate('/app/projects', { replace: true })} />
+      )}
     </div>
   )
 }

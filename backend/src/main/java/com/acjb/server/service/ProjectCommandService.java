@@ -84,14 +84,12 @@ public class ProjectCommandService {
         if (membership == null) {
             throw ApiException.notFound("이 프로젝트의 멤버가 아닙니다.");
         }
-        for (QAIssue issue : issues.findByProjectIdAndAssignedToIdAndStatusNot(projectId, targetId, IssueStatus.RESOLVED)) {
-            issue.assignTo(null);
-        }
+        // 이슈는 팀에 배정되므로 사람이 빠져도 이슈는 그대로다(AC19, 2026-11-08)
         projectMembers.delete(membership);
     }
 
     /**
-     * AC24 — 소유자만(본인 역할 포함). 이슈·담당자·알림은 바꾸지 않는다(알림 종류 3개 고정, N5).
+     * AC24 — 소유자만(본인 역할 포함). 이슈·담당 팀·알림은 바꾸지 않는다(알림 종류 3개 고정, N5).
      * 검사 순서: 소유자(403) → 역할 값(400) → 대상 멤버(404)
      */
     @Transactional

@@ -45,7 +45,7 @@ class DomainPersistenceTest {
             project, "아이콘이 너무 커요", "홈 화면 상단 알림 아이콘", List.of("홈 진입", "아이콘 확인", "크기 비교"),
             PlatformScope.AOS, new Environment(EnvPlatform.AOS, "Pixel 8", null, DeployStage.STAGING),
             List.of("https://example.com/a.png"), null,
-            mismatch, assignee, reporter));
+            mismatch, MemberRole.BACKEND, reporter));
         histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
         verifications.save(new Verification(issue, VerificationResult.FAIL, "해당 화면만", reporter));
         notifications.save(new Notification(issue, NotificationEvent.ISSUE_CREATED, assignee, "in_app"));
@@ -74,7 +74,7 @@ class DomainPersistenceTest {
 
         QAIssue loaded = issues.findById(issue.getId()).orElseThrow();
         assertThat(loaded.getStyleMismatch()).isNull();
-        assertThat(loaded.getAssignedTo()).isNull();
+        assertThat(loaded.getAssignedTeam()).isNull();
     }
 
     /** 프로젝트는 소유자가 있어야 만들 수 있다(AC16·N15) — 테스트마다 소유자용 멤버를 따로 만든다 */

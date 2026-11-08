@@ -44,8 +44,8 @@ import jakarta.servlet.http.Cookie;
 
 /**
  * PATCH /projects/{projectId}/qa-issues/{issueId}. 메서드 이름 앞의 id는 tests/harness/golden_cases.yaml 케이스와 대응한다.
- * 등장인물: reporter(member-1, 등록자), assignee(member-2, 담당자), other(member-3, 같은 프로젝트의 다른 멤버),
- * outsider(member-9, 다른 프로젝트 멤버).
+ * 등장인물: reporter(member-1, 등록자·디자인), assignee(member-2, 담당 팀 프론트엔드의 유일한 멤버), other(member-3, 백엔드),
+ * outsider(member-9, 다른 프로젝트 멤버). 2026-11-08부터 담당은 팀(assigned_team) — issue(member, …)는 그 멤버의 역할을 담당 팀으로 둔다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -78,16 +78,19 @@ class QaIssuePatchApiTest {
         other = members.save(new Member("p-other@test.dev", "다른 멤버"));
         outsider = members.save(new Member("p-outsider@test.dev", "외부"));
         projectMembers.save(new ProjectMember(project, reporter, MemberRole.DESIGNER));
-        projectMembers.save(new ProjectMember(project, assignee, MemberRole.BACKEND));
+        projectMembers.save(new ProjectMember(project, assignee, MemberRole.FRONTEND));
         projectMembers.save(new ProjectMember(project, other, MemberRole.BACKEND));
         projectMembers.save(new ProjectMember(otherProject, outsider, MemberRole.PLANNER));
     }
 
     /** 등록 API를 거친 것과 같은 상태(needs_check + 이력 1건)를 만든다. status가 다르면 그 상태로 맞춘다 */
-    private QAIssue issue(Member assignedTo, IssueStatus status) {
+    private QAIssue issue(Member teamMember, IssueStatus status) {
+        MemberRole team = teamMember == null ? null
+            : projectMembers.findByProjectIdAndMemberId(project.getId(), teamMember.getId()).orElseThrow().getRole();
+        Member assignedTo = teamMember;
         QAIssue issue = issues.save(new QAIssue(project, "아이콘이 너무 커요", "홈 화면 상단 알림 아이콘",
             List.of("홈 진입", "상단 알림 아이콘 확인"), PlatformScope.AOS,
-            new Environment(EnvPlatform.AOS, "Pixel 8", null, DeployStage.STAGING), List.of(), null, null, assignedTo, reporter));
+            new Environment(EnvPlatform.AOS, "Pixel 8", null, DeployStage.STAGING), List.of(), null, null, team, reporter));
         histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
         if (status != IssueStatus.NEEDS_CHECK) {
             issue.changeStatus(status);
@@ -173,7 +176,7 @@ class QaIssuePatchApiTest {
     // --- AC13: 권한 ---
 
     @Test
-    void au003_담당자가_아닌_멤버의_fixed는_403이고_상태_이력_알림이_그대로다() throws Exception {
+    void au003_담당_팀_역할이_아닌_멤버의_fixed는_403이고_상태_이력_알림이_그대로다() throws Exception {
         QAIssue issue = issue(assignee, IssueStatus.NEEDS_CHECK);
         long before = historyCount(issue);
         patchAs(other, issue, "{\"status\":\"fixed\"}")
@@ -185,13 +188,13 @@ class QaIssuePatchApiTest {
     }
 
     @Test
-    void au003_등록자도_담당자가_아니면_fixed로_바꿀_수_없다() throws Exception {
+    void au003_등록자도_담당_팀_역할이_아니면_fixed로_바꿀_수_없다() throws Exception {
         QAIssue issue = issue(assignee, IssueStatus.NEEDS_CHECK);
         patchAs(reporter, issue, "{\"status\":\"fixed\"}").andExpect(status().isForbidden());
     }
 
     @Test
-    void au004_담당자가_없는_이슈는_누구도_fixed로_바꿀_수_없다() throws Exception {
+    void au004_담당_팀이_없는_이슈는_누구도_fixed로_바꿀_수_없다() throws Exception {
         QAIssue issue = issue(null, IssueStatus.NEEDS_CHECK);
         patchAs(reporter, issue, "{\"status\":\"fixed\"}")
             .andExpect(status().isForbidden())
@@ -205,74 +208,93 @@ class QaIssuePatchApiTest {
     }
 
     @Test
-    void au007_프로젝트_멤버가_아닌_사람을_담당자로_지정하면_400이고_알림이_없다() throws Exception {
+    void au007_정해진_값이_아닌_담당_팀을_지정하면_400이고_알림이_없다() throws Exception {
         QAIssue issue = issue(assignee, IssueStatus.NEEDS_CHECK);
-        patchAs(reporter, issue, "{\"assigned_to\":\"%d\"}".formatted(outsider.getId()))
+        patchAs(reporter, issue, "{\"assigned_team\":\"qa\"}")
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.success").value(false));
         assertThat(notifications.count()).isZero();
         em.clear();
-        assertThat(issues.findById(issue.getId()).orElseThrow().getAssignedTo().getId()).isEqualTo(assignee.getId());
+        assertThat(issues.findById(issue.getId()).orElseThrow().getAssignedTeam()).isEqualTo(MemberRole.FRONTEND);
     }
 
-    // --- AC3 · N5: 담당자 지정 ---
+    // --- AC3 · N5: 담당 팀 지정 ---
 
     @Test
-    void nt003_담당자가_없던_이슈에_지정하면_그_담당자에게_issue_created_1건() throws Exception {
+    void nt003_담당_팀이_없던_이슈에_지정하면_그_팀_역할_멤버에게_issue_created_1건() throws Exception {
         QAIssue issue = issue(null, IssueStatus.NEEDS_CHECK);
-        patchAs(reporter, issue, "{\"assigned_to\":\"%d\"}".formatted(other.getId()))
+        patchAs(reporter, issue, "{\"assigned_team\":\"backend\"}")
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.assigned_to").value(String.valueOf(other.getId())));
+            .andExpect(jsonPath("$.data.assigned_team").value("backend"));
         assertThat(notifications.countByIssueIdAndEvent(issue.getId(), NotificationEvent.ISSUE_CREATED)).isEqualTo(1);
         assertThat(notifications.findAll()).singleElement()
             .satisfies(n -> assertThat(n.getRecipient().getId()).isEqualTo(other.getId()));
     }
 
     @Test
-    void 담당자를_다른_사람으로_바꾸면_새_담당자에게_1건() throws Exception {
+    void nt007_담당_팀_역할_멤버가_여럿이면_각각에게_1건씩() throws Exception {
+        Member second = members.save(new Member("p-front2@test.dev", "프론트2"));
+        projectMembers.save(new ProjectMember(project, second, MemberRole.FRONTEND));
+        QAIssue issue = issue(null, IssueStatus.NEEDS_CHECK);
+        patchAs(reporter, issue, "{\"assigned_team\":\"frontend\"}").andExpect(status().isOk());
+        assertThat(notifications.findAll()).extracting(n -> n.getRecipient().getId())
+            .containsExactlyInAnyOrder(assignee.getId(), second.getId());
+    }
+
+    @Test
+    void nt008_그_역할_멤버가_없으면_지정은_되고_알림은_없다() throws Exception {
+        QAIssue issue = issue(null, IssueStatus.NEEDS_CHECK);
+        patchAs(reporter, issue, "{\"assigned_team\":\"planner\"}")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.assigned_team").value("planner"));
+        assertThat(notifications.count()).isZero();
+    }
+
+    @Test
+    void 담당_팀을_바꾸면_새_팀_역할_멤버에게_1건() throws Exception {
         QAIssue issue = issue(assignee, IssueStatus.NEEDS_CHECK);
-        patchAs(other, issue, "{\"assigned_to\":\"%d\"}".formatted(other.getId())).andExpect(status().isOk());
+        patchAs(other, issue, "{\"assigned_team\":\"backend\"}").andExpect(status().isOk());
         assertThat(notifications.findAll()).singleElement()
             .satisfies(n -> assertThat(n.getRecipient().getId()).isEqualTo(other.getId()));
     }
 
     @Test
-    void ng004_같은_담당자를_다시_지정하면_200이고_알림이_없다() throws Exception {
+    void ng004_같은_담당_팀을_다시_지정하면_200이고_알림이_없다() throws Exception {
         QAIssue issue = issue(assignee, IssueStatus.NEEDS_CHECK);
-        patchAs(reporter, issue, "{\"assigned_to\":\"%d\"}".formatted(assignee.getId())).andExpect(status().isOk());
+        patchAs(reporter, issue, "{\"assigned_team\":\"frontend\"}").andExpect(status().isOk());
         assertThat(notifications.count()).isZero();
     }
 
     @Test
-    void assigned_to를_null로_비우면_400() throws Exception {
+    void assigned_team을_null로_비우면_400() throws Exception {
         QAIssue issue = issue(assignee, IssueStatus.NEEDS_CHECK);
-        patchAs(reporter, issue, "{\"assigned_to\":null}")
+        patchAs(reporter, issue, "{\"assigned_team\":null}")
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.error.message", containsString("assigned_to")));
+            .andExpect(jsonPath("$.error.message", containsString("assigned_team")));
     }
 
-    // --- 함께 보낸 경우 (변경 전 담당자 기준 — 2026-11-04 설만수 결정) ---
+    // --- 함께 보낸 경우 (변경 전 담당 팀 기준 — 2026-11-04 설만수 결정, 2026-11-08 팀으로) ---
 
     @Test
-    void 담당자가_fixed와_재지정을_함께_보내면_둘_다_반영되고_알림이_각각_1건() throws Exception {
+    void 담당_팀_멤버가_fixed와_팀_변경을_함께_보내면_둘_다_반영되고_알림이_각각_1건() throws Exception {
         QAIssue issue = issue(assignee, IssueStatus.NEEDS_CHECK);
-        patchAs(assignee, issue, "{\"status\":\"fixed\",\"assigned_to\":\"%d\"}".formatted(other.getId()))
+        patchAs(assignee, issue, "{\"status\":\"fixed\",\"assigned_team\":\"backend\"}")
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.status").value("fixed"))
-            .andExpect(jsonPath("$.data.assigned_to").value(String.valueOf(other.getId())));
+            .andExpect(jsonPath("$.data.assigned_team").value("backend"));
         assertThat(notifications.countByIssueIdAndEvent(issue.getId(), NotificationEvent.FIXED)).isEqualTo(1);
         assertThat(notifications.countByIssueIdAndEvent(issue.getId(), NotificationEvent.ISSUE_CREATED)).isEqualTo(1);
     }
 
     @Test
-    void 자기를_담당자로_지정하면서_fixed를_요청해도_변경_전_담당자가_아니면_403이고_담당자도_안_바뀐다() throws Exception {
+    void 자기_팀으로_바꾸면서_fixed를_요청해도_변경_전_팀이_아니면_403이고_팀도_안_바뀐다() throws Exception {
         QAIssue issue = issue(assignee, IssueStatus.NEEDS_CHECK);
-        patchAs(other, issue, "{\"status\":\"fixed\",\"assigned_to\":\"%d\"}".formatted(other.getId()))
+        patchAs(other, issue, "{\"status\":\"fixed\",\"assigned_team\":\"backend\"}")
             .andExpect(status().isForbidden());
         assertThat(notifications.count()).isZero();
         em.clear();
         QAIssue reloaded = issues.findById(issue.getId()).orElseThrow();
-        assertThat(reloaded.getAssignedTo().getId()).isEqualTo(assignee.getId());
+        assertThat(reloaded.getAssignedTeam()).isEqualTo(MemberRole.FRONTEND);
         assertThat(reloaded.getStatus()).isEqualTo(IssueStatus.NEEDS_CHECK);
     }
 

@@ -1,0 +1,26 @@
+package com.acjb.server.qa;
+
+import java.util.Map;
+
+import com.acjb.server.domain.StyleProperty;
+
+/** 첫 QA 이슈 설명 문구 */
+final class QaText {
+
+    private static final Map<StyleProperty, String> LABELS = Map.of(
+        StyleProperty.COLOR, "색상",
+        StyleProperty.FONT_WEIGHT, "글자 굵기",
+        StyleProperty.FONT_FAMILY, "글꼴",
+        StyleProperty.RADIUS, "모서리",
+        StyleProperty.SHADOW, "그림자",
+        StyleProperty.SPACING, "간격",
+        StyleProperty.TEXT, "텍스트");
+
+    private QaText() {
+    }
+
+    static String description(String nodeName, StyleProperty property, String expected, String actual, boolean demo) {
+        String text = "'" + nodeName + "'의 " + LABELS.get(property) + "이(가) 시안과 달라요 — 시안 " + expected + ", 구현 " + actual;
+        return demo ? "[시연용] " + text : text;
+    }
+}

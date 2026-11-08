@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.acjb.server.domain.IssueSource;
 import com.acjb.server.domain.IssueStatus;
+import com.acjb.server.domain.MemberRole;
 import com.acjb.server.domain.QAIssue;
 
 import jakarta.persistence.LockModeType;
@@ -20,24 +21,27 @@ public interface QAIssueRepository extends JpaRepository<QAIssue, Long> {
 
     List<QAIssue> findByProjectIdAndStatusOrderByCreatedAtDescIdDesc(Long projectId, IssueStatus status);
 
-    /** GET /qa-issues 목록. status·source·assigned_to는 없으면 거르지 않는다. 정렬 고정(created_at desc, id desc) */
+    /** GET /qa-issues 목록. status·source·assigned_team은 없으면 거르지 않는다. 정렬 고정(created_at desc, id desc) */
     @Query("""
         select i from QAIssue i
         where i.project.id = :projectId
           and (:status is null or i.status = :status)
           and (:source is null or i.source = :source)
-          and (:assignedTo is null or i.assignedTo.id = :assignedTo)
+          and (:team is null or i.assignedTeam = :team)
         order by i.createdAt desc, i.id desc
         """)
     List<QAIssue> search(@Param("projectId") Long projectId, @Param("status") IssueStatus status,
-                         @Param("source") IssueSource source, @Param("assignedTo") Long assignedTo);
+                         @Param("source") IssueSource source, @Param("team") MemberRole team);
+
+    /** Re-QA 대상 — fixed인 첫 QA 이슈(AC28). 정해진 순서(id asc) */
+    List<QAIssue> findByProjectIdAndStatusAndSourceOrderByIdAsc(Long projectId, IssueStatus status, IssueSource source);
+
+    long countByProjectIdAndStatusAndSource(Long projectId, IssueStatus status, IssueSource source);
 
     /** 작업공간 홈의 상태별 이슈 수(AC25) — [status, count] 행. 없는 상태는 행이 없다 */
     @Query("select i.status, count(i) from QAIssue i where i.project.id = :projectId group by i.status")
     List<Object[]> countByStatus(@Param("projectId") Long projectId);
 
-    /** AC19 — 제거되는 멤버가 담당자인 미해결 이슈(담당자를 비울 대상) */
-    List<QAIssue> findByProjectIdAndAssignedToIdAndStatusNot(Long projectId, Long assignedToId, IssueStatus status);
 
     /** 경로의 projectId와 함께 찾아, 다른 프로젝트 이슈가 섞이지 않게 한다(N10) */
     Optional<QAIssue> findByIdAndProjectId(Long id, Long projectId);

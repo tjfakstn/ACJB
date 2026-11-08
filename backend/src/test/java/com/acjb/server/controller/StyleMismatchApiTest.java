@@ -135,7 +135,7 @@ class StyleMismatchApiTest {
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.data.status").value("needs_check"))
             .andExpect(jsonPath("$.data.reported_by").value(String.valueOf(me.getId())))
-            .andExpect(jsonPath("$.data.assigned_to").isEmpty())
+            .andExpect(jsonPath("$.data.assigned_team").isEmpty())
             .andExpect(jsonPath("$.data.style_mismatch.id").value(String.valueOf(m.getId())))
             .andExpect(jsonPath("$.data.style_mismatch.expected_value").value("Gray 80"))
             .andExpect(jsonPath("$.data.style_mismatch.actual_value").value("#333333"))
@@ -162,15 +162,15 @@ class StyleMismatchApiTest {
     }
 
     @Test
-    void body의_assigned_to와_reported_by는_받지_않는다() throws Exception {
+    void body의_assigned_team과_reported_by는_받지_않는다() throws Exception {
         Member other = members.save(new Member("sm-other@test.dev", "다른"));
         projectMembers.save(new ProjectMember(project, other, MemberRole.BACKEND));
         StyleMismatch m = mismatches.save(StyleMismatch.manual(project, null, null, StyleProperty.COLOR, "a", "b"));
         createIssue(m, """
             {"description":"d","screen_location":"홈","repro_steps":["홈 진입"],"platform_scope":"common",
-             "assigned_to":"%d","reported_by":"%d"}""".formatted(other.getId(), other.getId()))
+             "assigned_team":"backend","reported_by":"%d"}""".formatted(other.getId()))
             .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.data.assigned_to").isEmpty())
+            .andExpect(jsonPath("$.data.assigned_team").isEmpty())
             .andExpect(jsonPath("$.data.reported_by").value(String.valueOf(me.getId())));
         assertThat(notifications.count()).isZero();
     }

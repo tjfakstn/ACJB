@@ -16,6 +16,7 @@ import com.acjb.server.domain.Environment;
 import com.acjb.server.domain.IssueSource;
 import com.acjb.server.domain.IssueStatus;
 import com.acjb.server.domain.Member;
+import com.acjb.server.domain.MemberRole;
 import com.acjb.server.domain.Notification;
 import com.acjb.server.domain.NotificationEvent;
 import com.acjb.server.domain.PlatformScope;
@@ -64,13 +65,15 @@ public class QaIssueService {
     private final StyleMismatchRepository mismatches;
     private final StatusHistoryRepository histories;
     private final NotificationRepository notifications;
+    private final TeamNotifier teamNotifier;
 
     private final ApplicationEventPublisher events;
 
     public QaIssueService(QAIssueRepository issues, ProjectRepository projects, MemberRepository members,
                           ProjectMemberRepository projectMembers, StyleMismatchRepository mismatches,
                           StatusHistoryRepository histories, NotificationRepository notifications,
-                          ApplicationEventPublisher events) {
+                          TeamNotifier teamNotifier, ApplicationEventPublisher events) {
+        this.teamNotifier = teamNotifier;
         this.events = events;
         this.issues = issues;
         this.projects = projects;
@@ -89,7 +92,7 @@ public class QaIssueService {
     /**
      * POST /style-mismatches/{mismatchId}/issues — 이미 기록된 StyleMismatch를 연결해 이슈를 만든다.
      * 재현 정보는 요청에서 받고(AC1, description도 SPEC AC1대로 필수), 검사·저장 규칙은 일반 등록과 같다.
-     * 명세 body에 없는 assigned_to·screenshots·figma_link는 받지 않는다 — 담당자는 등록 후 PATCH로 지정한다.
+     * 명세 body에 없는 assigned_team·screenshots·figma_link는 받지 않는다 — 담당 팀은 등록 후 PATCH로 지정한다.
      */
     @Transactional
     public QaIssueResponse createFromMismatch(Long projectId, String mismatchId, CreateIssueFromMismatchRequest req, Member reporter) {
@@ -127,7 +130,7 @@ public class QaIssueService {
 
         Project project = projects.findById(projectId)
             .orElseThrow(() -> ApiException.notFound("프로젝트를 찾을 수 없습니다."));
-        Member assignee = resolveAssignee(projectId, req.assignedTo());
+        MemberRole team = req.assignedTeam() == null ? null : Teams.parse(req.assignedTeam());
 
         StyleMismatch existing = existingMismatchId == null ? null
             : mismatches.findByIdAndProjectId(existingMismatchId, projectId)
@@ -140,13 +143,11 @@ public class QaIssueService {
             mismatchInput.expectedValue(), mismatchInput.actualValue()));
 
         QAIssue issue = issues.save(new QAIssue(project, req.description(), req.screenLocation(), req.reproSteps(),
-            platformScope, environment, screenshots, figmaLink, mismatch, assignee, reporter));
+            platformScope, environment, screenshots, figmaLink, mismatch, team, reporter));
         // 등록 시점의 needs_check도 이력 1건으로 남긴다(db-schema.md status_histories)
         StatusHistory first = histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
-        // AC3: 담당자가 있을 때만 정확히 1건
-        if (assignee != null) {
-            notifications.save(new Notification(issue, NotificationEvent.ISSUE_CREATED, assignee, IN_APP));
-        }
+        // AC3: 담당 팀이 있으면 그 역할 멤버 각각에게 1건씩(없으면 만들지 않는다)
+        teamNotifier.notifyTeam(issue, team, NotificationEvent.ISSUE_CREATED);
         issues.flush();
         // 이슈(와 함께 만든 스타일 차이)는 재검증 범위 제안(AC20)의 검색 문서가 된다 — 커밋 뒤 임베딩을 만든다
         events.publishEvent(new EmbeddingSourcesChanged(projectId));
@@ -154,11 +155,11 @@ public class QaIssueService {
     }
 
     @Transactional(readOnly = true)
-    public QaIssueListResponse list(Long projectId, String status, String source, String assignedTo) {
+    public QaIssueListResponse list(Long projectId, String status, String source, String assignedTeam) {
         IssueStatus statusFilter = status == null ? null : parseEnum(IssueStatus.class, status, "status");
         IssueSource sourceFilter = source == null ? null : parseEnum(IssueSource.class, source, "source");
-        Long assigneeFilter = assignedTo == null ? null : parseId(assignedTo, "assigned_to");
-        List<QaIssueResponse> items = issues.search(projectId, statusFilter, sourceFilter, assigneeFilter).stream()
+        MemberRole teamFilter = assignedTeam == null ? null : Teams.parse(assignedTeam);
+        List<QaIssueResponse> items = issues.search(projectId, statusFilter, sourceFilter, teamFilter).stream()
             .map(issue -> QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId())))
             .toList();
         return new QaIssueListResponse(items, items.size());
@@ -173,18 +174,6 @@ public class QaIssueService {
             throw ApiException.notFound("이슈를 찾을 수 없습니다.");
         }
         return QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()));
-    }
-
-    private Member resolveAssignee(Long projectId, String assignedTo) {
-        if (assignedTo == null) {
-            return null;
-        }
-        Long memberId = parseId(assignedTo, "assigned_to");
-        // AC13: 그 프로젝트 멤버가 아닌 사람을 지정하면 400
-        if (!projectMembers.existsByProjectIdAndMemberId(projectId, memberId)) {
-            throw ApiException.badRequest("assigned_to는 이 프로젝트의 멤버여야 합니다.");
-        }
-        return members.getReferenceById(memberId);
     }
 
     /** AC2: expected_value와 actual_value가 둘 다 있어야 한다. 빠진 값을 추론하거나 채우지 않는다(N3) */

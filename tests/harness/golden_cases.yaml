@@ -52,7 +52,7 @@ cases:
 
   - id: nt-001
     ac: AC3
-    description: 담당자를 지정해 이슈를 등록하면 담당자에게 Notification(issue_created)이 정확히 1건 생성된다
+    description: 담당 팀을 지정해 이슈를 등록하면 그 팀 역할 멤버에게 Notification(issue_created)이 정확히 1건 생성된다
     input:
       endpoint: POST /projects/{projectId}/qa-issues
       body:
@@ -60,12 +60,13 @@ cases:
         screen_location: "홈 화면"
         repro_steps: ["홈 진입"]
         platform_scope: "common"
-        assigned_to: "member-2"
+        assigned_team: "frontend"
+      precondition: 역할이 frontend인 멤버는 member-2 하나
     expected:
       status: 201
       followup:
-        description: assigned_to(member-2)에게 생성된 Notification 수를 센다
-        expected_notification_count_for_assignee: 1
+        description: 역할이 frontend인 멤버(member-2)에게 생성된 Notification 수를 센다
+        expected_notification_count_per_team_member: 1
         expected_notification_event: "issue_created"
 
   - id: nt-002
@@ -73,7 +74,7 @@ cases:
     description: 이슈 상태를 fixed로 바꾸면 등록자에게 Notification(fixed)이 정확히 1건 생성된다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      actor: 이슈의 assigned_to  # AC13
+      actor: 역할이 이슈의 assigned_team인 멤버  # AC13
       body: { status: "fixed" }
     expected:
       status: 200
@@ -111,7 +112,7 @@ cases:
     description: 허용된 상태 전이(needs_check → fixed)는 성공하고 status_history에 남는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      actor: 이슈의 assigned_to  # AC13
+      actor: 역할이 이슈의 assigned_team인 멤버  # AC13
       precondition: 이슈 status가 needs_check
       body: { status: "fixed" }
     expected:
@@ -159,22 +160,22 @@ cases:
 
   - id: nt-003
     ac: AC3
-    description: 담당자가 없던 이슈에 PATCH로 assigned_to를 새로 지정하면 그 담당자에게 Notification(issue_created)이 정확히 1건 생성된다
+    description: 담당 팀이 없던 이슈에 PATCH로 assigned_team을 새로 지정하면 그 팀 역할 멤버에게 Notification(issue_created)이 정확히 1건 생성된다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      precondition: 이슈에 assigned_to가 없음(null)
-      body: { assigned_to: "member-3" }
+      precondition: 이슈에 assigned_team이 없음(null), 역할이 designer인 멤버는 member-3 하나
+      body: { assigned_team: "designer" }
     expected:
       status: 200
-      body: { data: { assigned_to: "member-3" } }
+      body: { data: { assigned_team: "designer" } }
       followup:
-        description: assigned_to(member-3)에게 생성된 Notification 수를 센다
-        expected_notification_count_for_assignee: 1
+        description: 역할이 designer인 멤버(member-3)에게 생성된 Notification 수를 센다
+        expected_notification_count_per_team_member: 1
         expected_notification_event: "issue_created"
 
   - id: nt-004
     ac: AC3
-    description: 담당자를 지정하지 않고 이슈를 등록하면 Notification이 생성되지 않는다
+    description: 담당 팀을 지정하지 않고 이슈를 등록하면 Notification이 생성되지 않는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues
       body:
@@ -182,7 +183,7 @@ cases:
         screen_location: "결제 화면 총액"
         repro_steps: ["결제 화면 진입"]
         platform_scope: "ios"
-        # assigned_to 없음
+        # assigned_team 없음
     expected:
       status: 201
       followup:
@@ -222,18 +223,18 @@ cases:
   # --- AC11: 재검증 fail 알림 ---
   - id: nt-005
     ac: AC11
-    description: 재검증이 fail로 등록되면 담당자에게 Notification(recheck_failed)이 정확히 1건 생성된다
+    description: 재검증이 fail로 등록되면 담당 팀 역할 멤버에게 Notification(recheck_failed)이 정확히 1건 생성된다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
-      precondition: 이슈 status가 fixed, assigned_to가 member-2, reported_by가 member-1
+      precondition: 이슈 status가 fixed, assigned_team이 frontend(역할 frontend 멤버는 member-2 하나), reported_by가 member-1
       actor: member-1
       body: { result: "fail" }
     expected:
       status: 201
       body: { data: { issue_status: "needs_recheck" } }
       followup:
-        description: assigned_to(member-2)에게 생성된 recheck_failed Notification 수를 센다
-        expected_notification_count_for_assignee: 1
+        description: 역할이 frontend인 멤버(member-2)에게 생성된 recheck_failed Notification 수를 센다
+        expected_notification_count_per_team_member: 1
         expected_notification_event: "recheck_failed"
 
   - id: nt-006
@@ -241,7 +242,7 @@ cases:
     description: 재검증이 pass면 recheck_failed 알림은 생성되지 않는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
-      precondition: 이슈 status가 fixed, assigned_to가 member-2, reported_by가 member-1
+      precondition: 이슈 status가 fixed, assigned_team이 frontend(역할 frontend 멤버는 member-2 하나), reported_by가 member-1
       actor: member-1
       body: { result: "pass" }
     expected:
@@ -275,10 +276,10 @@ cases:
   # --- AC13: 역할별 권한 ---
   - id: au-003
     ac: AC13
-    description: 담당자가 아닌 멤버가 fixed로 바꾸려 하면 403이고 상태·이력·알림이 바뀌지 않는다
+    description: 담당 팀 역할이 아닌 멤버가 fixed로 바꾸려 하면 403이고 상태·이력·알림이 바뀌지 않는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      precondition: 이슈 status가 needs_check, assigned_to가 member-2
+      precondition: 이슈 status가 needs_check, assigned_team이 frontend, member-3의 역할은 designer
       actor: member-3
       body: { status: "fixed" }
     expected:
@@ -292,10 +293,10 @@ cases:
 
   - id: au-004
     ac: AC13
-    description: 담당자가 없는 이슈는 누구도 fixed로 바꿀 수 없다
+    description: 담당 팀이 없는 이슈는 누구도 fixed로 바꿀 수 없다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      precondition: 이슈 status가 needs_check, assigned_to가 null
+      precondition: 이슈 status가 needs_check, assigned_team이 null
       actor: member-1
       body: { status: "fixed" }
     expected:
@@ -323,7 +324,7 @@ cases:
     description: 권한 검사가 전이 검사보다 먼저다 — 권한 없는 사람이 허용되지 않은 전이를 요청하면 409가 아니라 403
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      precondition: 이슈 status가 needs_check, assigned_to가 member-2
+      precondition: 이슈 status가 needs_check, assigned_team이 frontend, member-3의 역할은 designer
       actor: member-3
       body: { status: "resolved" }
     expected:
@@ -331,11 +332,11 @@ cases:
 
   - id: au-007
     ac: AC13
-    description: 프로젝트 멤버가 아닌 사람을 담당자로 지정하면 400이고 알림이 생기지 않는다
+    description: 정해진 4개 값이 아닌 담당 팀을 지정하면 400이고 알림이 생기지 않는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      body: { assigned_to: "member-9" }
-      # member-9는 이 프로젝트 멤버가 아님
+      body: { assigned_team: "qa" }
+      # planner·designer·frontend·backend가 아님
     expected:
       status: 400
       body: { success: false }
@@ -367,7 +368,7 @@ cases:
         screen_location: "로그인 화면 버튼"
         repro_steps: ["로그인 화면 진입"]
         platform_scope: "common"
-        assigned_to: "member-2"
+        assigned_team: "frontend"
         style_mismatch: { property: "color", actual_value: "#333333" }
         # expected_value 누락
     expected:
@@ -392,11 +393,11 @@ cases:
   - id: ng-004
     ac: AC3
     rule: N5
-    description: 이미 같은 담당자인데 다시 지정하면 알림을 만들지 않는다
+    description: 이미 같은 담당 팀인데 다시 지정하면 알림을 만들지 않는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      precondition: 이슈 assigned_to가 member-2
-      body: { assigned_to: "member-2" }
+      precondition: 이슈 assigned_team이 frontend
+      body: { assigned_team: "frontend" }
     expected:
       status: 200
       followup:
@@ -433,7 +434,7 @@ cases:
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
       precondition: 이슈 status가 fixed
-      actor: 이슈의 assigned_to
+      actor: 역할이 이슈의 assigned_team인 멤버
       body: { status: "fixed" }
     expected:
       status: 409
@@ -726,15 +727,15 @@ cases:
   # --- AC19: 멤버 제거 ---
   - id: pj-005
     ac: AC19
-    description: 소유자가 멤버를 제거하면 그 멤버가 담당자인 미해결 이슈의 assigned_to만 비우고 resolved 이슈·상태·이력·알림은 그대로다
+    description: 소유자가 멤버를 제거해도 이슈(담당 팀·상태·이력)·알림은 바뀌지 않는다 — 담당은 팀 단위다(2026-11-08)
     input:
       endpoint: DELETE /projects/{projectId}/members/{memberId}
-      precondition: member-2가 담당자인 이슈 X(needs_check)와 Y(resolved)
+      precondition: member-2의 역할이 frontend, assigned_team이 frontend인 이슈 X(needs_check)와 Y(resolved)
       actor: 소유자(member-1)
     expected:
       status: 204
       followup:
-        expected_assigned_to: { X: null, Y: "member-2" }
+        expected_assigned_team: { X: "frontend", Y: "frontend" }
         expected_issue_status: { X: "needs_check", Y: "resolved" }
         status_history_length_unchanged: true
         expected_notification_count_total_delta: 0
@@ -853,10 +854,10 @@ cases:
 
   - id: rs-003
     ac: AC20
-    description: 재검증 등록 권한이 없는 멤버(등록자가 아닌 담당자)가 요청하면 403이고 임베딩·LLM을 부르지 않는다
+    description: 재검증 등록 권한이 없는 멤버(등록자가 아닌 담당 팀 멤버)가 요청하면 403이고 임베딩·LLM을 부르지 않는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
-      precondition: 이슈 status fixed, 등록자 member-1(멤버), 담당자 member-2
+      precondition: 이슈 status fixed, 등록자 member-1(멤버), 담당 팀 frontend(member-2의 역할 frontend)
       actor: member-2
     expected:
       status: 403
@@ -932,10 +933,10 @@ cases:
   # --- AC6·AC13 수정: in_progress(수정 중) ---
   - id: st-004
     ac: AC6
-    description: 담당자가 needs_check 이슈를 in_progress로 바꾸면 성공하고 status_history에 남으며 알림은 생기지 않는다
+    description: 담당 팀 멤버가 needs_check 이슈를 in_progress로 바꾸면 성공하고 status_history에 남으며 알림은 생기지 않는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      actor: 이슈의 assigned_to
+      actor: 역할이 이슈의 assigned_team인 멤버
       precondition: 이슈 status가 needs_check
       body: { status: "in_progress" }
     expected:
@@ -950,7 +951,7 @@ cases:
     description: in_progress → fixed는 성공하고 등록자에게 fixed 알림이 정확히 1건 생긴다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      actor: 이슈의 assigned_to
+      actor: 역할이 이슈의 assigned_team인 멤버
       precondition: 이슈 status가 in_progress
       body: { status: "fixed" }
     expected:
@@ -964,7 +965,7 @@ cases:
     description: fixed 이슈를 in_progress로 되돌리는 PATCH는 409이고 이력이 늘지 않는다 (fixed 이후는 재검증으로만)
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      actor: 이슈의 assigned_to
+      actor: 역할이 이슈의 assigned_team인 멤버
       precondition: 이슈 status가 fixed
       body: { status: "in_progress" }
     expected:
@@ -978,7 +979,7 @@ cases:
     description: in_progress → in_progress(같은 상태)는 409 (N7)
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      actor: 이슈의 assigned_to
+      actor: 역할이 이슈의 assigned_team인 멤버
       precondition: 이슈 status가 in_progress
       body: { status: "in_progress" }
     expected:
@@ -986,11 +987,11 @@ cases:
 
   - id: au-010
     ac: AC13
-    description: 담당자가 아닌 멤버의 in_progress 요청은 403이고 상태·이력이 그대로다
+    description: 역할이 담당 팀이 아닌 멤버의 in_progress 요청은 403이고 상태·이력이 그대로다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      actor: 담당자가 아닌 프로젝트 멤버
-      precondition: 이슈 status가 needs_check, assigned_to 지정됨
+      actor: 역할이 이슈의 assigned_team이 아닌 프로젝트 멤버
+      precondition: 이슈 status가 needs_check, assigned_team 지정됨
       body: { status: "in_progress" }
     expected:
       status: 403
@@ -1227,6 +1228,7 @@ cases:
     input:
       endpoint: POST /projects/{projectId}/first-qa
       actor: 소유자
+      body: { scope: ["color_typography"] }
       precondition: 비교 분석 succeeded, 매핑 "홈 / 주문 버튼"(node 12:34) ↔ src/components/Button.tsx
       figma_stub: { node: { id: "12:34", frame: "홈", name: "주문 버튼", fills: "#1A73E8" } }
       github_stub: { file: { path: "src/components/Button.tsx", line_20: "background: #2B7DE9;" } }
@@ -1240,7 +1242,7 @@ cases:
           source: "first_qa"
           status: "needs_check"
           reported_by: 소유자
-          assigned_to: null
+          assigned_team: null
           platform_scope: "common"
           screen_location_contains: ["홈", "주문 버튼"]
           repro_steps: ["'홈' 화면을 연다", "'주문 버튼'를 확인한다"]
@@ -1252,6 +1254,7 @@ cases:
     description: 첫 QA가 이미 성공했으면 다시 실행할 수 없다(409 NOT_READY)
     input:
       endpoint: POST /projects/{projectId}/first-qa
+      body: { scope: ["color_typography"] }
       actor: 소유자
       precondition: 첫 QA status succeeded
     expected:
@@ -1263,6 +1266,7 @@ cases:
     description: 소유자가 아닌 멤버는 첫 QA를 실행할 수 없다(403)
     input:
       endpoint: POST /projects/{projectId}/first-qa
+      body: { scope: ["color_typography"] }
       actor: 소유자가 아닌 프로젝트 멤버
       precondition: 비교 분석 succeeded
     expected:
@@ -1271,11 +1275,11 @@ cases:
 
   - id: fq-004
     ac: AC23
-    description: 자동 이슈에 담당자를 지정하면 그때 issue_created 알림이 1건 생긴다(AC3 그대로)
+    description: 자동 이슈에 담당 팀을 지정하면 그때 그 팀 역할 멤버에게 issue_created 알림이 1건 생긴다(AC3)
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
-      precondition: source first_qa, assigned_to 없음
-      body: { assigned_to: member-2 }
+      precondition: source first_qa, assigned_team 없음, 역할이 designer인 멤버는 member-2 하나
+      body: { assigned_team: designer }
     expected:
       status: 200
       followup:
@@ -1355,6 +1359,7 @@ cases:
     description: LLM이 인용한 파일·줄에 그 값이 없으면 이슈를 만들지 않고 dropped_count에 센다
     input:
       endpoint: POST /projects/{projectId}/first-qa
+      body: { scope: ["color_typography"] }
       actor: 소유자
       precondition: fq-001과 같은 매핑
       github_stub: { file: { path: "src/components/Button.tsx", line_20: "background: var(--primary);" } }
@@ -1370,6 +1375,7 @@ cases:
     description: 인용한 파일이 저장소에 없거나 매핑에 없는 노드를 가리키면 버린다
     input:
       endpoint: POST /projects/{projectId}/first-qa
+      body: { scope: ["color_typography"] }
       actor: 소유자
       precondition: fq-001과 같은 매핑
       llm_stub:
@@ -1386,6 +1392,7 @@ cases:
     description: 실행 도중 실패하면 그 실행으로 만든 이슈를 하나도 남기지 않는다
     input:
       endpoint: POST /projects/{projectId}/first-qa
+      body: { scope: ["color_typography"] }
       actor: 소유자
       precondition: 매핑 3개, 두 번째 처리 중 LLM 호출 실패
     expected:
@@ -1393,3 +1400,105 @@ cases:
         expected_run_status: "failed"
         expected_issue_count_delta: 0
         expected_style_mismatch_count_delta: 0
+
+  # --- 2026-11-08 담당 팀 배정·첫 QA 검증 범위·자동 Re-QA (설만수 승인) ---
+
+  - id: nt-007
+    ac: AC3
+    description: 담당 팀에 역할 멤버가 여럿이면 각각에게 issue_created가 1건씩 생긴다
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      precondition: 이슈 assigned_team 없음, 역할이 frontend인 멤버 member-2·member-4
+      body: { assigned_team: "frontend" }
+    expected:
+      status: 200
+      followup:
+        expected_notifications: [{ event: "issue_created", to: member-2, count: 1 }, { event: "issue_created", to: member-4, count: 1 }]
+        expected_notification_count_total_delta: 2
+
+  - id: nt-008
+    ac: AC3
+    description: 담당 팀 역할을 가진 멤버가 없으면 지정은 되지만 알림은 만들지 않는다
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      precondition: 이슈 assigned_team 없음, 역할이 backend인 멤버 없음
+      body: { assigned_team: "backend" }
+    expected:
+      status: 200
+      body: { data: { assigned_team: "backend" } }
+      followup:
+        expected_notification_count_total_delta: 0
+
+  - id: fq-005
+    ac: AC23
+    description: 검증 범위(scope)가 비었으면 400이고 실행을 만들지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/first-qa
+      actor: 소유자
+      precondition: 비교 분석 succeeded
+      body: { scope: [] }
+    expected:
+      status: 400
+      followup:
+        expected_run_count_delta: 0
+
+  - id: rq-001
+    ac: AC28
+    rule: N18
+    description: Re-QA는 다시 읽은 코드 값이 같으면 pass(resolved), 다르면 fail(needs_recheck + 담당 팀 알림)로 판정한다
+    input:
+      endpoint: POST /projects/{projectId}/re-qa
+      actor: 소유자
+      precondition: first_qa 이슈 A(fixed, color #1A73E8, 담당 팀 frontend — 역할 frontend 멤버 member-2), B(fixed, radius 8px, 담당 팀 frontend)
+      github_stub: { A: "background: #1A73E8;", B: "border-radius: 4px;" }
+    expected:
+      status: 202
+      followup:
+        expected_run_status: "succeeded"
+        expected_run: { kind: "re_qa", created_count: 1, failed_count: 1, dropped_count: 0 }
+        expected_issue_status: { A: "resolved", B: "needs_recheck" }
+        expected_verifications:
+          A: { result: "pass", source: "re_qa", verified_by: 소유자, observed_value: "#1A73E8" }
+          B: { result: "fail", source: "re_qa", verified_by: 소유자, observed_value: "4px" }
+        expected_notifications: [{ event: "recheck_failed", to: member-2, count: 1 }]
+
+  - id: rq-002
+    ac: AC28
+    description: fixed인 첫 QA 이슈가 없으면 Re-QA는 409이고 실행을 만들지 않는다(사람이 등록한 fixed 이슈는 대상이 아니다)
+    input:
+      endpoint: POST /projects/{projectId}/re-qa
+      actor: 소유자
+      precondition: fixed 이슈는 source manual 1건뿐
+    expected:
+      status: 409
+      body: { error: { code: "NOT_READY" } }
+      followup:
+        expected_run_count_delta: 0
+
+  - id: rq-003
+    ac: AC28
+    description: 소유자가 아닌 멤버는 Re-QA를 실행할 수 없다(403)
+    input:
+      endpoint: POST /projects/{projectId}/re-qa
+      actor: 소유자가 아닌 프로젝트 멤버
+      precondition: fixed인 첫 QA 이슈 1건
+    expected:
+      status: 403
+      external_calls: 0
+
+  - id: rq-004
+    ac: AC28
+    rule: N18
+    description: 노드·파일을 다시 읽지 못한 이슈는 판정하지 않고 fixed로 둔다
+    input:
+      endpoint: POST /projects/{projectId}/re-qa
+      actor: 소유자
+      precondition: first_qa 이슈 C(fixed)의 파일이 현재 커밋에 없음
+    expected:
+      status: 202
+      followup:
+        expected_run_status: "succeeded"
+        expected_run: { kind: "re_qa", created_count: 0, failed_count: 0, dropped_count: 1 }
+        expected_issue_status: { C: "fixed" }
+        expected_verification_count_delta: 0
+        expected_notification_count_total_delta: 0

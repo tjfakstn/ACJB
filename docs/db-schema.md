@@ -20,7 +20,7 @@ erDiagram
     projects ||--o{ style_mismatches : has
     style_scans  ||--o{ style_mismatches : "발견"
     style_mismatches ||--o{ qa_issues : "원본"
-    members ||--o{ qa_issues : "reported_by / assigned_to"
+    members ||--o{ qa_issues : "reported_by"
     qa_issues ||--o{ qa_issue_repro_steps : has
     qa_issues ||--o{ qa_issue_screenshots : has
     qa_issues ||--o{ status_histories : has
@@ -48,7 +48,7 @@ erDiagram
 | `style_scans` | scan 작업 | `POST/GET /style-mismatches/scan(s)` |
 | `style_mismatches` | 스타일 차이(수동·scan 공통) | `GET /style-mismatches` 목록·상세 · AC2 |
 | `embeddings` | 재검증 범위 제안 검색용 벡터 (`V2__embeddings.sql`) | `POST .../recheck-suggestions` · AC20 |
-| `project_runs` | 비교 분석·첫 QA 실행 기록 (2026-11-07 설계, V4 예정) | `/analysis`, `/first-qa` · AC22, AC23 |
+| `project_runs` | 비교 분석·첫 QA·Re-QA 실행 기록 (2026-11-07 설계, re_qa는 2026-11-08 V9) | `/analysis`, `/first-qa`, `/re-qa` · AC22, AC23, AC28 |
 | `design_code_mappings` | Figma 프레임·노드 ↔ 코드 파일·컴포넌트 매핑 (2026-11-07 스파이크 후 확정, V8) | `/analysis/mappings` · AC22, AC23, AC27 |
 
 (`github_issue_url` 등 GitHub 이슈·PR 컬럼은 v1 비포함이라 만들지 않는다. 저장소 연결 컬럼(`projects.github_*`)은 2026-11-07부터 있다. 세션은 서버 메모리 — 별도 테이블 없음.)
@@ -134,7 +134,7 @@ erDiagram
 | source | VARCHAR(10) | NOT NULL, default manual | manual / first_qa (2026-11-07) |
 | first_qa_run_id | BIGINT | FK→project_runs, NULL | source=first_qa일 때 만든 실행 |
 | reported_by_id | BIGINT | FK→members, NOT NULL | 등록자(로그인 사용자) |
-| assigned_to_id | BIGINT | FK→members, NULL | 담당자(고치는 사람). 프로젝트 멤버만(AC13) |
+| assigned_team | VARCHAR(10) | NULL, CHECK | 담당 팀 — planner / designer / frontend / backend(프로젝트 역할과 같은 값, AC3·AC13). 2026-11-08 V9에서 `assigned_to_id`를 대신함 — 기존 값은 그 멤버의 프로젝트 역할로 옮기고(역할 미지정이면 NULL) 컬럼을 지운다 |
 | created_at / updated_at | DATETIME(6) | NOT NULL | |
 
 ### qa_issue_repro_steps
@@ -167,8 +167,11 @@ erDiagram
 | qa_issue_id | BIGINT | FK, NOT NULL | |
 | result | VARCHAR(10) | NOT NULL | pass / fail |
 | scope | VARCHAR(255) | NULL | |
-| verified_by_id | BIGINT | FK→members, NOT NULL | 등록자만, 등록자가 제거됐으면 소유자(AC13) |
+| verified_by_id | BIGINT | FK→members, NOT NULL | 등록자만, 등록자가 제거됐으면 소유자(AC13). Re-QA면 실행한 소유자 |
 | verified_at | DATETIME(6) | NOT NULL | |
+| source | VARCHAR(10) | NOT NULL, default manual, CHECK | manual / re_qa(AC28, 2026-11-08 V9) |
+| observed_value | VARCHAR(255) | NULL | Re-QA가 다시 읽은 구현 값(manual이면 NULL) |
+| re_qa_run_id | BIGINT | FK→project_runs, NULL | source=re_qa일 때 만든 실행 |
 
 ### notifications
 | 컬럼 | 타입 | 제약 | 비고 |
@@ -261,16 +264,19 @@ erDiagram
 | --- | --- | --- | --- |
 | id | BIGINT | PK | |
 | project_id | BIGINT | FK→projects, NOT NULL | |
-| kind | VARCHAR(10) | NOT NULL, CHECK | analysis / first_qa |
+| kind | VARCHAR(10) | NOT NULL, CHECK | analysis / first_qa / re_qa(V9) |
 | status | VARCHAR(10) | NOT NULL, CHECK | queued / running / succeeded / failed |
 | requested_by_id | BIGINT | FK→members, NOT NULL | 소유자 |
 | commit_sha | VARCHAR(40) | NULL | 읽은 GitHub 커밋 |
-| created_count | INT | NOT NULL, default 0 | analysis면 매핑 수, first_qa면 만든 이슈 수 |
-| dropped_count | INT | NOT NULL, default 0 | 근거가 모자라 버린 수(N17) |
+| created_count | INT | NOT NULL, default 0 | analysis면 매핑 수, first_qa면 만든 이슈 수, re_qa면 pass 수 |
+| dropped_count | INT | NOT NULL, default 0 | 근거가 모자라 버린 수(N17), re_qa면 건너뛴 수(N18) |
+| failed_count | INT | NULL | re_qa에서 fail로 판정한 수(V9) |
+| scope | VARCHAR(100) | NULL | first_qa 검증 범위(쉼표로 이은 값, V9) |
+| demo | BOOLEAN | NOT NULL, default false | 개발용 가짜 비교기로 돈 실행(V9) |
 | error_message | VARCHAR(500) | NULL | 사용자에게 보여 줄 실패 사유. 내부 상세·토큰은 담지 않는다 |
 | created_at / finished_at | DATETIME(6) | NOT NULL / NULL | |
 
-같은 프로젝트·kind에 queued/running 행이 있으면 새로 만들지 않고(409), first_qa는 succeeded가 하나라도 있으면 새로 만들지 않는다(AC23). first_qa가 실패하면 그 실행으로 만든 이슈·스타일 차이를 한 트랜잭션으로 되돌린다(N17 — 일부만 남기지 않는다). `ProjectDetail`의 `analysis_status`·`first_qa_status`는 kind별 최근 행의 status(없으면 none).
+같은 프로젝트·kind에 queued/running 행이 있으면 새로 만들지 않고(409), first_qa는 succeeded가 하나라도 있으면 새로 만들지 않는다(AC23). first_qa가 실패하면 그 실행으로 만든 이슈·스타일 차이를 한 트랜잭션으로 되돌린다(N17 — 일부만 남기지 않는다). `ProjectDetail`의 `analysis_status`·`first_qa_status`는 kind별 최근 행의 status(없으면 none). re_qa는 first_qa·re_qa 중 queued/running이 있으면 만들지 않고(409), 실패하면 그 실행으로 만든 재검증·상태 변경·알림을 한 트랜잭션으로 되돌린다(N18).
 
 ### design_code_mappings (2026-11-07 확정 — V8)
 | 컬럼 | 타입 | 제약 | 비고 |
@@ -292,7 +298,7 @@ erDiagram
 | --- | --- | --- |
 | qa_issues | (project_id, created_at DESC, id DESC) | 이슈 목록 고정 정렬 |
 | qa_issues | (project_id, status) | 상태 필터 |
-| qa_issues | (assigned_to_id), (reported_by_id) | 담당자·등록자 필터 |
+| qa_issues | (project_id, assigned_team), (reported_by_id) | 담당 팀·등록자 필터 |
 | notifications | (recipient_id, created_at DESC, id DESC) | AC14 내 알림 최신순 |
 | status_histories | (qa_issue_id, changed_at, id) | 이력 시간순 |
 | verifications | (qa_issue_id, verified_at DESC, id DESC) | 재검증 목록 |

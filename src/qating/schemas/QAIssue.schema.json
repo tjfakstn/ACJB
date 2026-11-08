@@ -43,7 +43,7 @@
         }
       }
     },
-    "assigned_to": { "type": ["string", "null"] },
+    "assigned_team": { "type": ["string", "null"], "enum": ["planner", "designer", "frontend", "backend", null], "description": "담당 팀(프로젝트 역할과 같은 값, 2026-11-08)" },
     "reported_by": { "type": "string" },
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": "string", "format": "date-time" }

@@ -326,3 +326,26 @@
 - **세부**: 미리보기는 로그인한 사람이 토큰을 가졌을 때만 열린다. id만으로는 프로젝트에 접근할 수 없으므로(AC12, 멤버가 아니면 403) 새로 드러나는 정보가 없다. 토큰은 여전히 응답에 담지 않는다(N14)
 - **영향**: SPEC 3절 엔드포인트 목록, openapi v0.6.1(`InvitationPreviewResponse.data.project_id`). DB·골든 케이스는 바뀌지 않는다(필드 추가)
 - **결정자**: 설만수
+
+## 2026-11-08 QA 흐름을 시안에 맞춘다: 담당 팀 배정 · 자동 Re-QA · 첫 QA 개발용 가짜 비교기
+
+- **결정**
+  1. **담당자 → 담당 팀**: 이슈의 `assigned_to`(멤버 id)를 `assigned_team`(`planner`·`designer`·`frontend`·`backend` — 프로젝트 역할과 같은 값, 화면 이름 기획팀·디자인팀·프론트엔드팀·백엔드팀)으로 바꾼다. 시안 ASN-01~04·QUE·ISS
+     - 지정·변경은 프로젝트 멤버 누구나(정해진 4개 값이 아니면 400, null로 비우기는 400 — 지금과 같다)
+     - 알림(AC3·AC11): 팀이 지정·변경되면(등록 때 포함) 그 프로젝트에서 **역할이 그 팀인 멤버 각각에게** `issue_created`를 정확히 1건씩, 재검증 `fail`이면 같은 멤버들에게 `recheck_failed`를 1건씩. 그 역할 멤버가 없으면 만들지 않는다. 같은 팀 재지정은 알림 없음(N5). `fixed` 알림은 지금처럼 등록자에게(AC4)
+     - 권한(AC13): `in_progress`·`fixed` PATCH는 **역할이 그 이슈의 담당 팀인 멤버만**(팀이 없으면 누구도 불가). 소유자도 역할이 같아야 한다
+     - 멤버 제거(AC19): 더 이상 이슈에서 지울 담당자가 없다 — 제거는 이슈를 바꾸지 않는다. 역할을 바꾸면 그 뒤로는 새 역할의 팀 권한·알림을 받는다(지난 알림은 그대로)
+  2. **자동 Re-QA**(신규 AC28, 시안 RQA-01~03F·FIN): 소유자가 `POST /projects/{projectId}/re-qa`를 누르면 `fixed`이고 `source: first_qa`인 이슈들을 첫 QA와 같은 방법(같은 Figma 노드·코드 파일, 현재 브랜치 최신 커밋)으로 **다시 비교**한다(비동기 202, `GET .../re-qa`로 상태). 대상이 0건이면 409(`NOT_READY`), 첫 QA·Re-QA가 실행 중이어도 409
+     - 같아졌으면 `Verification(result: pass)` → `resolved`, 여전히 다르면 `fail` → `needs_recheck` + 담당 팀 `recheck_failed` 알림. `verified_by`는 실행한 소유자, Verification에 `source: re_qa`와 다시 읽은 코드 값 `observed_value`를 남긴다(시안 RQA-03 "수정 전/후")
+     - 근거를 다시 얻지 못한 이슈(노드·파일이 사라짐 등)는 바꾸지 않고 `fixed`로 두며 `skipped_count`에 센다. 실행이 실패하면 아무 이슈도 바꾸지 않는다(일부만 반영 금지)
+     - 사람이 등록한 이슈(`source: manual`)는 지금처럼 등록자가 재현 절차로 직접 재검증한다(AC5·AC7 유지). 첫 QA 이슈도 수동 재검증은 그대로 가능하다
+  3. **첫 QA 검증 범위**(시안 QA-01): `POST .../first-qa` body에 `scope`(1개 이상) — `size_spacing`(크기·간격·위치), `color_typography`(색상·타이포그래피), `border_radius`(테두리·모서리), `layout`(레이아웃), `presence`(UI 요소 존재 여부). 비면 400. property 범위 확정은 여전히 첫 QA 스파이크 뒤(N4) — scope는 실행에 기록하고 비교기가 따른다
+  4. **개발용 가짜 비교기**(Claude API 크레딧 충전 전): 설정 `app.qa.fake-comparator=true`(기본 false — 운영에서 켜지 않는다)일 때만 첫 QA·Re-QA의 LLM 비교 부분을 가짜 비교기로 바꾼다. 실행·저장·상태·알림 흐름은 실제 코드 그대로 돈다
+     - 가짜 첫 QA: 최근 성공한 비교 분석의 노드 매핑마다 정해진 규칙(노드 id 해시)으로 일부를 "차이 있음"으로 내고, 기대값·구현값은 고정된 예시 값을 쓴다. 이슈 `description` 앞에 `[시연용]`을 붙이고 실행에 `demo: true`를 남긴다
+     - 가짜 Re-QA: 첫 번째 Re-QA에서는 이슈 id가 홀수면 fail, 짝수면 pass, 두 번째부터는 pass(시안의 해결·재실패 두 경로를 모두 보이기 위해)
+     - N17 예외: 가짜 비교기가 켜져 있을 때만 근거 없는 시연 값을 저장한다 — 꺼져 있으면(기본) 지금 규칙 그대로. 키도 가짜도 없으면 첫 QA는 "비교용 LLM API 키 미설정"으로 실패한다
+  5. **결과 화면 지표**: 시안 QA-04의 PASS 항목 목록·디자인 일치율·평균 신뢰도·심각도는 만들지 않는다(근거 정의 없음). 결과·Queue는 이슈(FAIL)만 다룬다
+- **왜**: 최종 시안(QA-01~FIN-02)이 팀 단위 배정과 자동 재비교로 흐름을 그렸고(설만수 결정, 2026-11-08), 크레딧 충전 전에도 실행 흐름을 끝까지 구현·확인하기 위해
+- **영향**: AGENTS.md 용어집·절대 규칙 3·7, SPEC 4절·엔드포인트·AC3·AC11·AC13·AC19·AC23·AC28(신규)·N5·N15·N17, openapi(`QAIssue.assigned_team`, PATCH·POST·목록 필터, `first-qa` scope·demo, `re-qa`, `Verification.source`·`observed_value`), db-schema(`qa_issues.assigned_team`, `verifications.source`·`observed_value`, `project_runs` kind `RE_QA`·`scope`·`demo`, V9), ontology, `src/qating/schemas/QAIssue.schema.json`·`Verification.schema.json`
+- **골든 케이스(설만수 승인)**: `assigned_to`를 쓰는 23건을 `assigned_team`으로 바꾼다 — nt-001·002·003·004·005·006, st-002·004·005·006·007, au-003·004·006·007·010, ng-002·004·007, pj-005(멤버 제거가 이슈를 안 바꿈), rs-003, fq-001·004. 신규: 팀 알림 여러 명(nt-007), 그 역할 멤버 없음(nt-008), 첫 QA scope 비어 있음 400(fq-005), Re-QA 성공·실패·대상 없음·권한·건너뜀(rq-001~004). 첫 QA 요청에 `scope`가 필수가 되어 fq-002·003, ng-017~019의 입력에 `scope`만 더했다(기대값은 그대로)
+- **결정자**: 설만수

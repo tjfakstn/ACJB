@@ -60,7 +60,7 @@ GET이 아니라 POST인 이유: 외부 유료 호출(LLM·임베딩)을 일으�
 | `style_mismatch` | StyleMismatch | `화면: {screen}\n요소: {selector}\n{property}: 기대 {expected} / 실제 {actual}` (screen·selector가 비면 그 줄은 뺀다) | 전부 |
 | `verification` | Verification | `화면: {이슈 screen_location}\n증상: {이슈 description}\n결과: 재검증 실패\n범위: {scope}` (scope가 비면 그 줄은 뺀다) | **fail만** |
 
-- 세 원본 모두 생성 뒤 텍스트가 바뀌지 않는다(QAIssue PATCH는 status·assigned_to만, StyleMismatch·Verification은 updatable=false) → **생성 시 한 번만** 만들면 된다
+- 세 원본 모두 생성 뒤 텍스트가 바뀌지 않는다(QAIssue PATCH는 status·assigned_team만, StyleMismatch·Verification은 updatable=false) → **생성 시 한 번만** 만들면 된다
 - verification pass는 "문제 없음"이라 회귀 근거가 되지 않아 제외
 - verification 텍스트에 원래 이슈의 증상을 넣는다(2026-11-06 구현 때 추가) — 화면·결과·범위만으로는 무엇이 실패했는지 알 수 없어 검색에 거의 걸리지 않는다
 - 정본은 서버 코드 `EmbeddingTexts`(`backend/.../recheck/EmbeddingTexts.java`)이고, `evals/run_evals.py`도 같은 규칙을 따른다

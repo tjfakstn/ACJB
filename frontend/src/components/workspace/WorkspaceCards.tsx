@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../common/Icon'
+import { initialOf, ROLE_TAG } from '../common/roles'
 import {
   formatDate, formatDateTime, type Invitation, type IssueStatus, type MappingList, type MemberRole, type ProjectDetail,
   type ProjectMember, type ProjectRun,
@@ -10,14 +11,6 @@ import {
 // 카드 r12·1px 테두리·안쪽 20, 카드 사이 24, 제목 16/700, 보조 텍스트 12 #5f5f5f.
 
 export const CARD = 'rounded-xl border border-qa-border bg-white'
-
-/** 시안 Role Tag — 역할별 점·글자색(배경은 같은 색 10%) */
-const ROLE_TAG: Record<MemberRole, { label: string; dot: string; text: string; bg: string }> = {
-  designer: { label: '디자인', dot: 'bg-[#e5489b]', text: 'text-[#c2307a]', bg: 'bg-[#e5489b]/10' },
-  frontend: { label: '프론트엔드', dot: 'bg-[#007fff]', text: 'text-[#0066cc]', bg: 'bg-[#007fff]/10' },
-  backend: { label: '백엔드', dot: 'bg-[#f08c00]', text: 'text-[#a85a00]', bg: 'bg-[#f08c00]/10' },
-  planner: { label: '기획', dot: 'bg-[#965fff]', text: 'text-[#6e3be6]', bg: 'bg-[#965fff]/10' },
-}
 
 export function RoleTag({ role }: { role: MemberRole | null }) {
   if (!role) {
@@ -230,13 +223,6 @@ export function ProjectInfoCard({ rows }: { rows: { label: string; value: string
 }
 
 // ---------- 프로젝트 멤버 ----------
-
-/** 시안 아바타 이니셜: 한글 이름이면 성 다음 글자(김하늘→하), 아니면 첫 글자 */
-function initialOf(name: string): string {
-  const trimmed = name.trim()
-  if (/^[가-힣]{2,4}$/.test(trimmed)) return trimmed[1]
-  return (trimmed[0] ?? '?').toUpperCase()
-}
 
 function shortDate(iso: string): string {
   return formatDate(iso).slice(5)

@@ -116,7 +116,7 @@ export function WorkspacePage() {
         </main>
       </div>
       {analysisOpen && detail && (
-        <Overlay wide onClose={() => { setAnalysisOpen(false); void load() }}>
+        <Overlay width={640} onClose={() => { setAnalysisOpen(false); void load() }}>
           <AnalysisStep projectId={projectId} projectName={detail.name} inWizard={false}
             onClose={() => { setAnalysisOpen(false); void load() }}
             onCheckConnection={() => { setAnalysisOpen(false); void load() }}

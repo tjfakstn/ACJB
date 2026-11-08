@@ -92,6 +92,9 @@ app:
     # 노드 단계를 동시에 부르는 수와 넘길 코드 총량(넘으면 잘라 넣지 않고 실패한다)
     node-concurrency: 4
     max-code-chars: 400000
+  # 첫 QA·Re-QA 비교기 — true면 개발용 가짜 비교기(시연용 값). 운영에서 켜지 않는다(SPEC 4절·N17, 2026-11-08)
+  qa:
+    fake-comparator: ${QA_FAKE_COMPARATOR:false}
   voyage:
     api-key: ${VOYAGE_API_KEY:}
     base-url: https://api.voyageai.com

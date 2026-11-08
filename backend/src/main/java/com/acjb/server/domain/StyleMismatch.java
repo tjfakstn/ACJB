@@ -83,6 +83,13 @@ public class StyleMismatch {
     @Column(nullable = false, updatable = false)
     private String actualValue;
 
+    /** first_qa일 때 코드 값을 확인한 파일·줄(N17). Re-QA는 같은 파일을 다시 읽는다(AC28) */
+    @Column(name = "code_path", length = 500, updatable = false)
+    private String codePath;
+
+    @Column(name = "code_line", updatable = false)
+    private Integer codeLine;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -111,6 +118,16 @@ public class StyleMismatch {
     public static StyleMismatch fromScan(StyleScan scan, StyleProperty property, String expectedValue, String actualValue) {
         return new StyleMismatch(scan.getProject(), MismatchSource.SCAN, scan, scan.getFrameId(), scan.getNodeId(),
             scan.getTargetUrl(), scan.getSelector(), property, expectedValue, actualValue);
+    }
+
+    /** 첫 QA가 Figma 노드 값과 코드 값을 둘 다 확인한 차이(AC23·N17). screen에는 Figma 프레임 이름을 둔다 */
+    public static StyleMismatch firstQa(Project project, String frameId, String frameName, String nodeId, StyleProperty property,
+                                        String expectedValue, String actualValue, String codePath, Integer codeLine) {
+        StyleMismatch m = new StyleMismatch(project, MismatchSource.FIRST_QA, null, frameId, nodeId, frameName, null,
+            property, expectedValue, actualValue);
+        m.codePath = codePath;
+        m.codeLine = codeLine;
+        return m;
     }
 
     @PrePersist

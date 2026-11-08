@@ -47,6 +47,20 @@ public class Verification {
 
     private String scope;
 
+    /** manual=등록자가 직접, re_qa=자동 Re-QA(AC28) */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 10, updatable = false)
+    private VerificationSource source = VerificationSource.MANUAL;
+
+    /** Re-QA가 다시 읽은 구현 값(시안 RQA-03 수정 후). manual이면 null */
+    @Column(name = "observed_value", updatable = false)
+    private String observedValue;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "re_qa_run_id", updatable = false)
+    private ProjectRun reQaRun;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "verified_by_id", updatable = false)
     private Member verifiedBy;
@@ -59,6 +73,15 @@ public class Verification {
         this.result = result;
         this.scope = scope;
         this.verifiedBy = verifiedBy;
+    }
+
+    /** 자동 Re-QA 판정 — verified_by는 실행한 소유자(AC28) */
+    public static Verification reQa(QAIssue issue, VerificationResult result, String observedValue, Member requester, ProjectRun run) {
+        Verification v = new Verification(issue, result, null, requester);
+        v.source = VerificationSource.RE_QA;
+        v.observedValue = observedValue;
+        v.reQaRun = run;
+        return v;
     }
 
     @PrePersist

@@ -23,7 +23,7 @@ public record CreateQaIssueRequest(
     List<String> screenshots,
     String figmaLink,
     StyleMismatchInput styleMismatch,
-    String assignedTo
+    String assignedTeam
 ) {
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

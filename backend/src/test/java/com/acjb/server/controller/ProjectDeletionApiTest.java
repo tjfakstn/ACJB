@@ -77,9 +77,9 @@ class ProjectDeletionApiTest {
     private String issueWithEverything(Project p) throws Exception {
         String body = """
             {"description":"버튼 색이 달라요","screen_location":"홈 주문 버튼","repro_steps":["홈 진입","주문 버튼 확인"],
-             "platform_scope":"common","assigned_to":"%s",
+             "platform_scope":"common","assigned_team":"backend",
              "style_mismatch":{"property":"color","expected_value":"#1A73E8","actual_value":"#2B7DE9"}}
-            """.formatted(dev.getId());
+            """;
         String res = mvc.perform(as(post("/api/v1/projects/" + p.getId() + "/qa-issues"), owner).content(body))
             .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         String id = json.readTree(res).path("data").path("id").asString();

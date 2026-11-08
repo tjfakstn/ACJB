@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.acjb.server.domain.MemberRole;
 import com.acjb.server.domain.Project;
 import com.acjb.server.domain.ProjectMember;
 
@@ -26,4 +27,8 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     Optional<ProjectMember> findByProjectIdAndMemberId(Long projectId, Long memberId);
 
     long countByProjectId(Long projectId);
+
+    /** 담당 팀 = 그 프로젝트에서 이 역할인 멤버들(AC3·AC11). 알림을 정해진 순서로 만들도록 member id asc */
+    @Query("select pm from ProjectMember pm join fetch pm.member m where pm.project.id = :projectId and pm.role = :role order by m.id asc")
+    List<ProjectMember> findTeam(@Param("projectId") Long projectId, @Param("role") MemberRole role);
 }

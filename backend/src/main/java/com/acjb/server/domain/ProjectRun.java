@@ -23,7 +23,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 비교 분석(AC22)·첫 QA(AC23) 실행 한 건(V4). kind별 최근 행의 status가 작업공간의 analysis_status·first_qa_status다(AC25).
- * 비교 분석 실행은 analysis 패키지가 한다(2026-11-07). 첫 QA는 다음 스파이크 후 구현한다
+ * 비교 분석은 analysis 패키지, 첫 QA·Re-QA는 qa 패키지가 실행한다
  */
 @Entity
 @Table(name = "project_runs", indexes = {
@@ -64,6 +64,18 @@ public class ProjectRun {
     @Column(name = "dropped_count", nullable = false)
     private int droppedCount;
 
+    /** re_qa에서 여전히 달라 fail로 판정한 수. 다른 kind는 null */
+    @Column(name = "failed_count")
+    private Integer failedCount;
+
+    /** first_qa 검증 범위 — 쉼표로 이은 소문자 값(size_spacing 등) */
+    @Column(name = "scope", length = 100)
+    private String scope;
+
+    /** 개발용 가짜 비교기로 돈 실행(시연용 값, 2026-11-08) */
+    @Column(name = "demo", nullable = false)
+    private boolean demo;
+
     @Column(name = "error_message", length = 500)
     private String errorMessage;
 
@@ -90,6 +102,20 @@ public class ProjectRun {
         this.droppedCount = dropped;
         this.errorMessage = null;
         finish(RunStatus.SUCCEEDED, now);
+    }
+
+    /** Re-QA 성공 — pass 수(created)·fail 수·건너뛴 수(dropped, N18) */
+    public void succeedReQa(String commitSha, int passed, int failed, int skipped, Instant now) {
+        this.failedCount = failed;
+        succeed(commitSha, passed, skipped, now);
+    }
+
+    public void markDemo() {
+        this.demo = true;
+    }
+
+    public void setScope(String scope) {
+        this.scope = scope;
     }
 
     /** 실패 — 사용자에게 보여 줄 사유만(내부 상세·토큰은 담지 않는다) */

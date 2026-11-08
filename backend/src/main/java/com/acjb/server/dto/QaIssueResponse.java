@@ -29,7 +29,7 @@ public record QaIssueResponse(
     String status,
     String source,
     List<StatusHistoryView> statusHistory,
-    String assignedTo,
+    String assignedTeam,
     String reportedBy,
     Instant createdAt,
     Instant updatedAt
@@ -51,7 +51,7 @@ public record QaIssueResponse(
             lower(issue.getStatus()),
             lower(issue.getSource()),
             history.stream().map(StatusHistoryView::of).toList(),
-            idOf(issue.getAssignedTo()),
+            lower(issue.getAssignedTeam()),
             idOf(issue.getReportedBy()),
             issue.getCreatedAt(),
             issue.getUpdatedAt());

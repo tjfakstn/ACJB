@@ -91,7 +91,7 @@ class ConcurrentTransitionTest {
 
     private QAIssue newIssue() {
         QAIssue issue = issues.save(new QAIssue(project, "d", "홈", List.of("홈 진입"), PlatformScope.COMMON,
-            null, List.of(), null, null, assignee, reporter));
+            null, List.of(), null, null, MemberRole.BACKEND, reporter));
         histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
         created.add(issue);
         return issue;

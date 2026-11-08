@@ -42,11 +42,13 @@ public class VerificationService {
     private final StatusHistoryRepository histories;
     private final NotificationRepository notifications;
     private final VerifierPolicy verifierPolicy;
+    private final TeamNotifier teamNotifier;
     private final ApplicationEventPublisher events;
 
     public VerificationService(QAIssueRepository issues, VerificationRepository verifications,
                                StatusHistoryRepository histories, NotificationRepository notifications,
-                               VerifierPolicy verifierPolicy, ApplicationEventPublisher events) {
+                               VerifierPolicy verifierPolicy, TeamNotifier teamNotifier, ApplicationEventPublisher events) {
+        this.teamNotifier = teamNotifier;
         this.issues = issues;
         this.verifications = verifications;
         this.histories = histories;
@@ -86,9 +88,9 @@ public class VerificationService {
         IssueStatus next = result == VerificationResult.PASS ? IssueStatus.RESOLVED : IssueStatus.NEEDS_RECHECK;
         issue.changeStatus(next);
         histories.save(new StatusHistory(issue, next, actor));
-        // AC11: fail이면 담당자에게 1건. 담당자가 없거나 pass면 만들지 않는다
-        if (result == VerificationResult.FAIL && issue.getAssignedTo() != null) {
-            notifications.save(new Notification(issue, NotificationEvent.RECHECK_FAILED, issue.getAssignedTo(), IN_APP));
+        // AC11: fail이면 담당 팀 역할 멤버 각각에게 1건씩. 팀이 없거나 pass면 만들지 않는다
+        if (result == VerificationResult.FAIL) {
+            teamNotifier.notifyTeam(issue, issue.getAssignedTeam(), NotificationEvent.RECHECK_FAILED);
         }
         // fail 재검증은 재검증 범위 제안(AC20)의 검색 문서가 된다 — 커밋 뒤 임베딩을 만든다
         if (result == VerificationResult.FAIL) {

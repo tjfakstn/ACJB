@@ -115,7 +115,7 @@ class RecheckSuggestionApiTest {
 
     private QAIssue issue(Project p, String screen, String description, IssueStatus status) {
         QAIssue issue = issues.save(new QAIssue(p, description, screen, List.of(screen + " 진입", "확인"),
-            PlatformScope.COMMON, null, List.of(), null, null, assignee, reporter));
+            PlatformScope.COMMON, null, List.of(), null, null, MemberRole.BACKEND, reporter));
         histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
         if (status != IssueStatus.NEEDS_CHECK) {
             issue.changeStatus(status);

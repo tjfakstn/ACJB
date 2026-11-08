@@ -174,8 +174,7 @@ class QaIssueApiTest {
     void ng002_style_mismatch가_잘못되면_이슈_차이_알림_모두_저장하지_않는다() throws Exception {
         postIssue(project, reporter, """
             {"description":"버튼 색이 달라요","screen_location":"로그인 화면 버튼","repro_steps":["로그인 화면 진입"],
-             "platform_scope":"common","assigned_to":"%d","style_mismatch":{"property":"color","actual_value":"#333333"}}"""
-            .formatted(assignee.getId()))
+             "platform_scope":"common","assigned_team":"backend","style_mismatch":{"property":"color","actual_value":"#333333"}}""")
             .andExpect(status().isBadRequest());
         assertThat(issues.count()).isZero();
         assertThat(mismatches.count()).isZero();
@@ -197,29 +196,28 @@ class QaIssueApiTest {
     // --- AC3 ---
 
     @Test
-    void nt001_담당자를_지정해_등록하면_담당자에게_issue_created_1건() throws Exception {
+    void nt001_담당_팀을_지정해_등록하면_그_팀_역할_멤버에게_issue_created_1건() throws Exception {
         String id = createIssue(project, """
             {"description":"아이콘이 너무 커요","screen_location":"홈 화면","repro_steps":["홈 진입"],
-             "platform_scope":"common","assigned_to":"%d"}""".formatted(assignee.getId()));
+             "platform_scope":"common","assigned_team":"backend"}""");
         assertThat(notifications.countByIssueIdAndEvent(Long.valueOf(id), NotificationEvent.ISSUE_CREATED)).isEqualTo(1);
         assertThat(notifications.findAll()).singleElement()
             .satisfies(n -> assertThat(n.getRecipient().getId()).isEqualTo(assignee.getId()));
     }
 
     @Test
-    void nt004_담당자_없이_등록하면_알림이_생기지_않는다() throws Exception {
+    void nt004_담당_팀_없이_등록하면_알림이_생기지_않는다() throws Exception {
         createIssue(project, """
             {"description":"텍스트가 잘려요","screen_location":"결제 화면 총액","repro_steps":["결제 화면 진입"],"platform_scope":"ios"}""");
         assertThat(notifications.count()).isZero();
     }
 
     @Test
-    void 프로젝트_멤버가_아닌_사람을_담당자로_지정하면_400이고_저장하지_않는다() throws Exception {
+    void 정해진_값이_아닌_담당_팀으로_등록하면_400이고_저장하지_않는다() throws Exception {
         postIssue(project, reporter, """
-            {"description":"d","screen_location":"홈","repro_steps":["홈 진입"],"platform_scope":"common","assigned_to":"%d"}"""
-            .formatted(outsider.getId()))
+            {"description":"d","screen_location":"홈","repro_steps":["홈 진입"],"platform_scope":"common","assigned_team":"qa"}""")
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.error.message", containsString("assigned_to")));
+            .andExpect(jsonPath("$.error.message", containsString("assigned_team")));
         assertThat(issues.count()).isZero();
     }
 
@@ -286,13 +284,12 @@ class QaIssueApiTest {
     }
 
     @Test
-    void 목록은_status와_assigned_to로_거른다() throws Exception {
+    void 목록은_status와_assigned_team으로_거른다() throws Exception {
         createIssue(project, VALID);
         String assigned = createIssue(project, """
-            {"description":"d","screen_location":"홈","repro_steps":["홈 진입"],"platform_scope":"common","assigned_to":"%d"}"""
-            .formatted(assignee.getId()));
+            {"description":"d","screen_location":"홈","repro_steps":["홈 진입"],"platform_scope":"common","assigned_team":"backend"}""");
 
-        getAs(reporter, project.getId() + "/qa-issues?assigned_to=" + assignee.getId())
+        getAs(reporter, project.getId() + "/qa-issues?assigned_team=backend")
             .andExpect(jsonPath("$.data.total").value(1))
             .andExpect(jsonPath("$.data.items[0].id").value(assigned));
         getAs(reporter, project.getId() + "/qa-issues?status=fixed")

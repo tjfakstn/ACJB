@@ -2,7 +2,8 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../common/Icon'
 import {
-  formatDate, type Invitation, type IssueStatus, type MemberRole, type ProjectDetail, type ProjectMember,
+  formatDate, formatDateTime, type Invitation, type IssueStatus, type MappingList, type MemberRole, type ProjectDetail,
+  type ProjectMember, type ProjectRun,
 } from '../../lib/api'
 
 // 작업공간 홈(시안 WS-01·01N·01M·02) 조각들. 수치는 시안 노드 값을 그대로 옮겼다:
@@ -346,6 +347,112 @@ export function ConnectionsCard({ detail }: { detail: ProjectDetail }) {
       <p className="mt-4 text-xs text-qa-text-sub">
         {figma && github && last ? `마지막 확인 ${formatDate(last)} · 접근 권한 확인됨` : 'QA 실행 전에 Figma·GitHub 연결이 필요해요.'}
       </p>
+    </section>
+  )
+}
+
+// ---------- 최근 AI 분석 (시안 WS-01 "AI Analysis") ----------
+
+const RUN_CHIP: Record<string, { label: string; dot: string; bg: string }> = {
+  none: { label: '분석 전', dot: 'bg-qa-sub', bg: 'bg-qa-surface' },
+  queued: { label: '대기 중', dot: 'bg-qa-primary', bg: 'bg-qa-primary/10' },
+  running: { label: '진행 중', dot: 'bg-qa-primary', bg: 'bg-qa-primary/10' },
+  succeeded: { label: '완료', dot: 'bg-qa-success', bg: 'bg-qa-success/10' },
+  failed: { label: '실패', dot: 'bg-qa-warning', bg: 'bg-qa-warning/10' },
+}
+
+export function AnalysisCard({ run, mapping, connected, isOwner, onOpen }: {
+  run: ProjectRun | null
+  mapping: MappingList | null
+  connected: boolean
+  isOwner: boolean
+  /** 분석 창 열기 — 시작·다시 시도·진행 상태 보기 */
+  onOpen: () => void
+}) {
+  const status = run?.status ?? 'none'
+  const chip = RUN_CHIP[status]
+  const frames = mapping?.items.length ?? 0
+  const nodes = mapping?.items.reduce((n, f) => n + f.nodes.length, 0) ?? 0
+  const steps = status === 'succeeded'
+    ? [
+        { title: '디자인 구조 분석', desc: `화면 ${frames}개에 구현 파일 연결` },
+        { title: 'UI 코드 분석', desc: `요소 ${nodes}개에 컴포넌트 연결${mapping?.commit_sha ? ` · 커밋 ${mapping.commit_sha.slice(0, 7)}` : ''}` },
+      ]
+    : [
+        { title: '디자인 구조 분석', desc: 'Figma 화면과 요소 읽기' },
+        { title: 'UI 코드 분석', desc: '화면을 그리는 파일·컴포넌트 찾기' },
+      ]
+  return (
+    <section className={`${CARD} p-5`}>
+      <div className="flex h-6 items-center gap-2">
+        <h2 className="text-base font-bold leading-6 text-black">최근 AI 분석</h2>
+        <span className={`flex h-6 items-center gap-1.5 rounded-full px-2 text-xs font-medium text-black ${chip.bg}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${chip.dot}`} />{chip.label}
+        </span>
+      </div>
+      <ul className="mt-4 flex flex-col gap-3">
+        {steps.map((s) => (
+          <li key={s.title} className="flex items-start gap-3">
+            <span className="mt-0.5 flex">
+              <CheckCircle state={status === 'succeeded' ? 'done' : status === 'running' || status === 'queued' ? 'current' : 'todo'} />
+            </span>
+            <div className="min-w-0">
+              <div className="text-sm font-medium leading-5 text-black">{s.title}</div>
+              <div className="text-xs leading-4 text-qa-text-sub">{s.desc}</div>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {status === 'failed' && run?.error_message && (
+        <p className="mt-3 rounded-lg bg-qa-warning/10 px-3 py-2 text-xs leading-4 text-black">{run.error_message}</p>
+      )}
+      {status === 'succeeded' && run?.dropped_count ? (
+        <p className="mt-3 text-xs leading-4 text-qa-text-sub">근거가 없어 버린 짝 {run.dropped_count}개</p>
+      ) : null}
+      <div className="mt-4">
+        {status === 'running' || status === 'queued' ? (
+          <SmallButton kind="ghost" icon="arrow-right" onClick={onOpen}>분석 진행 상태 보기</SmallButton>
+        ) : status === 'succeeded' ? (
+          <span className="text-xs text-qa-text-sub">{run?.finished_at ? `${formatDateTime(run.finished_at)} 완료` : ''}</span>
+        ) : !connected ? (
+          <span className="text-xs text-qa-text-sub">Figma·GitHub를 모두 연결하면 비교 분석을 시작할 수 있어요.</span>
+        ) : isOwner ? (
+          <SmallButton kind="fill" icon={status === 'failed' ? 'refresh' : 'arrow-right'} onClick={onOpen}>
+            {status === 'failed' ? '다시 시도' : '비교 분석 시작'}
+          </SmallButton>
+        ) : (
+          <span className="text-xs text-qa-text-sub">비교 분석은 프로젝트 소유자가 시작해요.</span>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ---------- 디자인-코드 매핑 (시안 WS-01 "Mapping") ----------
+
+export function MappingCard({ projectId, mapping }: { projectId: string; mapping: MappingList }) {
+  const frames = mapping.items.length
+  const nodes = mapping.items.reduce((n, f) => n + f.nodes.length, 0)
+  return (
+    <section className={`${CARD} p-5`}>
+      <h2 className="text-base font-bold leading-6 text-black">디자인-코드 매핑</h2>
+      <dl className="mt-4 flex flex-col">
+        {[
+          { label: '매핑된 화면', value: `${frames}개` },
+          { label: '매핑된 요소', value: `${nodes}개` },
+          { label: '기준 시점', value: mapping.run?.finished_at ? formatDate(mapping.run.finished_at) : '-' },
+        ].map((r) => (
+          <div key={r.label} className="flex h-9 items-center justify-between text-sm">
+            <dt className="text-qa-text-sub">{r.label}</dt>
+            <dd className="font-medium text-black">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <Link to={`/app/projects/${projectId}/mapping`}
+        className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-qa-primary bg-white text-sm font-medium text-qa-primary-hover hover:bg-qa-primary/5">
+        <Icon name="git-compare" className="h-5 w-5" />
+        디자인-코드 매핑 보기
+      </Link>
     </section>
   )
 }

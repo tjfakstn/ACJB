@@ -4,17 +4,19 @@ import { Spinner } from '../common/Spinner'
 import { Icon } from '../common/Icon'
 import { CloseButton, Kv, NextStep, Overlay, Stepper } from './WizardParts'
 import { InviteStep } from './InviteStep'
+import { AnalysisStep } from './AnalysisStep'
 import { ConnectStep } from './ConnectStep'
 
 // 새 프로젝트 만들기 마법사 — 시안 "전체 서비스 최종 통합 UI"의 PRJ-02(입력) → PRJ-03(처리 중) → PRJ-04(생성 완료)
-// → 2단계 멤버 초대(InviteStep, INV-01~05) → 3단계 Figma·Git 연결(ConnectStep, CON-01~05). 한 팝업 안에서 이어지고 뒤 화면은 목록 그대로다.
+// → 2단계 멤버 초대(InviteStep, INV-01~05) → 3단계 Figma·Git 연결(ConnectStep, CON-01~05) → 프로젝트 시작 비교 분석(AnalysisStep, CON-06·06F·06R).
+// 한 팝업 안에서 이어지고 뒤 화면은 목록 그대로다. 분석이 성공하면 작업공간으로 간다.
 // 예외 PRJ-02V1(이름 미입력)·PRJ-02V2(입력값 오류)·PRJ-03F(생성 실패). 입력은 이름·설명뿐이다(SPEC AC16, 2026-11-07).
 const NAME_MIN = 2
 const NAME_MAX = 40
 const DESCRIPTION_MAX = 200
 const ALLOWED_CHAR = /[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9 _-]/
 
-type Phase = 'form' | 'creating' | 'failed' | 'done' | 'invite' | 'connect'
+type Phase = 'form' | 'creating' | 'failed' | 'done' | 'invite' | 'connect' | 'analysis'
 
 interface CreateProjectDialogProps {
   onClose: () => void
@@ -69,19 +71,28 @@ export function CreateProjectDialog({ onClose, onCreated, onManageMembers, onSta
     }
   }
 
-  if (created && (phase === 'done' || phase === 'invite' || phase === 'connect')) {
+  if (created && (phase === 'done' || phase === 'invite' || phase === 'connect' || phase === 'analysis')) {
     // 시안 PRJ-04·INV의 ✕·[나중에 …]는 연결 단계(CON-01)로 간다. 연결 단계의 ✕만 마법사를 닫는다(PRJ-01)
     const toConnect = () => setPhase('connect')
     return (
-      <Overlay onClose={phase === 'connect' ? onClose : toConnect}>
+      <Overlay wide={phase === 'analysis'} onClose={phase === 'connect' || phase === 'analysis' ? onClose : toConnect}>
         {phase === 'done' && <DoneView project={created} onInvite={() => setPhase('invite')} onLater={toConnect} />}
         {/* 연결 단계에서 [이전]으로 돌아왔을 때 보낸 초대 결과가 남도록 초대 단계는 숨기기만 한다 */}
-        {phase !== 'done' && (
+        {phase !== 'done' && phase !== 'analysis' && (
           <div hidden={phase !== 'invite'}>
             <InviteStep project={created} onClose={toConnect} onNext={toConnect} onManageMembers={() => onManageMembers(created)} />
           </div>
         )}
-        {phase === 'connect' && <ConnectStep project={created} onClose={onClose} onBack={() => setPhase('invite')} onStart={() => onStart(created)} />}
+        {/* 비교 분석에서 [연결 정보 확인]으로 돌아왔을 때 입력한 링크가 남도록 연결 단계도 숨기기만 한다 */}
+        {(phase === 'connect' || phase === 'analysis') && (
+          <div hidden={phase !== 'connect'}>
+            <ConnectStep project={created} onClose={onClose} onBack={() => setPhase('invite')} onStart={() => setPhase('analysis')} />
+          </div>
+        )}
+        {phase === 'analysis' && (
+          <AnalysisStep projectId={created.id} projectName={created.name} inWizard onClose={onClose}
+            onCheckConnection={() => setPhase('connect')} onDone={() => onStart(created)} />
+        )}
       </Overlay>
     )
   }

@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { ProjectsPage } from './pages/ProjectsPage'
+import { MappingPage } from './pages/MappingPage'
 import { MembersPage } from './pages/MembersPage'
 import { WorkspacePage } from './pages/WorkspacePage'
 import { InvitationPage } from './pages/InvitationPage'
@@ -16,6 +17,7 @@ function App() {
         <Route path="/app/projects" element={<ProjectsPage />} />
         <Route path="/app/projects/:projectId" element={<WorkspacePage />} />
         <Route path="/app/projects/:projectId/members" element={<MembersPage />} />
+        <Route path="/app/projects/:projectId/mapping" element={<MappingPage />} />
         <Route path="/invitations/:token" element={<InvitationPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

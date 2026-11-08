@@ -7,11 +7,11 @@ import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './wizardStyles'
 // 새 프로젝트 마법사 3단계 — 시안 CON-01(연결 전) → CON-02·04(확인 중) → CON-03·05(완료), 예외 CON-E1~E5.
 // 링크를 입력하고 칸을 벗어나거나 Enter를 누르면 서버가 실제 접근을 확인한다(SPEC AC21) — 링크 입력만으로는 연결되지 않는다.
 // 시안과 다른 점: GitHub는 공개 저장소만 연결한다(GitHub App 없음, 2026-11-07 결정) — CON-E4의 [GitHub에서 접근 허용] 대신
-// 공개 저장소로 바꾸라고 안내한다. [프로젝트 시작하기] 뒤의 비교 분석(CON-06)은 아직 없어 작업공간 홈으로 간다.
+// 공개 저장소로 바꾸라고 안내한다. [프로젝트 시작하기]를 누르면 비교 분석(CON-06)으로 넘어간다.
 // GitHub는 연결되면 분석할 브랜치를 고를 수 있다(처음엔 기본 브랜치, 2026-11-07).
 const GITHUB_PATTERN = /^(?:https?:\/\/)?(?:www\.)?github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+?(?:\.git)?\/?(?:[?#].*)?$/
-// Figma는 앱의 페이지 [공유하기]에서 복사한 페이지 링크만 받는다(2026-11-07): figma.com/design/{key}/{이름}?node-id={페이지}&t=…
-// 이 검사는 모양만 본다 — node-id가 실제로 페이지인지(프레임·섹션이 아닌지)는 서버가 Figma로 확인한다
+// Figma는 최종 시안만 담은 페이지([공유하기]) 또는 섹션([링크 복사]) 링크를 받는다(2026-11-07): figma.com/design/{key}/{이름}?node-id=…
+// 이 검사는 모양만 본다 — node-id가 실제로 페이지·섹션인지(프레임이 아닌지)는 서버가 Figma로 확인한다
 const FIGMA_PATTERN = /^(?:https?:\/\/)?(?:www\.)?figma\.com\/design\/[A-Za-z0-9]+(?:\/[^/?#]*)?\?(?:[^#]*&)?node-id=\d+(?:-|:|%3A)\d+/i
 
 type State =
@@ -28,7 +28,7 @@ const BANNERS: Record<Service, Partial<Record<State['kind'], { title: string; bo
   figma: {
     forbidden: { title: 'Figma 파일 접근 권한을 확인해 주세요', body: '파일 보기 권한이 없어요. 권한이 확인되어야 [프로젝트 시작하기]가 활성화됩니다.' },
     failed: { title: 'Figma 파일을 연결하지 못했어요', body: '파일을 찾을 수 없거나 응답이 지연되고 있어요. 링크를 확인한 뒤 다시 시도해 주세요.' },
-    format: { title: 'Figma 페이지 링크를 확인해 주세요', body: 'Figma 앱에서 대조할 페이지를 연 뒤 [공유하기]로 복사한 페이지 링크만 연결할 수 있어요.' },
+    format: { title: 'Figma 링크를 확인해 주세요', body: '최종 시안만 담은 페이지의 [공유하기] 링크나, 섹션을 우클릭해 [링크 복사]한 링크만 연결할 수 있어요.' },
   },
   github: {
     forbidden: { title: 'GitHub 저장소에 접근할 수 없어요', body: '저장소가 없거나 비공개예요. 공개 저장소만 연결할 수 있어요.' },
@@ -66,7 +66,7 @@ export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepPr
     try {
       const detail = service === 'github'
         ? await connectGithub(project.id, url).then((c) => { setBranches(c.branches); setBranchError(null); return c.branch })
-        : await connectFigma(project.id, url).then((c) => `${c.file_name} › ${c.page_name}`)
+        : await connectFigma(project.id, url).then((c) => `${c.file_name} › ${c.page_name}${c.scope === 'section' ? ' (섹션)' : ''}`)
       set({ url, checked: url, state: { kind: 'connected', detail } })
     } catch (e) {
       if (e instanceof ApiError && e.status === 400) {
@@ -149,8 +149,8 @@ export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepPr
           )}
         />
         <ServiceCard
-          service="figma" title="Figma 연결" label="Figma 페이지 링크" placeholder="ex: https://www.figma.com/design/…?node-id=…"
-          guide="Figma 앱에서 대조할 페이지를 열고 [공유하기] → [링크 복사]로 받은 페이지 링크를 붙여 넣어 주세요."
+          service="figma" title="Figma 연결" label="Figma 페이지·섹션 링크" placeholder="ex: https://www.figma.com/design/…?node-id=…"
+          guide="최종 시안만 담은 페이지의 [공유하기] → [링크 복사] 링크를 붙여 넣어 주세요. 지난 시안이 같은 페이지에 섞여 있다면, 최종 시안 섹션을 우클릭해 [링크 복사]한 섹션 링크를 넣어 주세요."
           value={figma.url} state={figma.state}
           onChange={(url) => setFigma({ ...figma, url, state: figma.state.kind === 'connected' ? figma.state : { kind: 'idle' } })}
           onCheck={(force) => void check('figma', force)} onReset={() => reset('figma')}
@@ -280,7 +280,7 @@ function StatusLine({ service, state, onRetry, onReset }: { service: Service; st
       return (
         <span className="flex items-center gap-1 text-xs text-black">
           <Icon name="alert-circle" className="h-4 w-4 flex-none text-qa-warning" />
-          {state.message ?? (service === 'figma' ? 'Figma 페이지 링크가 아니에요' : '올바른 GitHub 저장소 링크가 아니에요')}
+          {state.message ?? (service === 'figma' ? 'Figma 페이지·섹션 링크가 아니에요' : '올바른 GitHub 저장소 링크가 아니에요')}
         </span>
       )
     default:

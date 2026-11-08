@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
-  ApiError, fetchMe, formatDate, getProjectDetail, listInvitations, listMembers,
-  type Invitation, type Me, type ProjectDetail, type ProjectMember,
+  ApiError, fetchMe, formatDate, getAnalysis, getMappings, getProjectDetail, listInvitations, listMembers,
+  type Invitation, type MappingList, type Me, type ProjectDetail, type ProjectMember, type ProjectRun,
 } from '../lib/api'
 import { AppHeader } from '../components/projects/AppHeader'
 import { WorkspaceSidebar } from '../components/members/WorkspaceSidebar'
@@ -10,15 +10,18 @@ import { DeleteProjectDialog } from '../components/projects/DeleteProjectDialog'
 import { InviteDialog } from '../components/members/InviteDialog'
 import { Icon } from '../components/common/Icon'
 import {
-  ConnectionsCard, FirstQaStatus, GettingStarted, MembersCard, ProjectInfoCard, QaQueueCard,
+  AnalysisCard, ConnectionsCard, FirstQaStatus, GettingStarted, MappingCard, MembersCard, ProjectInfoCard, QaQueueCard,
   SmallButton, WorkflowStepper, type ChecklistItem,
 } from '../components/workspace/WorkspaceCards'
+import { AnalysisStep } from '../components/projects/AnalysisStep'
+import { Overlay } from '../components/projects/WizardParts'
 import { currentStep } from '../components/workspace/workflow'
 
 // 프로젝트 작업공간 홈(시안 WS-01·01N·01M·02, SPEC AC25). 프로젝트를 열면 여기로 온다.
 // 상태별 모양: 멤버 없음(01N) / 초대 후(01M) / 첫 QA 이후(02). 같은 컴포넌트가 데이터로 갈라진다.
 // 시안과 다른 점(데이터가 아직 없어 지어내지 않는다, N4):
-//  - "최근 AI 분석"·"디자인-코드 매핑" 카드: 비교 분석(AC22)이 아직 없어 그리지 않는다
+//  - "최근 AI 분석"은 서버가 주는 실행 상태·매핑 수만 보여 준다(처리 요소 수·변경 이력 분석은 없다).
+//    "디자인-코드 매핑" 카드는 분석이 성공했을 때만, 평균 매핑 신뢰도는 서버가 주지 않아 뺐다
 //  - [첫 QA 실행]·[QA 준비하기]·[연결 관리]: 화면이 아직 없어 잠가 둔다
 
 /** 마법사 끝(ProjectsPage)에서 넘겨주는 토스트 신호 */
@@ -39,6 +42,9 @@ export function WorkspacePage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [run, setRun] = useState<ProjectRun | null>(null)
+  const [mapping, setMapping] = useState<MappingList | null>(null)
+  const [analysisOpen, setAnalysisOpen] = useState(false)
   const [invitedNow, setInvitedNow] = useState(0)
   const [toast, setToast] = useState<Toast | null>(
     (location.state as WorkspaceLocationState | null)?.justCreated ? { kind: 'created' } : null,
@@ -51,7 +57,10 @@ export function WorkspacePage() {
 
   const load = useCallback(async () => {
     try {
-      const [d, m, inv] = await Promise.all([getProjectDetail(projectId), listMembers(projectId), listInvitations(projectId)])
+      const [d, m, inv, run] = await Promise.all([getProjectDetail(projectId), listMembers(projectId), listInvitations(projectId),
+        getAnalysis(projectId)])
+      setRun(run)
+      setMapping(run?.status === 'succeeded' ? await getMappings(projectId) : null)
       setDetail(d)
       setMembers(m)
       setInvitations(inv)
@@ -100,12 +109,20 @@ export function WorkspacePage() {
             <div className="text-sm text-qa-text-sub">불러오는 중…</div>
           ) : (
             <Workspace
-              detail={detail} me={me} members={members} invitations={invitations} toast={toast}
-              onInvite={() => setInviteOpen(true)} onDelete={() => setDeleteOpen(true)}
+              detail={detail} me={me} members={members} invitations={invitations} toast={toast} run={run} mapping={mapping}
+              onInvite={() => setInviteOpen(true)} onDelete={() => setDeleteOpen(true)} onAnalysis={() => setAnalysisOpen(true)}
             />
           )}
         </main>
       </div>
+      {analysisOpen && detail && (
+        <Overlay wide onClose={() => { setAnalysisOpen(false); void load() }}>
+          <AnalysisStep projectId={projectId} projectName={detail.name} inWizard={false}
+            onClose={() => { setAnalysisOpen(false); void load() }}
+            onCheckConnection={() => { setAnalysisOpen(false); void load() }}
+            onDone={() => { setAnalysisOpen(false); void load() }} />
+        </Overlay>
+      )}
       {inviteOpen && (
         <InviteDialog projectId={projectId} onClose={closeInvite}
           onInvited={() => { setInvitedNow((n) => n + 1); void load() }} />
@@ -117,14 +134,17 @@ export function WorkspacePage() {
   )
 }
 
-function Workspace({ detail, me, members, invitations, toast, onInvite, onDelete }: {
+function Workspace({ detail, me, members, invitations, toast, run, mapping, onInvite, onDelete, onAnalysis }: {
   detail: ProjectDetail
   me: Me
   members: ProjectMember[]
   invitations: Invitation[]
   toast: Toast | null
+  run: ProjectRun | null
+  mapping: MappingList | null
   onInvite: () => void
   onDelete: () => void
+  onAnalysis: () => void
 }) {
   const isOwner = detail.owner_id === me.id
   const c = detail.issue_counts
@@ -228,6 +248,8 @@ function Workspace({ detail, me, members, invitations, toast, onInvite, onDelete
           <MembersCard projectId={detail.id} me={me.id ?? ''} ownerId={detail.owner_id}
             members={members} invitations={invitations} onInvite={onInvite} />
           <ConnectionsCard detail={detail} />
+          <AnalysisCard run={run} mapping={mapping} connected={bothConnected} isOwner={isOwner} onOpen={onAnalysis} />
+          {mapping && mapping.run && <MappingCard projectId={detail.id} mapping={mapping} />}
         </div>
       </div>
 

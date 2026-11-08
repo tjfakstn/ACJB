@@ -304,12 +304,18 @@ export function formatDate(iso: string): string {
 
 export interface ProjectRun {
   id: string
-  kind: 'analysis' | 'first_qa'
+  kind: 'analysis' | 'first_qa' | 're_qa'
   status: Exclude<RunStatus, 'none'>
-  /** analysis는 저장한 매핑 수 */
+  /** analysis는 저장한 매핑 수, first_qa는 만든 이슈 수, re_qa는 해결(pass)된 이슈 수 */
   created_count: number
-  /** 근거가 없어 버린 짝 수 */
+  /** analysis·first_qa는 근거가 없어 버린 수, re_qa는 근거를 다시 얻지 못해 건너뛴 수 */
   dropped_count: number
+  /** re_qa에서 여전히 달라 fail로 판정한 수. 다른 kind는 null */
+  failed_count: number | null
+  /** first_qa가 고른 검증 범위 */
+  scope: QaScope[] | null
+  /** 개발용 가짜 비교기로 돈 실행([시연용] — 2026-11-08) */
+  demo: boolean
   error_message: string | null
   created_at: string
   finished_at: string | null
@@ -339,4 +345,131 @@ export function formatDateTime(iso: string): string {
   if (Number.isNaN(d.getTime())) return '-'
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${formatDate(iso)} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// --- 첫 QA(AC23)·QA 이슈·담당 팀(AC3·AC13)·자동 Re-QA(AC28) — 2026-11-08 ---
+
+/** 첫 QA 검증 범위(시안 QA-01) — 1개 이상 */
+export type QaScope = 'size_spacing' | 'color_typography' | 'border_radius' | 'layout' | 'presence'
+
+export const QA_SCOPES: { value: QaScope; label: string }[] = [
+  { value: 'size_spacing', label: '크기·간격·위치' },
+  { value: 'color_typography', label: '색상·타이포그래피' },
+  { value: 'border_radius', label: '테두리·모서리' },
+  { value: 'layout', label: '레이아웃' },
+  { value: 'presence', label: 'UI 요소 존재 여부' },
+]
+
+/** 담당 팀은 프로젝트 역할과 같은 값 — 그 역할 멤버들이 팀이다(2026-11-08) */
+export type Team = MemberRole
+
+export const TEAM_LABELS: Record<Team, string> = {
+  planner: '기획팀',
+  designer: '디자인팀',
+  frontend: '프론트엔드팀',
+  backend: '백엔드팀',
+}
+
+export type StyleProperty = 'color' | 'font_weight' | 'font_family' | 'radius' | 'shadow' | 'spacing' | 'text'
+
+export const PROPERTY_LABELS: Record<StyleProperty, string> = {
+  color: '색상',
+  font_weight: '글자 굵기',
+  font_family: '글꼴',
+  radius: '모서리',
+  shadow: '그림자',
+  spacing: '간격',
+  text: '텍스트',
+}
+
+export interface StyleMismatch {
+  id: string
+  frame_id: string | null
+  screen: string | null
+  property: StyleProperty
+  expected_value: string
+  actual_value: string
+}
+
+export interface QaIssue {
+  id: string
+  project_id: string
+  description: string
+  /** 첫 QA 이슈는 "화면 / 요소" */
+  screen_location: string
+  repro_steps: string[]
+  platform_scope: 'common' | 'aos' | 'ios'
+  figma_link: string | null
+  style_mismatch: StyleMismatch | null
+  status: IssueStatus
+  source: 'manual' | 'first_qa'
+  /** changed_at asc */
+  status_history: { status: IssueStatus; changed_by: string; changed_at: string }[]
+  assigned_team: Team | null
+  reported_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Verification {
+  id: string
+  qa_issue_id: string
+  result: 'pass' | 'fail'
+  scope: string | null
+  source: 'manual' | 're_qa'
+  /** Re-QA가 다시 읽은 구현 값(시안 RQA-03 수정 후). manual이면 null */
+  observed_value: string | null
+  verified_by: string
+  verified_at: string
+}
+
+/** 소유자만. 성공한 비교 분석이 있고 첫 QA가 아직 성공하지 않았을 때 202(그 외 409 NOT_READY), scope 비면 400 */
+export function startFirstQa(projectId: string, scope: QaScope[]): Promise<ProjectRun> {
+  return request<ProjectRun>('POST', `/api/v1/projects/${projectId}/first-qa`, { scope })
+}
+
+/** 최근 첫 QA — 실행한 적이 없으면 null */
+export function getFirstQa(projectId: string): Promise<ProjectRun | null> {
+  return request<ProjectRun | null>('GET', `/api/v1/projects/${projectId}/first-qa`)
+}
+
+/** 소유자만. fixed인 첫 QA 이슈가 없거나 첫 QA·Re-QA가 진행 중이면 409 NOT_READY */
+export function startReQa(projectId: string): Promise<ProjectRun> {
+  return request<ProjectRun>('POST', `/api/v1/projects/${projectId}/re-qa`)
+}
+
+/** 최근 Re-QA — 실행한 적이 없으면 null */
+export function getReQa(projectId: string): Promise<ProjectRun | null> {
+  return request<ProjectRun | null>('GET', `/api/v1/projects/${projectId}/re-qa`)
+}
+
+/** 서버가 created_at desc, id desc로 고정해 돌려준다 */
+export async function listIssues(projectId: string): Promise<QaIssue[]> {
+  const data = await request<{ items: QaIssue[] }>('GET', `/api/v1/projects/${projectId}/qa-issues`)
+  return data.items
+}
+
+export function getIssue(projectId: string, issueId: string): Promise<QaIssue> {
+  return request<QaIssue>('GET', `/api/v1/projects/${projectId}/qa-issues/${issueId}`)
+}
+
+/** 프로젝트 멤버 누구나. 같은 팀 재지정은 알림 없음, null로 비우기는 400(AC3·N5) */
+export function assignTeam(projectId: string, issueId: string, team: Team): Promise<QaIssue> {
+  return request<QaIssue>('PATCH', `/api/v1/projects/${projectId}/qa-issues/${issueId}`, { assigned_team: team })
+}
+
+/** in_progress·fixed는 역할이 담당 팀인 멤버만(403), 정해진 전이 밖이면 409(AC6·AC13) */
+export function changeIssueStatus(projectId: string, issueId: string, status: 'in_progress' | 'fixed'): Promise<QaIssue> {
+  return request<QaIssue>('PATCH', `/api/v1/projects/${projectId}/qa-issues/${issueId}`, { status })
+}
+
+/** verified_at desc */
+export async function listVerifications(projectId: string, issueId: string): Promise<Verification[]> {
+  const data = await request<{ items: Verification[] }>('GET', `/api/v1/projects/${projectId}/qa-issues/${issueId}/verifications`)
+  return data.items
+}
+
+/** 연결한 Figma 파일에서 그 프레임을 여는 링크 */
+export function figmaFrameUrl(fileKey: string, frameId: string): string {
+  return `https://www.figma.com/design/${fileKey}/?node-id=${encodeURIComponent(frameId.replace(':', '-'))}`
 }

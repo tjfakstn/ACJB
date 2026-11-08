@@ -62,8 +62,8 @@ export function CloseButton({ onClick, disabled }: { onClick: () => void; disabl
   )
 }
 
-// 시안 Dialog 너비 — 기본 560, 비교 분석 640, 초대 입력·확인(INV-01~04) 760, 초대 완료(INV-05) 600
-const WIDTHS = { 560: 'max-w-[560px]', 600: 'max-w-[600px]', 640: 'max-w-[640px]', 760: 'max-w-[760px]' } as const
+// 시안 Dialog 너비 — 확인 창(GST-02C) 480, 기본 560, 비교 분석 640, 초대 입력·확인(INV-01~04) 760, 초대 완료(INV-05) 600
+const WIDTHS = { 480: 'max-w-[480px]', 560: 'max-w-[560px]', 600: 'max-w-[600px]', 640: 'max-w-[640px]', 760: 'max-w-[760px]' } as const
 export type OverlayWidth = keyof typeof WIDTHS
 
 /** 화면 전체를 덮는 반투명 배경 + 가운데 창. onClose가 없으면(처리 중) 배경·Esc로 닫히지 않는다 */

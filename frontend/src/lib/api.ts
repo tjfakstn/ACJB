@@ -147,7 +147,8 @@ export async function listMembers(projectId: string): Promise<ProjectMember[]> {
   return data.items
 }
 
-export interface FigmaConnection { url: string; file_key: string; file_name: string; page_id: string; page_name: string; connected_at: string }
+/** page_id·page_name은 페이지 또는 섹션 — scope가 어느 쪽인지 알려 준다(2026-11-07) */
+export interface FigmaConnection { url: string; file_key: string; file_name: string; page_id: string; page_name: string; scope: 'page' | 'section'; connected_at: string }
 export interface GithubConnection { url: string; repo: string; default_branch: string; branch: string; connected_at: string }
 /** 연결 응답에만 — 고를 수 있는 브랜치(이름순, 최대 100개) */
 export interface GithubConnectResult extends GithubConnection { branches: string[] }
@@ -295,4 +296,45 @@ export function formatDate(iso: string): string {
   if (Number.isNaN(d.getTime())) return '-'
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+// --- 비교 분석(AC22)·디자인-코드 매핑(AC27) ---
+
+export interface ProjectRun {
+  id: string
+  kind: 'analysis' | 'first_qa'
+  status: Exclude<RunStatus, 'none'>
+  /** analysis는 저장한 매핑 수 */
+  created_count: number
+  /** 근거가 없어 버린 짝 수 */
+  dropped_count: number
+  error_message: string | null
+  created_at: string
+  finished_at: string | null
+}
+
+/** 소유자만. Figma·GitHub가 둘 다 연결돼 있고 진행 중·성공한 분석이 없을 때만 202(그 외 409 NOT_READY) */
+export function startAnalysis(projectId: string): Promise<ProjectRun> {
+  return request<ProjectRun>('POST', `/api/v1/projects/${projectId}/analysis`)
+}
+
+/** 최근 비교 분석 — 실행한 적이 없으면 null */
+export function getAnalysis(projectId: string): Promise<ProjectRun | null> {
+  return request<ProjectRun | null>('GET', `/api/v1/projects/${projectId}/analysis`)
+}
+
+export interface NodeMapping { node_id: string; node_name: string; code_path: string; code_symbol: string }
+export interface FrameMapping { frame_id: string; frame_name: string; code_path: string; nodes: NodeMapping[] }
+export interface MappingList { run: ProjectRun | null; commit_sha: string | null; items: FrameMapping[] }
+
+/** 최근 성공한 비교 분석의 매핑 — 프레임 이름순, 그 안 노드 이름순. 없으면 items 빈 배열 */
+export function getMappings(projectId: string): Promise<MappingList> {
+  return request<MappingList>('GET', `/api/v1/projects/${projectId}/analysis/mappings`)
+}
+
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '-'
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${formatDate(iso)} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }

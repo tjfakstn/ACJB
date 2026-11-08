@@ -63,13 +63,13 @@ export function CloseButton({ onClick, disabled }: { onClick: () => void; disabl
 }
 
 /** 화면 전체를 덮는 반투명 배경 + 가운데 560px 창. onClose가 없으면(처리 중) 배경·Esc로 닫히지 않는다 */
-export function Overlay({ children, onClose }: { children: ReactNode; onClose?: () => void }) {
+export function Overlay({ children, onClose, wide }: { children: ReactNode; onClose?: () => void; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.() }}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose?.() }}>
       <div role="dialog" aria-modal="true" aria-labelledby="create-project-title"
-        className="max-h-[calc(100vh-32px)] w-full max-w-[560px] overflow-y-auto rounded-2xl bg-white p-6 shadow-[0_20px_48px_rgba(15,23,41,0.18)]">
+        className={`max-h-[calc(100vh-32px)] w-full ${wide ? 'max-w-[640px]' : 'max-w-[560px]'} overflow-y-auto rounded-2xl bg-white p-6 shadow-[0_20px_48px_rgba(15,23,41,0.18)]`}>
         {children}
       </div>
     </div>

@@ -2,10 +2,11 @@ import { NavLink } from 'react-router-dom'
 import { Icon } from '../common/Icon'
 
 // 프로젝트 작업공간 왼쪽 메뉴(시안 WS-01 "작업 메뉴" — 240px, 항목 207×40, 아이콘 20, 활성 primary 10% 배경).
-// 지금 만들어진 화면은 프로젝트 홈뿐이라 나머지는 시안 모양 그대로 두되 누를 수 없게 한다.
+// 만들어진 화면은 프로젝트 홈·디자인-코드 매핑(시안 WS-03 메뉴, 2026-11-07)이고 나머지는 시안 모양 그대로 두되 누를 수 없게 한다.
 // 멤버 관리는 시안 메뉴에 없다 — 작업공간 홈의 "프로젝트 멤버" 카드 [멤버 관리]로 들어간다.
 const ITEMS: { label: string; icon: string; path: string | null }[] = [
   { label: '프로젝트 홈', icon: 'home', path: '' },
+  { label: '디자인-코드 매핑', icon: 'git-compare', path: 'mapping' },
   { label: '디자인 QA', icon: 'shield-check', path: null },
   { label: 'QA 결과', icon: 'list-checks', path: null },
   { label: 'QA Queue', icon: 'inbox', path: null },

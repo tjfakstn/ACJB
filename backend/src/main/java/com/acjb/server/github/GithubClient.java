@@ -1,7 +1,7 @@
 package com.acjb.server.github;
 
 /**
- * GitHub REST API 중 저장소 연결 확인(AC21)에 쓰는 호출. 코드만 읽고 이슈·PR은 다루지 않는다(N13).
+ * GitHub REST API 중 저장소 연결 확인(AC21)과 비교 분석(AC22)에 쓰는 호출. 코드만 읽고 이슈·PR은 다루지 않는다(N13).
  * 테스트에서는 가짜로 바꿔 끼운다
  */
 public interface GithubClient {
@@ -16,5 +16,17 @@ public interface GithubClient {
     boolean branchExists(String owner, String repo, String branch);
 
     record RepoInfo(String fullName, String defaultBranch, boolean isPrivate) {
+    }
+
+    /** GET /repos/{owner}/{repo}/commits/{branch} — 그 브랜치의 지금 커밋 sha(비교 분석은 이 시점 코드를 읽는다, AC22) */
+    String commitSha(String owner, String repo, String branch);
+
+    /** GET /repos/{owner}/{repo}/git/trees/{sha}?recursive=1 — 파일(blob)만. GitHub가 목록을 잘랐으면(truncated) 예외 */
+    java.util.List<TreeFile> tree(String owner, String repo, String sha);
+
+    /** GET /repos/{owner}/{repo}/contents/{path}?ref={sha} (raw) — 파일 원문 */
+    String fileContent(String owner, String repo, String sha, String path);
+
+    record TreeFile(String path, long size) {
     }
 }

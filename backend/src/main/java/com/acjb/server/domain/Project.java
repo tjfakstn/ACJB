@@ -2,8 +2,13 @@ package com.acjb.server.domain;
 
 import java.time.Instant;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -58,6 +63,12 @@ public class Project {
     @Column(name = "figma_page_name", length = 255)
     private String figmaPageName;
 
+    /** figma_page_id가 페이지인지 섹션인지(V8) */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "figma_scope", length = 10)
+    private FigmaScope figmaScope;
+
     @Column(name = "figma_connected_at")
     private Instant figmaConnectedAt;
 
@@ -92,7 +103,8 @@ public class Project {
     }
 
     /** AC21 — 접근 확인에 성공한 값만 넘긴다(서비스에서 확인) */
-    public void connectFigma(String url, String fileKey, String fileName, String pageId, String pageName, Instant now) {
+    public void connectFigma(String url, String fileKey, String fileName, String pageId, String pageName, FigmaScope scope, Instant now) {
+        this.figmaScope = scope;
         this.figmaUrl = url;
         this.figmaFileKey = fileKey;
         this.figmaFileName = fileName;

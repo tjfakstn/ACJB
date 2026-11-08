@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.acjb.server.common.ApiException;
 import com.acjb.server.common.ErrorCodes;
+import com.acjb.server.domain.FigmaScope;
 import com.acjb.server.domain.Member;
 import com.acjb.server.domain.Project;
 import com.acjb.server.domain.RunKind;
@@ -22,6 +23,7 @@ import com.acjb.server.dto.GithubConnectResponse;
 import com.acjb.server.dto.ProjectDetailResponse;
 import com.acjb.server.figma.FigmaApiException;
 import com.acjb.server.figma.FigmaClient;
+import com.acjb.server.figma.FigmaNode;
 import com.acjb.server.github.GithubApiException;
 import com.acjb.server.github.GithubClient;
 import com.acjb.server.repository.ProjectRepository;
@@ -38,12 +40,12 @@ public class ConnectionService {
     private static final Logger log = LoggerFactory.getLogger(ConnectionService.class);
 
     /**
-     * Figma 앱의 페이지 [공유하기]에서 복사한 페이지 링크만 받는다(2026-11-07): figma.com/design/{key}/{이름}?node-id={페이지}&t=…
+     * 최종 시안만 담은 페이지([공유하기]) 또는 섹션([링크 복사])의 링크를 받는다(2026-11-07): figma.com/design/{key}/{이름}?node-id={페이지·섹션}&t=…
      * node-id는 주소에서 "424-2"(또는 "424:2", "424%3A2")로 온다. 프로토타입·브랜치·프로젝트 링크는 이 형식이 아니라서 400
      */
     private static final Pattern FIGMA_URL = Pattern.compile("^(?:https?://)?(?:www\\.)?figma\\.com/design/([A-Za-z0-9]+)(?:/[^/?#]*)?\\?([^#]*)(?:#.*)?$");
     private static final Pattern NODE_ID_PARAM = Pattern.compile("(?:^|&)node-id=([0-9]+)(?:-|:|%3A|%3a)([0-9]+)(?:&|$)");
-    private static final String PAGE_LINK_GUIDE = "Figma 앱에서 대조할 페이지를 연 뒤 [공유하기]로 복사한 페이지 링크를 붙여 넣어 주세요.";
+    private static final String PAGE_LINK_GUIDE = "최종 시안만 담은 페이지의 [공유하기] 링크나, 섹션을 우클릭해 [링크 복사]한 링크를 붙여 넣어 주세요.";
     private static final Pattern GITHUB_URL = Pattern.compile("^(?:https?://)?(?:www\\.)?github\\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\\.git)?/?(?:[?#].*)?$");
     private static final int URL_MAX = 500;
     private static final HttpStatus UNPROCESSABLE = HttpStatus.valueOf(422);
@@ -69,7 +71,7 @@ public class ConnectionService {
         Matcher m = url == null ? null : FIGMA_URL.matcher(url);
         Matcher node = m != null && m.matches() ? NODE_ID_PARAM.matcher(m.group(2)) : null;
         if (node == null || !node.find()) {
-            throw ApiException.badRequest("Figma 페이지 링크가 아니에요. " + PAGE_LINK_GUIDE);
+            throw ApiException.badRequest("Figma 페이지·섹션 링크가 아니에요. " + PAGE_LINK_GUIDE);
         }
         String pageId = node.group(1) + ":" + node.group(2);
         rejectAfterAnalysis(projectId);
@@ -94,12 +96,36 @@ public class ConnectionService {
             throw new ApiException(HttpStatus.BAD_GATEWAY, ErrorCodes.CONNECTION_FAILED,
                 "파일을 찾을 수 없거나 Figma 응답이 지연되고 있어요. 링크를 확인한 뒤 다시 시도해 주세요.");
         }
-        // node-id가 페이지가 아니면(프레임·섹션을 골라 복사한 링크) 받지 않는다 — 대조 범위는 페이지 하나다
-        FigmaClient.Page page = outline.pages().stream().filter(p -> p.id().equals(pageId)).findFirst()
-            .orElseThrow(() -> ApiException.badRequest("링크가 페이지가 아니라 프레임이나 섹션을 가리켜요. " + PAGE_LINK_GUIDE));
+        // 페이지면 그대로, 아니면 섹션인지 확인한다 — 프레임 등 다른 노드는 대조 범위가 아니라 받지 않는다(2026-11-07)
+        String scopeName;
+        FigmaScope scope;
+        FigmaClient.Page page = outline.pages().stream().filter(p -> p.id().equals(pageId)).findFirst().orElse(null);
+        if (page != null) {
+            scopeName = page.name();
+            scope = FigmaScope.PAGE;
+        } else {
+            scopeName = sectionNode(fileKey, pageId).name();
+            scope = FigmaScope.SECTION;
+        }
         Instant now = clock.instant();
-        project.connectFigma(url, fileKey, outline.name(), page.id(), page.name(), now);
-        return new ProjectDetailResponse.FigmaConnection(url, fileKey, outline.name(), page.id(), page.name(), now);
+        project.connectFigma(url, fileKey, outline.name(), pageId, scopeName, scope, now);
+        return new ProjectDetailResponse.FigmaConnection(url, fileKey, outline.name(), pageId, scopeName,
+            scope.name().toLowerCase(java.util.Locale.ROOT), now);
+    }
+
+    private FigmaNode sectionNode(String fileKey, String nodeId) {
+        java.util.Optional<FigmaNode> node;
+        try {
+            node = figma.nodes(fileKey, List.of(nodeId)).getOrDefault(nodeId, java.util.Optional.empty());
+        } catch (FigmaApiException e) {
+            log.warn("Figma 노드 확인 실패: status={} message={}", e.status(), e.getMessage());
+            throw new ApiException(HttpStatus.BAD_GATEWAY, ErrorCodes.CONNECTION_FAILED,
+                "Figma 응답이 지연되고 있어요. 잠시 뒤 다시 시도해 주세요.");
+        }
+        if (node.isEmpty() || !"SECTION".equals(node.get().type())) {
+            throw ApiException.badRequest("링크가 페이지나 섹션이 아니라 프레임 같은 다른 요소를 가리켜요. " + PAGE_LINK_GUIDE);
+        }
+        return node.get();
     }
 
     /** 브랜치 이름 — GitHub가 허용하는 문자만 대략 거른다(실제 존재는 GitHub로 확인) */

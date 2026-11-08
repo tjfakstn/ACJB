@@ -212,6 +212,16 @@ class InvitationApiTest {
     // --- AC18 ---
 
     @Test
+    void 초대_미리보기는_프로젝트_id를_함께_준다() throws Exception {
+        invite(dev, "preview-id@test.dev").andExpect(status().isCreated());
+
+        mvc.perform(as(get("/api/v1/invitations/" + lastToken()), "preview-id@test.dev"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.project_id").value(String.valueOf(project.getId())))
+            .andExpect(jsonPath("$.data.token").doesNotExist());
+    }
+
+    @Test
     void ac18_초대받은_계정으로_수락하면_고른_역할의_멤버가_되고_초대는_accepted() throws Exception {
         invite(dev, "joiner@test.dev").andExpect(status().isCreated());
         String token = lastToken();

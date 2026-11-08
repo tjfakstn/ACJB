@@ -35,10 +35,11 @@ public final class InvitationDtos {
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record Preview(String projectName, String projectDescription, String invitedByName, String email, String status,
-                          Instant expiresAt) {
+    /** projectId — 이미 참여한 사람을 그 프로젝트로 보내는 데 쓴다(시안 GST-02A). id만으로는 접근할 수 없다(AC12) */
+    public record Preview(String projectId, String projectName, String projectDescription, String invitedByName, String email,
+                          String status, Instant expiresAt) {
         public static Preview of(Invitation i, Instant now) {
-            return new Preview(i.getProject().getName(), i.getProject().getDescription(), i.getInvitedBy().getName(), i.getEmail(),
+            return new Preview(String.valueOf(i.getProject().getId()), i.getProject().getName(), i.getProject().getDescription(), i.getInvitedBy().getName(), i.getEmail(),
                 i.effectiveStatus(now).name().toLowerCase(Locale.ROOT), i.getExpiresAt());
         }
     }

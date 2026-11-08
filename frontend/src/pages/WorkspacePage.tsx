@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
-  ApiError, fetchMe, formatDate, getAnalysis, getMappings, getProjectDetail, listInvitations, listMembers,
-  type Invitation, type MappingList, type Me, type ProjectDetail, type ProjectMember, type ProjectRun,
+  ApiError, fetchMe, formatDate, getAnalysis, getMappings, getProjectDetail, listInvitations, listMembers, ROLE_LABELS,
+  type Invitation, type MappingList, type Me, type MemberRole, type ProjectDetail, type ProjectMember, type ProjectRun,
 } from '../lib/api'
 import { AppHeader } from '../components/projects/AppHeader'
 import { WorkspaceSidebar } from '../components/members/WorkspaceSidebar'
@@ -27,9 +27,11 @@ import { currentStep } from '../components/workspace/workflow'
 /** 마법사 끝(ProjectsPage)에서 넘겨주는 토스트 신호 */
 export interface WorkspaceLocationState {
   justCreated?: boolean
+  /** 초대 수락 화면(GST-02)에서 고른 역할 */
+  joinedRole?: MemberRole
 }
 
-type Toast = { kind: 'created' } | { kind: 'invited'; count: number }
+type Toast = { kind: 'created' } | { kind: 'invited'; count: number } | { kind: 'joined'; role: MemberRole }
 
 export function WorkspacePage() {
   const { projectId = '' } = useParams()
@@ -46,13 +48,17 @@ export function WorkspacePage() {
   const [mapping, setMapping] = useState<MappingList | null>(null)
   const [analysisOpen, setAnalysisOpen] = useState(false)
   const [invitedNow, setInvitedNow] = useState(0)
-  const [toast, setToast] = useState<Toast | null>(
-    (location.state as WorkspaceLocationState | null)?.justCreated ? { kind: 'created' } : null,
-  )
+  const [toast, setToast] = useState<Toast | null>(() => {
+    const state = location.state as WorkspaceLocationState | null
+    // GST-03 — 초대를 수락하고 들어오면 고른 역할로 참여했다고 알린다
+    if (state?.joinedRole) return { kind: 'joined', role: state.joinedRole }
+    return state?.justCreated ? { kind: 'created' } : null
+  })
 
   // 새로고침하면 토스트가 다시 뜨지 않게 history state를 비운다
   useEffect(() => {
-    if ((location.state as WorkspaceLocationState | null)?.justCreated) navigate('.', { replace: true, state: null })
+    const state = location.state as WorkspaceLocationState | null
+    if (state?.justCreated || state?.joinedRole) navigate('.', { replace: true, state: null })
   }, [location.state, navigate])
 
   const load = useCallback(async () => {
@@ -229,7 +235,7 @@ function Workspace({ detail, me, members, invitations, toast, run, mapping, onIn
         }
       />
 
-      {toast && !qaDone && <ToastBanner toast={toast} detail={detail} alone={alone} />}
+      {toast && (!qaDone || toast.kind === 'joined') && <ToastBanner toast={toast} detail={detail} alone={alone} />}
 
       <WorkflowStepper current={currentStep(detail)} />
       <FirstQaStatus detail={detail} openIssues={openIssues} cta={firstQaButton} />
@@ -292,7 +298,11 @@ function PageHeader({ name, description, actions }: { name: string; description:
 function ToastBanner({ toast, detail, alone }: { toast: Toast; detail: ProjectDetail; alone: boolean }) {
   let title: string
   let sub: string
-  if (toast.kind === 'invited') {
+  if (toast.kind === 'joined') {
+    // 시안 문구 "참여 후 변경할 수 없어요"는 스펙과 달라 고쳤다 — 역할은 이후 소유자가 바꿀 수 있다(SPEC AC24)
+    title = `‘${detail.name}’에 ${ROLE_LABELS[toast.role]} 역할로 참여했어요`
+    sub = '프로젝트 역할은 담당 업무 분야를 나타내요. 이후 변경은 소유자가 멤버 관리에서 할 수 있고, QA 문제의 수정 담당 팀은 QA 결과에서 별도로 배정됩니다.'
+  } else if (toast.kind === 'invited') {
     title = `멤버 ${toast.count}명을 초대했어요`
     sub = '수락하면 ‘참여 완료’로 표시돼요. QA 결과와 진행 상태에는 영향이 없으며, QA는 자동으로 실행되지 않아요.'
   } else {

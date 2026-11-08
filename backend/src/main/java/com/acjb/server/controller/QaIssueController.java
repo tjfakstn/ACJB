@@ -54,8 +54,8 @@ public class QaIssueController {
     public Map<String, Object> list(@PathVariable Long projectId,
                                     @RequestParam(required = false) String status,
                                     @RequestParam(required = false) String source,
-                                    @RequestParam(name = "assigned_to", required = false) String assignedTo) {
-        return ApiResponses.ok(service.list(projectId, status, source, assignedTo));
+                                    @RequestParam(name = "assigned_team", required = false) String assignedTeam) {
+        return ApiResponses.ok(service.list(projectId, status, source, assignedTeam));
     }
 
     @GetMapping("/{issueId}")
@@ -63,7 +63,7 @@ public class QaIssueController {
         return ApiResponses.ok(service.get(projectId, issueId));
     }
 
-    /** body는 JsonNode로 받는다 — 필드가 "없음"과 "null"을 구분해야 해서(assigned_to: null은 400) */
+    /** body는 JsonNode로 받는다 — 필드가 "없음"과 "null"을 구분해야 해서(assigned_team: null은 400) */
     @PatchMapping("/{issueId}")
     public Map<String, Object> patch(@PathVariable Long projectId, @PathVariable String issueId, @RequestBody JsonNode body,
                                      @AuthenticationPrincipal OAuth2User principal) {

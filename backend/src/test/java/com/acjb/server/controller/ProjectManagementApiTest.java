@@ -165,16 +165,18 @@ class ProjectManagementApiTest {
         return new Team(project, owner, dev, designer);
     }
 
+    /** assignee의 역할(dev=백엔드)을 담당 팀으로 둔다(2026-11-08 담당자 → 담당 팀) */
     private QAIssue issue(Team t, Member assignee, IssueStatus status) {
+        MemberRole team = projectMembers.findByProjectIdAndMemberId(t.project().getId(), assignee.getId()).orElseThrow().getRole();
         QAIssue issue = issues.save(new QAIssue(t.project(), "d", "홈", List.of("홈 진입"), PlatformScope.COMMON, null, List.of(),
-            null, null, assignee, t.designer()));
+            null, null, team, t.designer()));
         histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, t.designer()));
         issue.changeStatus(status);
         return issues.saveAndFlush(issue);
     }
 
     @Test
-    void ac19_소유자가_멤버를_제거하면_미해결_담당_이슈만_담당자를_비우고_상태_이력은_그대로다() throws Exception {
+    void pj005_소유자가_멤버를_제거해도_이슈_담당_팀_상태_이력_알림은_그대로다() throws Exception {
         Team t = team();
         QAIssue open = issue(t, t.dev(), IssueStatus.NEEDS_CHECK);
         QAIssue fixedIssue = issue(t, t.dev(), IssueStatus.FIXED);
@@ -188,10 +190,11 @@ class ProjectManagementApiTest {
         em.flush();
         em.clear();
         assertThat(projectMembers.existsByProjectIdAndMemberId(t.project().getId(), t.dev().getId())).isFalse();
-        assertThat(issues.findById(open.getId()).orElseThrow().getAssignedTo()).isNull();
-        assertThat(issues.findById(fixedIssue.getId()).orElseThrow().getAssignedTo()).isNull();
+        // 담당은 팀 단위라 사람이 빠져도 이슈는 바뀌지 않는다(AC19, 2026-11-08)
+        assertThat(issues.findById(open.getId()).orElseThrow().getAssignedTeam()).isEqualTo(MemberRole.BACKEND);
+        assertThat(issues.findById(fixedIssue.getId()).orElseThrow().getAssignedTeam()).isEqualTo(MemberRole.BACKEND);
         assertThat(issues.findById(fixedIssue.getId()).orElseThrow().getStatus()).isEqualTo(IssueStatus.FIXED);
-        assertThat(issues.findById(resolved.getId()).orElseThrow().getAssignedTo().getId()).isEqualTo(t.dev().getId());
+        assertThat(issues.findById(resolved.getId()).orElseThrow().getAssignedTeam()).isEqualTo(MemberRole.BACKEND);
         assertThat(histories.count()).isEqualTo(historyBefore);
         assertThat(notifications.count()).isEqualTo(notificationsBefore);
         // 제거된 사람은 이후 AC12대로 403

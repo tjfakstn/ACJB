@@ -75,15 +75,19 @@ class VerificationApiTest {
         reporter = members.save(new Member("v-reporter@test.dev", "등록자"));
         assignee = members.save(new Member("v-assignee@test.dev", "담당자"));
         other = members.save(new Member("v-other@test.dev", "다른 멤버"));
-        for (Member m : List.of(reporter, assignee, other)) {
-            projectMembers.save(new ProjectMember(project, m, MemberRole.BACKEND));
-        }
+        // 담당 팀(2026-11-08) — assignee만 백엔드라 백엔드 팀 알림은 assignee 1명에게 간다
+        projectMembers.save(new ProjectMember(project, reporter, MemberRole.DESIGNER));
+        projectMembers.save(new ProjectMember(project, assignee, MemberRole.BACKEND));
+        projectMembers.save(new ProjectMember(project, other, MemberRole.PLANNER));
         projectMembers.save(new ProjectMember(otherProject, reporter, MemberRole.DESIGNER));
     }
 
+    /** assignedTo의 그 프로젝트 역할을 담당 팀으로 둔다(2026-11-08 담당자 → 담당 팀) */
     private QAIssue issue(Project p, Member assignedTo, IssueStatus status) {
+        MemberRole team = assignedTo == null ? null
+            : projectMembers.findByProjectIdAndMemberId(p.getId(), assignedTo.getId()).map(ProjectMember::getRole).orElse(null);
         QAIssue issue = issues.save(new QAIssue(p, "버튼 색이 달라요", "로그인 화면 버튼",
-            List.of("로그인 화면 진입", "버튼 색 확인"), PlatformScope.COMMON, null, List.of(), null, null, assignedTo, reporter));
+            List.of("로그인 화면 진입", "버튼 색 확인"), PlatformScope.COMMON, null, List.of(), null, null, team, reporter));
         histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
         if (status != IssueStatus.NEEDS_CHECK) {
             issue.changeStatus(status);
@@ -140,7 +144,7 @@ class VerificationApiTest {
     // --- AC11 ---
 
     @Test
-    void nt005_fail이면_담당자에게_recheck_failed_1건() throws Exception {
+    void nt005_fail이면_담당_팀_역할_멤버에게_recheck_failed_1건() throws Exception {
         QAIssue issue = issue(project, assignee, IssueStatus.FIXED);
         verifyAs(reporter, issue, "{\"result\":\"fail\"}")
             .andExpect(status().isCreated())

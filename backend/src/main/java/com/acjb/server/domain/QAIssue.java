@@ -41,7 +41,7 @@ import lombok.NoArgsConstructor;
     // 목록 고정 정렬(created_at desc, id desc)과 상태·담당자·등록자 필터 — docs/db-schema.md 4절
     @Index(name = "idx_qa_issues_project_created", columnList = "project_id, created_at DESC, id DESC"),
     @Index(name = "idx_qa_issues_project_status", columnList = "project_id, status"),
-    @Index(name = "idx_qa_issues_assigned_to", columnList = "assigned_to_id"),
+    @Index(name = "idx_qa_issues_project_team", columnList = "project_id, assigned_team"),
     @Index(name = "idx_qa_issues_reported_by", columnList = "reported_by_id")
 })
 @Getter
@@ -103,15 +103,22 @@ public class QAIssue {
     @Column(name = "status", nullable = false, length = 20)
     private IssueStatus status = IssueStatus.NEEDS_CHECK;
 
-    /** 사람이 등록한 이슈는 manual. first_qa는 첫 QA 구현 때 채운다(AC23, V4) */
+    /** 사람이 등록한 이슈는 manual, 첫 QA가 근거로 저장한 이슈는 first_qa(AC23) */
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "source", nullable = false, length = 10, updatable = false)
     private IssueSource source = IssueSource.MANUAL;
 
+    /** source=first_qa일 때 만든 첫 QA 실행 */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_to_id")
-    private Member assignedTo;
+    @JoinColumn(name = "first_qa_run_id", updatable = false)
+    private ProjectRun firstQaRun;
+
+    /** 담당 팀 — 그 프로젝트에서 이 역할인 멤버들(AC3·AC13, 2026-11-08 사람 → 팀). 없으면 null */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "assigned_team", length = 10)
+    private MemberRole assignedTeam;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "reported_by_id", updatable = false)
@@ -125,7 +132,7 @@ public class QAIssue {
 
     public QAIssue(Project project, String description, String screenLocation, List<String> reproSteps,
                    PlatformScope platformScope, Environment environment, List<String> screenshots,
-                   String figmaLink, StyleMismatch styleMismatch, Member assignedTo, Member reportedBy) {
+                   String figmaLink, StyleMismatch styleMismatch, MemberRole assignedTeam, Member reportedBy) {
         this.project = project;
         this.description = description;
         this.screenLocation = screenLocation;
@@ -135,8 +142,22 @@ public class QAIssue {
         this.screenshots = screenshots == null ? new ArrayList<>() : new ArrayList<>(screenshots);
         this.figmaLink = figmaLink;
         this.styleMismatch = styleMismatch;
-        this.assignedTo = assignedTo;
+        this.assignedTeam = assignedTeam;
         this.reportedBy = reportedBy;
+    }
+
+    /**
+     * 첫 QA가 저장하는 이슈(AC23) — 공통 플랫폼, 담당 팀 없음, 등록자는 실행한 소유자.
+     * 재현 절차는 ["'{프레임}' 화면을 연다", "'{노드}'를 확인한다"]
+     */
+    public static QAIssue firstQa(Project project, ProjectRun run, String description, String frameName, String nodeName,
+                                  StyleMismatch mismatch, Member reporter) {
+        QAIssue issue = new QAIssue(project, description, frameName + " / " + nodeName,
+            List.of("'" + frameName + "' 화면을 연다", "'" + nodeName + "'를 확인한다"),
+            PlatformScope.COMMON, null, List.of(), null, mismatch, null, reporter);
+        issue.source = IssueSource.FIRST_QA;
+        issue.firstQaRun = run;
+        return issue;
     }
 
     /** 상태 변경은 서비스에서 전이 규칙(AC6)을 검사한 뒤에만 호출한다 */
@@ -144,8 +165,8 @@ public class QAIssue {
         this.status = next;
     }
 
-    public void assignTo(Member member) {
-        this.assignedTo = member;
+    public void assignTeam(MemberRole team) {
+        this.assignedTeam = team;
     }
 
     @PrePersist

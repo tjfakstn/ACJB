@@ -81,7 +81,7 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - `POST /projects/{projectId}/invitations/{invitationId}/resend` → 200 `Invitation` — 대기 중 초대의 만료를 7일 연장하고 새 링크로 다시 보낸다(멤버 누구나) (AC17)
 - `GET /projects/{projectId}/invitations` → 대기 중인 초대 목록 / `DELETE .../invitations/{invitationId}` → 초대 취소(초대한 사람 또는 소유자)
 - `GET /invitations/mine` → 로그인 이메일로 온 대기 중인 초대 / `POST /invitations/mine/{invitationId}/accept` — body `{role}` (메일을 못 받았을 때 앱에서 수락하는 경로, 규칙은 AC18과 같다)
-- `GET /invitations/{token}` → 초대 미리보기(프로젝트 이름·설명·초대한 사람·만료 시각) / `POST /invitations/{token}/accept` — body `{role}` → 멤버가 됨 (AC18). `/invitations/**`는 로그인만 필요하다(아직 그 프로젝트 멤버가 아니므로 AC12 대상 아님)
+- `GET /invitations/{token}` → 초대 미리보기(프로젝트 id·이름·설명·초대한 사람·만료 시각) / `POST /invitations/{token}/accept` — body `{role}` → 멤버가 됨 (AC18). `/invitations/**`는 로그인만 필요하다(아직 그 프로젝트 멤버가 아니므로 AC12 대상 아님)
 - `GET /projects/{projectId}/notifications?event?` → `Notification[]` — 내게 온 알림만, `created_at desc` (AC14)
 - `POST /projects/{projectId}/qa-issues/parse` — body `{text}` → `{context: IssueReportContext, missing: string[]}` *(신규)*
 - `POST /projects/{projectId}/qa-issues` — body `{description, screen_location, repro_steps[], platform_scope, environment{platform, device, browser, deploy_stage}, screenshots[], figma_link?, style_mismatch?{property, expected_value, actual_value}, assigned_to?}` → `QAIssue` (`status: "needs_check"`, `reported_by`는 로그인 사용자)

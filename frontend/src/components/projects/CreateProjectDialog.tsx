@@ -44,6 +44,8 @@ function checkName(name: string) {
 
 export function CreateProjectDialog({ onClose, onCreated, onManageMembers, onStart }: CreateProjectDialogProps) {
   const [phase, setPhase] = useState<Phase>('form')
+  // 초대 완료 화면(INV-05)은 입력·확인(760)보다 좁은 600px 창이다
+  const [inviteSent, setInviteSent] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [touched, setTouched] = useState(false)
@@ -75,12 +77,12 @@ export function CreateProjectDialog({ onClose, onCreated, onManageMembers, onSta
     // 시안 PRJ-04·INV의 ✕·[나중에 …]는 연결 단계(CON-01)로 간다. 연결 단계의 ✕만 마법사를 닫는다(PRJ-01)
     const toConnect = () => setPhase('connect')
     return (
-      <Overlay wide={phase === 'analysis'} onClose={phase === 'connect' || phase === 'analysis' ? onClose : toConnect}>
+      <Overlay width={phase === 'analysis' ? 640 : phase === 'invite' ? (inviteSent ? 600 : 760) : 560} onClose={phase === 'connect' || phase === 'analysis' ? onClose : toConnect}>
         {phase === 'done' && <DoneView project={created} onInvite={() => setPhase('invite')} onLater={toConnect} />}
         {/* 연결 단계에서 [이전]으로 돌아왔을 때 보낸 초대 결과가 남도록 초대 단계는 숨기기만 한다 */}
         {phase !== 'done' && phase !== 'analysis' && (
           <div hidden={phase !== 'invite'}>
-            <InviteStep project={created} onClose={toConnect} onNext={toConnect} onManageMembers={() => onManageMembers(created)} />
+            <InviteStep project={created} onClose={toConnect} onNext={toConnect} onManageMembers={() => onManageMembers(created)} onSent={() => setInviteSent(true)} />
           </div>
         )}
         {/* 비교 분석에서 [연결 정보 확인]으로 돌아왔을 때 입력한 링크가 남도록 연결 단계도 숨기기만 한다 */}

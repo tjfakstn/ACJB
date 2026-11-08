@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
-  acceptInvitation, ApiError, fetchMe, formatDate, googleLoginUrl, listMembers, listProjects, logoutUrl, previewInvitation,
+  acceptInvitation, ApiError, fetchMe, formatDate, googleLoginUrl, listMembers, logoutUrl, previewInvitation,
   rememberAfterLogin, ROLE_LABELS, type InvitationPreview, type Me, type MemberRole,
 } from '../lib/api'
 import { AppHeader } from '../components/projects/AppHeader'
@@ -18,7 +18,7 @@ import type { WorkspaceLocationState } from './WorkspacePage'
 //  - "참여 후 변경할 수 없다"는 문구 — 본인은 못 바꾸지만 소유자는 바꿀 수 있다(SPEC AC24). 확인 창·완료 화면에 "변경은 소유자만"으로 적었다
 //  - [거절하기]·[초대 다시 요청하기]는 뺐다 — 거절 기록·재요청 API가 v1에 없다(그냥 두면 7일 뒤 만료). 시안에도 "추가 개발"로 표시돼 있다
 //  - "함께하는 멤버"·초대한 사람의 권한(소유자)은 뺐다 — 초대 미리보기 API가 주지 않는 값이라 지어내지 않는다
-//  - 02A의 프로젝트·기존 역할: 미리보기에 프로젝트 id가 없어서, 내 프로젝트 중 이름·설명이 같은 것이 정확히 하나일 때만 연결한다
+//  - 02A의 기존 역할은 미리보기의 project_id로 멤버 목록에서 찾는다(2026-11-08 미리보기에 project_id 추가)
 type View =
   | { kind: 'loading' }
   | { kind: 'login' }
@@ -38,13 +38,11 @@ const ROLE_DESC: Record<MemberRole, string> = {
   backend: 'API, 데이터 처리 및 서버 기능 구현을 담당합니다.',
 }
 
-/** 02A — 미리보기에 프로젝트 id가 없어 내 프로젝트에서 이름·설명으로 찾는다. 하나로 정해지지 않으면 연결하지 않는다 */
+/** 02A — 미리보기의 프로젝트에서 내 기존 역할을 찾는다. 멤버 목록을 못 읽으면(이미 나간 경우 등) 연결하지 않는다 */
 async function findMyProject(preview: InvitationPreview, me: Me): Promise<{ projectId: string | null; role: MemberRole | null }> {
   try {
-    const matches = (await listProjects()).filter((p) => p.name === preview.project_name && (p.description ?? null) === (preview.project_description ?? null))
-    if (matches.length !== 1) return { projectId: null, role: null }
-    const mine = (await listMembers(matches[0].id)).find((m) => m.id === me.id)
-    return { projectId: matches[0].id, role: mine?.role ?? null }
+    const mine = (await listMembers(preview.project_id)).find((m) => m.id === me.id)
+    return mine ? { projectId: preview.project_id, role: mine.role } : { projectId: null, role: null }
   } catch {
     return { projectId: null, role: null }
   }

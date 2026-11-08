@@ -229,6 +229,8 @@ export interface Invitation {
 
 /** 메일의 수락 링크로 들어왔을 때 보이는 미리보기 — 토큰은 응답에 담기지 않는다(N14) */
 export interface InvitationPreview {
+  /** 이미 참여한 사람을 그 프로젝트로 보낼 때 쓴다(시안 GST-02A) */
+  project_id: string
   project_name: string
   project_description: string | null
   invited_by_name: string

@@ -240,7 +240,11 @@ export function MembersPage() {
         </main>
       </div>
 
-      {inviteOpen && <InviteDialog projectId={projectId} onClose={closeInvite} onInvited={load} />}
+      {inviteOpen && project && members && (
+        <InviteDialog projectId={projectId} projectName={project.name} ownerId={project.owner_id} meId={me.id}
+          members={members} invitations={pending} onClose={closeInvite} onInvited={() => void load()}
+          onManageMembers={closeInvite} onBackToWorkspace={() => navigate(`/app/projects/${projectId}`)} />
+      )}
     </div>
   )
 }

@@ -124,8 +124,10 @@ export function WorkspacePage() {
         </Overlay>
       )}
       {inviteOpen && (
-        <InviteDialog projectId={projectId} onClose={closeInvite}
-          onInvited={() => { setInvitedNow((n) => n + 1); void load() }} />
+        <InviteDialog projectId={projectId} projectName={detail?.name ?? ''} ownerId={detail?.owner_id ?? ''} meId={me.id}
+          members={members} invitations={invitations.filter((i) => i.status === 'pending')} onClose={closeInvite}
+          onInvited={() => { setInvitedNow((n) => n + 1); void load() }}
+          onManageMembers={() => navigate(`/app/projects/${projectId}/members`)} onBackToWorkspace={closeInvite} />
       )}
       {deleteOpen && detail && (
         <DeleteProjectDialog project={detail} onClose={() => setDeleteOpen(false)} onDeleted={() => navigate('/app/projects', { replace: true })} />

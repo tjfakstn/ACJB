@@ -106,12 +106,12 @@ export function WorkflowStepper({ current }: { current: number }) {
 export function FirstQaStatus({ detail, openIssues, cta }: { detail: ProjectDetail; openIssues: number; cta: ReactNode }) {
   const done = detail.first_qa_status === 'succeeded'
   return (
-    <section className={`${CARD} mt-6 flex min-h-[74px] items-center gap-4 px-6 py-4`}>
+    <section className={`${CARD} mt-6 flex min-h-[74px] flex-wrap items-center gap-4 px-6 py-4`}>
       <span className={`flex h-10 w-10 flex-none items-center justify-center rounded-full ${done ? 'bg-qa-success/10 text-qa-success' : 'bg-qa-primary/10 text-qa-primary'}`}>
         <Icon name={done ? 'check' : 'inbox'} className="h-5 w-5" />
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+      <div className="min-w-[220px] flex-1">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base font-bold leading-[19px] text-black">
             {done ? '첫 QA 실행 결과 · 최초 검사 완료' : '아직 QA를 실행한 기록이 없습니다.'}
           </h2>

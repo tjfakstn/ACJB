@@ -1,15 +1,15 @@
 package com.acjb.server.invite;
 
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,7 +20,6 @@ import org.springframework.stereotype.Component;
 public class SmtpInvitationMailer implements InvitationMailer {
 
     private static final Logger log = LoggerFactory.getLogger(SmtpInvitationMailer.class);
-    private static final DateTimeFormatter EXPIRES = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.of("Asia/Seoul"));
 
     private final ObjectProvider<JavaMailSender> sender;
     private final String from;
@@ -37,24 +36,19 @@ public class SmtpInvitationMailer implements InvitationMailer {
             log.warn("초대 메일 발송 설정(MAIL_USERNAME·MAIL_PASSWORD)이 없어 메일을 보내지 않았습니다. 초대는 앱 안 초대함으로 수락할 수 있습니다.");
             return false;
         }
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(from);
-        message.setTo(mail.to());
-        message.setSubject("[QAting] " + mail.inviterName() + " 님이 '" + mail.projectName() + "' 프로젝트에 초대했습니다");
-        message.setText("""
-            %s 님이 QAting의 '%s' 프로젝트에 초대했습니다.
-            %s
-            아래 링크를 열고, 이 메일을 받은 구글 계정(%s)으로 로그인한 뒤 수락하세요.
-            %s
-
-            이 초대는 %s(한국 시간)까지 유효합니다.
-            다른 구글 계정으로 로그인하면 수락할 수 없습니다.
-            """.formatted(mail.inviterName(), mail.projectName(),
-                mail.projectDescription() == null ? "" : "프로젝트 설명: " + mail.projectDescription() + "\n",
-                mail.to(), mail.acceptUrl(), EXPIRES.format(mail.expiresAt())));
         try {
+            // 카드형 HTML + HTML을 못 보는 메일 앱용 텍스트를 함께 보낸다(multipart/alternative)
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(from);
+            helper.setTo(mail.to());
+            helper.setSubject(InvitationMailTemplate.subject(mail));
+            helper.setText(InvitationMailTemplate.text(mail), InvitationMailTemplate.html(mail));
             mailSender.send(message);
             return true;
+        } catch (MessagingException e) {
+            log.warn("초대 메일 작성 실패: {}", e.getClass().getSimpleName());
+            return false;
         } catch (MailException e) {
             log.warn("초대 메일 발송 실패: {}", e.getClass().getSimpleName());
             return false;

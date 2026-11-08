@@ -150,9 +150,15 @@ public class FigmaRestClient implements FigmaClient {
                 : http.get().uri(path, fileKey, ids).retrieve().body(String.class);
         } catch (RestClientResponseException e) {
             String errorBody = e.getResponseBodyAsString();
-            boolean tokenProblem = errorBody != null && errorBody.toLowerCase(java.util.Locale.ROOT).contains("token");
+            int code = e.getStatusCode().value();
+            boolean tokenProblem = code != 429 && errorBody != null && errorBody.toLowerCase(java.util.Locale.ROOT).contains("token");
+            long retryAfter = -1;
+            String header = e.getResponseHeaders() == null ? null : e.getResponseHeaders().getFirst("Retry-After");
+            if (code == 429 && header != null && header.trim().matches("\\d{1,6}")) {
+                retryAfter = Long.parseLong(header.trim());
+            }
             throw new FigmaApiException(tokenProblem ? "서버 Figma 토큰이 만료됐거나 올바르지 않습니다." : describe(e.getStatusCode()),
-                e.getStatusCode().value(), tokenProblem, e);
+                code, tokenProblem, retryAfter, e);
         } catch (ResourceAccessException e) {
             throw new FigmaApiException("Figma에 연결하지 못했습니다(시간 초과 또는 네트워크 오류).", e);
         }

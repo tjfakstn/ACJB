@@ -50,8 +50,14 @@ import tools.jackson.databind.JsonNode;
 public class AnalysisJob {
 
     private static final Logger log = LoggerFactory.getLogger(AnalysisJob.class);
-    /** 한 번에 받는 프레임 원본 수 — 프레임 하나가 수백 KB라 나눠 받는다 */
-    private static final int FRAME_BATCH = 10;
+    /**
+     * 한 번에 받는 프레임 원본 수. 프레임 하나가 수백 KB라 나눠 받되, Figma 요청 한도(분당)에 걸리지 않게 호출 수를 줄인다
+     * — 10개씩이면 프레임 460개에 약 60번을 불러 429를 받았다(2026-11-07 실측)
+     */
+    private static final int FRAME_BATCH = 40;
+    /** Figma 429 — Retry-After만큼(없으면 20초·40초·60초) 기다렸다가 같은 호출을 다시 한다 */
+    private static final int FIGMA_ATTEMPTS = 4;
+    private static final long FIGMA_WAIT_CAP_SECONDS = 60;
     static final int MAX_FRAMES = 1000;
 
     private final FigmaClient figma;
@@ -63,6 +69,23 @@ public class AnalysisJob {
     private final Clock clock;
     private final int nodeConcurrency;
     private final int maxCodeChars;
+    /** 테스트에서 실제로 기다리지 않게 바꿔 끼운다(setSleeper) */
+    private Sleeper sleeper = seconds -> {
+        try {
+            Thread.sleep(seconds * 1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new MappingFailedException("비교 분석이 중단됐어요.", e);
+        }
+    };
+
+    public interface Sleeper {
+        void sleep(long seconds);
+    }
+
+    public void setSleeper(Sleeper sleeper) {
+        this.sleeper = sleeper;
+    }
 
     public AnalysisJob(FigmaClient figma, GithubClient github, DesignCodeMapper mapper, ProjectRunRepository runs,
                        DesignCodeMappingRepository mappings, PlatformTransactionManager txManager, Clock clock,
@@ -146,7 +169,7 @@ public class AnalysisJob {
         containers.add(new String[] {in.scopeId(), null});
         while (!containers.isEmpty()) {
             String[] c = containers.poll();
-            List<FigmaNode> kids = figma.children(in.fileKey(), c[0])
+            List<FigmaNode> kids = figmaCall(() -> figma.children(in.fileKey(), c[0]))
                 .orElseThrow(() -> new MappingFailedException("연결한 Figma 페이지·섹션을 찾을 수 없어요. 연결을 다시 확인해 주세요."));
             for (FigmaNode kid : kids) {
                 if ("SECTION".equals(kid.type())) {
@@ -166,7 +189,8 @@ public class AnalysisJob {
         Map<String, String> frameNames = new HashMap<>();
         List<String> ids = new ArrayList<>(frameSection.keySet());
         for (int i = 0; i < ids.size(); i += FRAME_BATCH) {
-            Map<String, JsonNode> docs = figma.nodeDocuments(in.fileKey(), ids.subList(i, Math.min(ids.size(), i + FRAME_BATCH)));
+            List<String> batch = ids.subList(i, Math.min(ids.size(), i + FRAME_BATCH));
+            Map<String, JsonNode> docs = figmaCall(() -> figma.nodeDocuments(in.fileKey(), batch));
             for (Map.Entry<String, JsonNode> e : docs.entrySet()) {
                 DesignCodeMapper.FrameSummary s = FigmaFrames.summary(e.getValue(), frameSection.get(e.getKey()));
                 summaries.add(s);
@@ -197,7 +221,8 @@ public class AnalysisJob {
         ExecutorService pool = Executors.newFixedThreadPool(nodeConcurrency);
         try {
             for (int i = 0; i < mapped.size(); i += FRAME_BATCH) {
-                Map<String, JsonNode> docs = figma.nodeDocuments(in.fileKey(), mapped.subList(i, Math.min(mapped.size(), i + FRAME_BATCH)));
+                List<String> batch = mapped.subList(i, Math.min(mapped.size(), i + FRAME_BATCH));
+                Map<String, JsonNode> docs = figmaCall(() -> figma.nodeDocuments(in.fileKey(), batch));
                 Map<String, Future<List<DesignCodeMapper.NodeMatch>>> pending = new LinkedHashMap<>();
                 for (Map.Entry<String, JsonNode> e : docs.entrySet()) {
                     Set<String> idsInFrame = new HashSet<>();
@@ -254,6 +279,22 @@ public class AnalysisJob {
             sources.put(f.path(), src);
         }
         return new DesignCodeMapper.CodeBundle(fullName, sha, sources);
+    }
+
+    /** Figma 요청 한도(429)면 기다렸다가 다시 부른다. 다른 오류는 그대로 던진다 */
+    private <T> T figmaCall(java.util.function.Supplier<T> call) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return call.get();
+            } catch (FigmaApiException e) {
+                if (e.status() != 429 || attempt >= FIGMA_ATTEMPTS) {
+                    throw e;
+                }
+                long wait = Math.min(FIGMA_WAIT_CAP_SECONDS, e.retryAfterSeconds() > 0 ? e.retryAfterSeconds() : 20L * attempt);
+                log.info("Figma 요청 한도 — {}초 뒤 다시 시도({}/{})", wait, attempt, FIGMA_ATTEMPTS - 1);
+                sleeper.sleep(wait);
+            }
+        }
     }
 
     private static <T> T await(Future<T> f) {

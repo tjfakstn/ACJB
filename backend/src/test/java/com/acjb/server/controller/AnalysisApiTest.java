@@ -322,6 +322,28 @@ class AnalysisApiTest {
     }
 
     @Test
+    void Figma_요청_한도에_걸리면_기다렸다가_다시_불러_끝낸다() throws Exception {
+        connectBoth();
+        stubSources();
+        when(figma.children("K", "1:1"))
+            .thenThrow(new com.acjb.server.figma.FigmaApiException("Figma 요청 한도를 넘었습니다.", 429, false, 7, null))
+            .thenReturn(Optional.of(List.of(new FigmaNode("S1", "최종 섹션", "SECTION"))));
+        when(mapper.mapFrames(anyList(), any())).thenReturn(List.of(new DesignCodeMapper.FrameMatch("F1", "src/A.tsx")));
+        when(mapper.mapNodes(any(), any())).thenReturn(List.of());
+        List<Long> waited = new java.util.ArrayList<>();
+        job.setSleeper(waited::add);
+        try {
+            start(owner).andExpect(status().isAccepted());
+            Long runId = latestRunId();
+            job.run(runId);
+            assertThat(reloadRun(runId).getStatus()).isEqualTo(RunStatus.SUCCEEDED);
+            assertThat(waited).containsExactly(7L);   // Retry-After만큼
+        } finally {
+            job.setSleeper(s -> { });
+        }
+    }
+
+    @Test
     void 분석한_적이_없으면_상태_data는_null이다() throws Exception {
         getAs("/analysis", member).andExpect(status().isOk()).andExpect(jsonPath("$.data").value(Matchers.nullValue()));
     }

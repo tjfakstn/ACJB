@@ -10,6 +10,8 @@ public class FigmaApiException extends RuntimeException {
      * — 사용자의 파일 권한 문제로 안내하지 않도록 따로 표시한다(2026-11-07)
      */
     private final boolean tokenProblem;
+    /** 429일 때 Figma가 Retry-After로 알려 준 대기 초. 모르면 -1 */
+    private final long retryAfterSeconds;
 
     public FigmaApiException(String message) {
         this(message, 0, null);
@@ -24,9 +26,18 @@ public class FigmaApiException extends RuntimeException {
     }
 
     public FigmaApiException(String message, int status, boolean tokenProblem, Throwable cause) {
+        this(message, status, tokenProblem, -1, cause);
+    }
+
+    public FigmaApiException(String message, int status, boolean tokenProblem, long retryAfterSeconds, Throwable cause) {
         super(message, cause);
         this.status = status;
         this.tokenProblem = tokenProblem;
+        this.retryAfterSeconds = retryAfterSeconds;
+    }
+
+    public long retryAfterSeconds() {
+        return retryAfterSeconds;
     }
 
     public boolean tokenProblem() {

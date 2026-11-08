@@ -22,7 +22,7 @@ import { currentStep } from '../components/workspace/workflow'
 // 시안과 다른 점(데이터가 아직 없어 지어내지 않는다, N4):
 //  - "최근 AI 분석"은 서버가 주는 실행 상태·매핑 수만 보여 준다(처리 요소 수·변경 이력 분석은 없다).
 //    "디자인-코드 매핑" 카드는 분석이 성공했을 때만, 평균 매핑 신뢰도는 서버가 주지 않아 뺐다
-//  - [첫 QA 실행]·[QA 준비하기]·[연결 관리]: 화면이 아직 없어 잠가 둔다
+//  - [연결 관리]: 화면이 아직 없어 잠가 둔다. [첫 QA 실행]·[QA 준비하기]는 디자인 QA 화면으로 간다(2026-11-08)
 
 /** 마법사 끝(ProjectsPage)에서 넘겨주는 토스트 신호 */
 export interface WorkspaceLocationState {
@@ -166,12 +166,12 @@ function Workspace({ detail, me, members, invitations, toast, run, mapping, onIn
     ? formatDate([detail.figma!.connected_at, detail.github!.connected_at].sort()[1])
     : null
 
-  const lockedQa = '첫 QA 실행 기능은 준비 중이에요'
+  // 첫 QA 전에는 첫 QA 준비(QA-01), 이후에는 Re-QA 실행(RQA-01)으로 간다. 실행 버튼은 그 화면에서 소유자에게만 열린다
   const firstQaButton = (
-    <button type="button" disabled title={isOwner ? lockedQa : '첫 QA는 프로젝트 소유자만 실행할 수 있어요'}
-      className="h-10 flex-none whitespace-nowrap rounded-lg bg-qa-primary px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+    <Link to={`/app/projects/${detail.id}/qa`}
+      className="flex h-10 flex-none items-center whitespace-nowrap rounded-lg bg-qa-primary px-4 text-sm font-medium text-white hover:bg-qa-primary-hover">
       {qaDone ? '디자인 QA 실행' : '첫 QA 실행'}
-    </button>
+    </Link>
   )
 
   const description = qaDone
@@ -212,7 +212,7 @@ function Workspace({ detail, me, members, invitations, toast, run, mapping, onIn
       label: '첫 QA 실행',
       done: qaDone,
       sub: '멤버 초대 없이도 실행할 수 있어요 · 사용자가 직접 실행 (자동 실행 없음)',
-      action: <SmallButton kind="ghost" icon="arrow-right" disabled title={lockedQa}>QA 준비하기</SmallButton>,
+      action: <SmallButton kind="ghost" icon="arrow-right" to={`/app/projects/${detail.id}/qa`}>QA 준비하기</SmallButton>,
     },
   ]
 

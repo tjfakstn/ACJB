@@ -38,7 +38,9 @@ import com.acjb.server.github.GithubApiException;
 import com.acjb.server.github.GithubClient;
 import com.acjb.server.github.GithubClient.CommitInfo;
 import com.acjb.server.github.GithubClient.PullInfo;
+import com.acjb.server.domain.ManualQaPin;
 import com.acjb.server.repository.DesignCodeMappingRepository;
+import com.acjb.server.repository.ManualQaPinRepository;
 import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRunRepository;
 import com.acjb.server.repository.QAIssueRepository;
@@ -65,6 +67,7 @@ public class CodeTraceService {
     private final VerificationRepository verifications;
     private final ProjectRunRepository runs;
     private final DesignCodeMappingRepository mappings;
+    private final ManualQaPinRepository pins;
     private final GithubClient github;
     private final TransactionTemplate tx;
     private final Clock clock;
@@ -74,8 +77,9 @@ public class CodeTraceService {
     }
 
     public CodeTraceService(QAIssueRepository issues, ProjectMemberRepository projectMembers, VerificationRepository verifications,
-                            ProjectRunRepository runs, DesignCodeMappingRepository mappings, GithubClient github,
-                            TransactionTemplate tx, Clock clock) {
+                            ProjectRunRepository runs, DesignCodeMappingRepository mappings, ManualQaPinRepository pins,
+                            GithubClient github, TransactionTemplate tx, Clock clock) {
+        this.pins = pins;
         this.issues = issues;
         this.projectMembers = projectMembers;
         this.verifications = verifications;
@@ -159,7 +163,7 @@ public class CodeTraceService {
             String sha = issue.getFirstQaRun() == null ? null : issue.getFirstQaRun().getCommitSha();
             String url = p.getGithubRepo() == null || sha == null ? null
                 : "https://github.com/" + p.getGithubRepo() + "/blob/" + sha + "/" + m.getCodePath() + (m.getCodeLine() == null ? "" : "#L" + m.getCodeLine());
-            code = new CodeTraceView.Code(m.getCodePath(), m.getCodeLine(), symbol(projectId, m), sha, url);
+            code = new CodeTraceView.Code("element", m.getCodePath(), m.getCodeLine(), symbol(projectId, m), sha, url);
             if (m.getNodeId() != null) {
                 related = issues.findFirstQaByElement(projectId, m.getNodeId()).stream()
                     .filter(i -> !i.getId().equals(issue.getId()) && i.getStyleMismatch() != null)
@@ -167,6 +171,9 @@ public class CodeTraceService {
                         i.getStyleMismatch().getExpectedValue(), i.getStyleMismatch().getActualValue(), lower(i.getStatus().name())))
                     .toList();
             }
+        }
+        if (issue.getSource() == IssueSource.MANUAL) {
+            code = pins.findByIssueId(issue.getId()).map(ManualQaPin::getFigmaFrameId).flatMap(f -> screenFile(projectId, p, f)).orElse(null);
         }
         List<ReQa> reQa = new ArrayList<>();
         for (Verification v : verifications.findByIssueIdOrderByVerifiedAtDescIdDesc(issue.getId())) {
@@ -176,6 +183,17 @@ public class CodeTraceService {
         }
         return new Snapshot(issue.getId(), issue.getCreatedAt(), p.getGithubRepo(), p.getGithubBranch(), code, related,
             issue.getFixLinkUrl(), reQa);
+    }
+
+    /** 수동 QA — 기준 프레임을 최근 성공한 비교 분석이 짝지은 화면 파일(AC34, 줄 단위가 아니다) */
+    private Optional<CodeTraceView.Code> screenFile(Long projectId, Project p, String frameId) {
+        return runs.findFirstByProjectIdAndKindAndStatusOrderByFinishedAtDescIdDesc(projectId, RunKind.ANALYSIS, RunStatus.SUCCEEDED)
+            .flatMap(run -> mappings.findFrame(run.getId(), frameId).stream().findFirst().map(d -> {
+                String sha = run.getCommitSha();
+                String url = p.getGithubRepo() == null || sha == null ? null
+                    : "https://github.com/" + p.getGithubRepo() + "/blob/" + sha + "/" + d.getCodePath();
+                return new CodeTraceView.Code("screen", d.getCodePath(), null, null, sha, url);
+            }));
     }
 
     /** 매핑의 컴포넌트 — 같은 프레임·파일의 노드 짝이 한 컴포넌트를 가리킬 때만(여럿이면 어느 것인지 모른다) */

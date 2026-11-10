@@ -46,6 +46,7 @@ import com.acjb.server.github.GithubClient;
 import com.acjb.server.github.GithubClient.CommitInfo;
 import com.acjb.server.github.GithubClient.PullInfo;
 import com.acjb.server.repository.DesignCodeMappingRepository;
+import com.acjb.server.repository.ManualQaPinRepository;
 import com.acjb.server.repository.MemberRepository;
 import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRepository;
@@ -78,6 +79,7 @@ class CodeTraceApiTest {
     @Autowired StyleMismatchRepository mismatches;
     @Autowired QAIssueRepository issues;
     @Autowired VerificationRepository verifications;
+    @Autowired ManualQaPinRepository pins;
     @MockitoBean GithubClient github;
 
     Project project;
@@ -142,6 +144,7 @@ class CodeTraceApiTest {
         mvc.perform(as(get(base() + "/code-trace"), designer))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.issue_key").value("QA-" + issue.getId()))
+            .andExpect(jsonPath("$.data.code.basis").value("element"))
             .andExpect(jsonPath("$.data.code.path").value("src/QaParts.tsx"))
             .andExpect(jsonPath("$.data.code.line").value(141))
             .andExpect(jsonPath("$.data.code.symbol").value("Verdict"))
@@ -254,5 +257,27 @@ class CodeTraceApiTest {
         mvc.perform(as(get(base() + "/code-trace"), front))
             .andExpect(jsonPath("$.data.github").value("not_connected"))
             .andExpect(jsonPath("$.data.issue_key").value("QA-" + issue.getId()));
+    }
+
+    @Test
+    void 수동_QA는_기준_프레임의_화면_파일로_코드를_잇고_문제_코드는_파일_기준이다() throws Exception {
+        ProjectRun analysis = runs.findFirstByProjectIdAndKindOrderByCreatedAtDescIdDesc(project.getId(), RunKind.ANALYSIS).orElseThrow();
+        mappings.save(DesignCodeMapping.frame(project, analysis, "F2", "QUE-01", "src/pages/QaQueuePage.tsx", Instant.now()));
+        QAIssue manual = issues.save(new QAIssue(project, "카드가 작다", "/queue", List.of("큐를 연다"), com.acjb.server.domain.PlatformScope.COMMON,
+            null, List.of(), null, null, null, front));
+        pins.save(new com.acjb.server.domain.ManualQaPin(project, manual, 1, "r1", "카드 크기", "/queue", null, null, null, null, null,
+            com.acjb.server.domain.LocationBasis.NONE, com.acjb.server.domain.CaptureStatus.NONE, null, null, null, null, "F2", "QUE-01", Instant.now()));
+        em.flush();
+        CommitInfo last = commit("abc1234aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "feat: 큐", Instant.parse("2026-11-09T00:00:00Z"));
+        when(github.lastCommitForPath("o", "r", SHA, "src/pages/QaQueuePage.tsx")).thenReturn(Optional.of(last));
+        when(github.pullsForCommit("o", "r", last.sha())).thenReturn(List.of());
+        mvc.perform(as(get("/api/v1/projects/" + project.getId() + "/qa-issues/" + manual.getId() + "/code-trace"), front))
+            .andExpect(jsonPath("$.data.code.basis").value("screen"))
+            .andExpect(jsonPath("$.data.code.path").value("src/pages/QaQueuePage.tsx"))
+            .andExpect(jsonPath("$.data.code.line").doesNotExist())
+            .andExpect(jsonPath("$.data.code.url").value("https://github.com/o/r/blob/" + SHA + "/src/pages/QaQueuePage.tsx"))
+            .andExpect(jsonPath("$.data.origin.basis").value("file"))
+            .andExpect(jsonPath("$.data.origin.commit.sha").value(last.sha()));
+        verify(github, never()).blameLine(anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 }

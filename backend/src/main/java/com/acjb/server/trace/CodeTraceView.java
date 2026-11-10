@@ -13,9 +13,9 @@ import tools.jackson.databind.annotation.JsonNaming;
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public record CodeTraceView(String issueKey, Code code, List<Related> related, Origin origin, List<Fix> fixes, String github) {
 
-    /** 첫 QA가 값을 읽은 곳 */
+    /** 코드 위치 — basis element=첫 QA가 값을 읽은 줄, screen=수동 QA 기준 프레임을 비교 분석이 짝지은 화면 파일(줄 없음) */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record Code(String path, Integer line, String symbol, String commitSha, String url) {
+    public record Code(String basis, String path, Integer line, String symbol, String commitSha, String url) {
     }
 
     /** 같은 Figma 요소의 다른 첫 QA 이슈 — 표의 행 */

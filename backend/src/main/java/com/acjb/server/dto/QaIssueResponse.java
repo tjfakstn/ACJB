@@ -108,8 +108,11 @@ public record QaIssueResponse(
                 return null;
             }
             return new ManualQaView(p.getPinNumber(), p.getTitle(), p.getPagePath(), p.getPageUrl(),
-                new AnchorView(p.getXPx(), p.getYPx(), ratio(p.getXPx(), p.getViewportWidth()), ratio(p.getYPx(), p.getViewportHeight())),
-                new ViewportView(p.getViewportWidth(), p.getViewportHeight()), lower(p.getLocationBasis()), lower(p.getCaptureStatus()),
+                // 위치 없이 등록(none)하면 좌표·화면 크기가 없다
+                p.getXPx() == null ? null
+                    : new AnchorView(p.getXPx(), p.getYPx(), ratio(p.getXPx(), p.getViewportWidth()), ratio(p.getYPx(), p.getViewportHeight())),
+                p.getViewportWidth() == null ? null : new ViewportView(p.getViewportWidth(), p.getViewportHeight()),
+                lower(p.getLocationBasis()), lower(p.getCaptureStatus()),
                 p.getCapture() == null ? null : String.valueOf(p.getCapture().getId()), lower(p.getSeverity()), p.getExpectedResult(),
                 p.getActualResult(), p.getFigmaFrameId() == null ? null : new FigmaFrameView(p.getFigmaFrameId(), p.getFigmaFrameName()));
         }

@@ -32,6 +32,7 @@ public final class LiveQaRequests {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ManualQaRequest(String clientRequestId, String title, String description, String pagePath, AnchorInput anchor,
                                   ViewportInput viewport, String locationBasis, String captureId, String captureStatus, String severity,
-                                  String expectedResult, String actualResult, String figmaFrameId) {
+                                  String expectedResult, String actualResult, String figmaFrameId,
+                                  java.util.List<String> reproSteps) {
     }
 }

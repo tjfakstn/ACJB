@@ -632,4 +632,62 @@ class LiveQaApiTest {
         em.clear();
         assertThat(links.count()).isZero();
     }
+
+    // ---------------------------------------------------------------- AC31 위치 없이 등록(location_basis none, 2026-11-10)
+
+    private static String noneBody(String requestId, String extra) {
+        return """
+            {"client_request_id":"%s","title":"카드 크기 수정","description":"카드가 시안보다 작습니다.","location_basis":"none"%s}"""
+            .formatted(requestId, extra);
+    }
+
+    @Test
+    void 배포_주소_없이_위치_없이_등록하면_사람이_적은_화면과_재현_절차를_그대로_쓴다() throws Exception {
+        mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON)
+                .content(noneBody("n1", ",\"page_path\":\"/projects\",\"repro_steps\":[\"프로젝트 목록을 연다\",\" \",\"첫 카드를 본다\"]")))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.screen_location").value("/projects"))
+            .andExpect(jsonPath("$.data.repro_steps.length()").value(2))
+            .andExpect(jsonPath("$.data.repro_steps[1]").value("첫 카드를 본다"))
+            .andExpect(jsonPath("$.data.manual_qa.pin_number").value(1))
+            .andExpect(jsonPath("$.data.manual_qa.location_basis").value("none"))
+            .andExpect(jsonPath("$.data.manual_qa.anchor").doesNotExist())
+            .andExpect(jsonPath("$.data.manual_qa.viewport").doesNotExist())
+            .andExpect(jsonPath("$.data.manual_qa.page_url").doesNotExist())
+            .andExpect(jsonPath("$.data.manual_qa.capture_status").value("none"));
+        verify(capturer, never()).capture(anyString(), anyInt(), anyInt());
+    }
+
+    @Test
+    void 위치_없이_등록할_때_경로가_없으면_고른_프레임_이름이_화면이고_스크린샷은_선택이다() throws Exception {
+        figmaConnected();
+        analyzed("10:1", "LOGIN-01 로그인");
+        QaCapture c = captures.save(new QaCapture(project, CaptureKind.UPLOAD, "image/png", null, 4, 4, png(4, 4), front, Instant.now()));
+        em.flush();
+        mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON)
+                .content(noneBody("n2", ",\"figma_frame_id\":\"10:1\",\"capture_id\":\"" + c.getId() + "\",\"repro_steps\":[\"로그인 화면을 연다\"]")))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.screen_location").value("LOGIN-01 로그인"))
+            .andExpect(jsonPath("$.data.manual_qa.capture_status").value("user_attached"))
+            .andExpect(jsonPath("$.data.manual_qa.figma_frame.frame_id").value("10:1"));
+    }
+
+    @Test
+    void 위치_없이_등록은_화면과_재현_절차가_있어야_하고_좌표를_섞으면_400() throws Exception {
+        deployed();
+        long before = pins.count();
+        for (String extra : List.of(
+            ",\"page_path\":\"/p\"",                                                        // 재현 절차 없음
+            ",\"page_path\":\"/p\",\"repro_steps\":[\" \"]",                                 // 빈 재현 절차
+            ",\"repro_steps\":[\"연다\"]",                                                    // 화면 없음
+            ",\"page_path\":\"/p\",\"repro_steps\":[\"연다\"],\"anchor\":{\"x_px\":1,\"y_px\":1}", // 좌표를 섞음
+            ",\"page_path\":\"/p\",\"repro_steps\":[\"" + "가".repeat(501) + "\"]")) {       // 500자 초과
+            mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON).content(noneBody("bad", extra)))
+                .andExpect(status().isBadRequest());
+        }
+        // 위치를 찍어 등록하면 재현 절차는 서버가 만든다 — 보내면 400
+        mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON)
+            .content(manualBody("live-steps", ",\"repro_steps\":[\"연다\"]"))).andExpect(status().isBadRequest());
+        assertThat(pins.count()).isEqualTo(before);
+    }
 }

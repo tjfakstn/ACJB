@@ -1,6 +1,5 @@
 package com.acjb.server.scan;
 
-import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -10,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
@@ -19,7 +17,6 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
 import com.microsoft.playwright.Response;
-import com.microsoft.playwright.Route;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.ServiceWorkerPolicy;
 import com.microsoft.playwright.options.WaitForSelectorState;
@@ -57,8 +54,6 @@ public class PlaywrightComputedStyleReader implements ComputedStyleReader {
           };
         }""";
 
-    private static final int MAX_REDIRECTS = 5;
-
     private final TargetUrlPolicy policy;
     private final double timeoutMs;
 
@@ -75,9 +70,7 @@ public class PlaywrightComputedStyleReader implements ComputedStyleReader {
              BrowserContext context = browser.newContext(new Browser.NewContextOptions()
                  .setViewportSize(1440, 900)
                  .setServiceWorkers(ServiceWorkerPolicy.BLOCK))) {
-            // 리다이렉트는 브라우저에 맡기지 않는다 — 브라우저가 따라가는 다음 요청은 route를 거치지 않는다
-            // (실측 2026-11-04: 302 → 169.254.169.254에 브라우저가 직접 접속). 서버가 한 단계씩 주소를 검사하며 따라간 뒤 결과만 넘겨준다
-            context.route("**/*", this::fetchChecked);
+            GuardedBrowserRoutes.install(context, policy, timeoutMs);
             Page page = context.newPage();
             page.setDefaultTimeout(timeoutMs);
             Response response;
@@ -115,30 +108,6 @@ public class PlaywrightComputedStyleReader implements ComputedStyleReader {
             log.warn("scan 브라우저 실행 실패: {}", e.getClass().getSimpleName());
             log.debug("scan 브라우저 실행 실패 상세", e);
             throw new ScanFailedException("화면을 여는 브라우저를 실행하지 못했습니다(서버에 ./gradlew playwrightInstall 필요할 수 있음).", e);
-        }
-    }
-
-    /** 요청을 대신 보내고, 3xx면 Location을 검사한 뒤 직접 따라간다. 막힌 주소가 나오면 그 요청을 끊는다 */
-    private void fetchChecked(Route route) {
-        String url = route.request().url();
-        try {
-            for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
-                if (!policy.allows(url)) {
-                    route.abort("blockedbyclient");
-                    return;
-                }
-                APIResponse response = route.fetch(new Route.FetchOptions().setUrl(url).setMaxRedirects(0).setTimeout(timeoutMs));
-                String location = response.headers().get("location");
-                if (response.status() >= 300 && response.status() < 400 && location != null) {
-                    url = URI.create(url).resolve(location.trim()).toString();
-                    continue;
-                }
-                route.fulfill(new Route.FulfillOptions().setResponse(response));
-                return;
-            }
-            route.abort("failed");
-        } catch (PlaywrightException | IllegalArgumentException e) {
-            route.abort("failed");
         }
     }
 

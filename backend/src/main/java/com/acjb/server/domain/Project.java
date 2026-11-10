@@ -89,6 +89,13 @@ public class Project {
     @Column(name = "github_connected_at")
     private Instant githubConnectedAt;
 
+    /** 실시간 QA 워크스페이스가 띄우는 배포 주소(AC29, V10). 소유자가 입력한 값만 저장한다 — GitHub 배포 주소는 읽을 때마다 가져온다 */
+    @Column(name = "deploy_url", length = 1000)
+    private String deployUrl;
+
+    @Column(name = "deploy_url_updated_at")
+    private Instant deployUrlUpdatedAt;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -119,6 +126,12 @@ public class Project {
         this.githubDefaultBranch = defaultBranch;
         this.githubBranch = branch;
         this.githubConnectedAt = now;
+    }
+
+    /** AC29 — 주소 제한 검사를 통과한 값만 넘긴다(서비스에서 확인). null이면 지운다 */
+    public void changeDeployUrl(String url, Instant now) {
+        this.deployUrl = url;
+        this.deployUrlUpdatedAt = now;
     }
 
     @PrePersist

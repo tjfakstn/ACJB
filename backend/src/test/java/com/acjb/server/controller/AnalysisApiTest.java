@@ -362,4 +362,27 @@ class AnalysisApiTest {
         assertThat(projects.findById(project.getId())).isEmpty();
         assertThat(mappings.count()).isZero();
     }
+
+    /** 2026-11-10 — 코드 파일을 찾지 못한 화면(LLM이 비워 답했거나 근거 없는 경로를 단 프레임)은 매핑 조회에 "확인해 볼 곳"으로 담긴다. 이슈는 만들지 않는다 */
+    @Test
+    void 코드를_찾지_못한_화면은_매핑_조회의_unmapped_frames로_돌려준다() throws Exception {
+        connectBoth();
+        stubSources();
+        when(figma.children("K", "S1")).thenReturn(Optional.of(List.of(new FigmaNode("F1", "홈", "FRAME"), new FigmaNode("F2", "설정", "FRAME"))));
+        when(mapper.mapFrames(anyList(), any())).thenReturn(List.of(
+            new DesignCodeMapper.FrameMatch("F1", "src/A.tsx"), new DesignCodeMapper.FrameMatch("F2", null)));
+        when(mapper.mapNodes(any(), any())).thenReturn(List.of());
+        long issuesBefore = count("QAIssue");
+        start(owner).andExpect(status().isAccepted());
+        job.run(latestRunId());
+
+        getAs("/analysis/mappings", member).andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.items", Matchers.hasSize(1)))
+            .andExpect(jsonPath("$.data.items[0].frame_id").value("F1"))
+            .andExpect(jsonPath("$.data.unmapped_frames", Matchers.hasSize(1)))
+            .andExpect(jsonPath("$.data.unmapped_frames[0].frame_id").value("F2"))
+            .andExpect(jsonPath("$.data.unmapped_frames[0].frame_name").value("설정"))
+            .andExpect(jsonPath("$.data.unmapped_frames[0].section").value("최종 섹션"));
+        assertThat(count("QAIssue")).isEqualTo(issuesBefore);
+    }
 }

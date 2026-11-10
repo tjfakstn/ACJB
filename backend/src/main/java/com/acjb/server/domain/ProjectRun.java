@@ -84,6 +84,17 @@ public class ProjectRun {
     @Column(name = "found_dropped_count")
     private Integer foundDroppedCount;
 
+    /** analysis에서 코드 파일을 찾지 못한 프레임 — JSON 배열 [{frame_id, frame_name, section}](2026-11-10). 다른 kind는 null */
+    @Column(name = "unmapped_frames", columnDefinition = "mediumtext")
+    private String unmappedFrames;
+
+    /** 첫 QA·Re-QA 비교 진행률 — 비교한 Figma 요소 수/전체(2026-11-10). 비교를 시작하기 전·다른 kind는 null */
+    @Column(name = "progress_done")
+    private Integer progressDone;
+
+    @Column(name = "progress_total")
+    private Integer progressTotal;
+
     @Column(name = "demo", nullable = false)
     private boolean demo;
 
@@ -126,6 +137,16 @@ public class ProjectRun {
         this.foundCount = found;
         this.foundDroppedCount = foundDropped;
         succeed(commitSha, passed, skipped, now);
+    }
+
+    /** 진행률은 줄지 않는다 — 동시에 끝난 묶음의 기록 순서가 뒤바뀌어도 */
+    public void progress(int done, int total) {
+        this.progressTotal = total;
+        this.progressDone = progressDone == null ? done : Math.max(progressDone, done);
+    }
+
+    public void setUnmappedFrames(String unmappedFrames) {
+        this.unmappedFrames = unmappedFrames;
     }
 
     public void setAddedScope(String addedScope) {

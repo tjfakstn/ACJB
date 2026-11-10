@@ -229,12 +229,15 @@ export function KeyValue({ rows }: { rows: { label: string; value: ReactNode }[]
 
 /** 첫 QA 이슈의 screen_location은 "화면 / 요소" — 요소 이름을 앞에 쓴다 */
 export function issueParts(issue: QaIssue): { screen: string; element: string } {
+  // 수동 QA(AC31)는 화면 = 찍은 경로, 요소 = 사람이 쓴 제목
+  if (issue.manual_qa) return { screen: issue.manual_qa.page_path, element: issue.manual_qa.title }
   const i = issue.screen_location.lastIndexOf(' / ')
   return i < 0 ? { screen: issue.screen_location, element: issue.screen_location }
     : { screen: issue.screen_location.slice(0, i), element: issue.screen_location.slice(i + 3) }
 }
 
 export function issueTitle(issue: QaIssue): string {
+  if (issue.manual_qa) return issue.manual_qa.title
   const m = issue.style_mismatch
   return m ? `${issueParts(issue).element} — ${PROPERTY_LABELS[m.property]} 불일치` : issue.description
 }

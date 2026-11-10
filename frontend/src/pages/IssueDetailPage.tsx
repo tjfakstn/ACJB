@@ -75,7 +75,9 @@ export function IssueDetailPage() {
             </nav>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <h1 className="mr-2 text-[28px] font-bold leading-9 text-black">이슈 #{issue.id}</h1>
-              <Verdict pass={issue.status === 'resolved'} />
+              {issue.source === 'manual'
+                ? <span className="rounded bg-[#7c3aed]/10 px-1.5 text-xs font-medium leading-5 text-[#7c3aed]">수동 QA</span>
+                : <Verdict pass={issue.status === 'resolved'} />}
               <ProgressChip status={issue.status} />
               <TeamTag team={issue.assigned_team} />
             </div>

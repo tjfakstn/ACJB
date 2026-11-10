@@ -419,6 +419,119 @@ export interface QaIssue {
   reported_by: string
   created_at: string
   updated_at: string
+  /** 실시간 QA 워크스페이스에서 위치를 찍어 등록한 수동 QA만(SPEC AC31) */
+  manual_qa: ManualQa | null
+}
+
+// ---------------------------------------------------------------- 실시간 QA 워크스페이스 (SPEC AC29~AC31)
+
+export type Severity = 'critical' | 'high' | 'medium' | 'low'
+
+export const SEVERITY_LABELS: Record<Severity, string> = {
+  critical: 'Critical',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+}
+
+export type CaptureStatus = 'captured' | 'failed' | 'user_attached' | 'none'
+export type LocationBasis = 'live_overlay' | 'capture_image'
+
+export interface Viewport { width: number; height: number }
+
+export interface ManualQa {
+  /** 화면 표시 ID는 QA-M### */
+  pin_number: number
+  title: string
+  page_path: string
+  page_url: string | null
+  anchor: { x_px: number; y_px: number; x_ratio: number; y_ratio: number }
+  viewport: Viewport
+  location_basis: LocationBasis
+  capture_status: CaptureStatus
+  capture_id: string | null
+  severity: Severity | null
+  expected_result: string | null
+  actual_result: string | null
+}
+
+export interface DeployTarget {
+  url: string | null
+  source: 'manual' | 'github_deployment' | 'none'
+  /** 소유자가 저장한 주소(입력란용) */
+  manual_url: string | null
+  /** false면 화면 삽입 제한(M-09B), null이면 확인 못 함 */
+  embeddable: boolean | null
+  embed_blocked_reason: string | null
+}
+
+export interface QaCapture {
+  id: string
+  kind: 'auto' | 'upload'
+  page_url: string | null
+  width: number
+  height: number
+  created_at: string
+}
+
+export interface ManualQaInput {
+  client_request_id: string
+  title: string
+  description: string
+  page_path: string
+  anchor: { x_px: number; y_px: number }
+  viewport: Viewport
+  location_basis: LocationBasis
+  capture_id?: string
+  capture_status?: 'failed' | 'none'
+  severity?: Severity
+  expected_result?: string
+  actual_result?: string
+}
+
+export function getDeployTarget(projectId: string): Promise<DeployTarget> {
+  return request<DeployTarget>('GET', `/api/v1/projects/${projectId}/deploy-target`)
+}
+
+export function updateDeployUrl(projectId: string, url: string | null): Promise<DeployTarget> {
+  return request<DeployTarget>('PUT', `/api/v1/projects/${projectId}/deploy-url`, { url })
+}
+
+export function captureScreen(projectId: string, pagePath: string, viewport: Viewport): Promise<QaCapture> {
+  return request<QaCapture>('POST', `/api/v1/projects/${projectId}/captures`, { page_path: pagePath, viewport })
+}
+
+/** multipart라 JSON 요청 함수를 쓰지 않는다 — Content-Type은 브라우저가 경계값과 함께 정한다 */
+export async function uploadCapture(projectId: string, file: File): Promise<QaCapture> {
+  const form = new FormData()
+  form.append('file', file)
+  let res: Response
+  try {
+    res = await fetch(`/api/v1/projects/${projectId}/captures/upload`, {
+      method: 'POST', credentials: 'include', headers: { 'X-XSRF-TOKEN': xsrfToken() }, body: form,
+    })
+  } catch {
+    throw new ApiError(0, 'NETWORK_ERROR', '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.')
+  }
+  const json = await res.json().catch(() => null)
+  if (!res.ok || !json || json.success === false) {
+    throw new ApiError(res.status, json?.error?.code ?? `HTTP_${res.status}`,
+      json?.error?.message ?? (res.status === 413 ? '이미지는 5MB 이하만 첨부할 수 있어요.' : '이미지를 올리지 못했어요.'))
+  }
+  return json.data as QaCapture
+}
+
+export function captureImageUrl(projectId: string, captureId: string): string {
+  return `/api/v1/projects/${projectId}/captures/${captureId}/image`
+}
+
+export function createManualQa(projectId: string, input: ManualQaInput): Promise<QaIssue> {
+  return request<QaIssue>('POST', `/api/v1/projects/${projectId}/manual-qa`, input)
+}
+
+/** 수동 QA 화면 표시 ID — 시안 QA-M### */
+export function manualQaId(pin: number): string {
+  return `QA-M${String(pin).padStart(3, '0')}`
 }
 
 export interface Verification {

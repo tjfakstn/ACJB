@@ -7,7 +7,7 @@ import { MembersPage } from './pages/MembersPage'
 import { WorkspacePage } from './pages/WorkspacePage'
 import { InvitationPage } from './pages/InvitationPage'
 import { QaRunPage } from './pages/QaRunPage'
-import { QaResultsPage } from './pages/QaResultsPage'
+import { LiveQaPage } from './pages/LiveQaPage'
 import { QaQueuePage } from './pages/QaQueuePage'
 import { IssueDetailPage } from './pages/IssueDetailPage'
 import { ReQaResultPage } from './pages/ReQaResultPage'
@@ -24,7 +24,7 @@ function App() {
         <Route path="/app/projects/:projectId/members" element={<MembersPage />} />
         <Route path="/app/projects/:projectId/mapping" element={<MappingPage />} />
         <Route path="/app/projects/:projectId/qa" element={<QaRunPage />} />
-        <Route path="/app/projects/:projectId/results" element={<QaResultsPage />} />
+        <Route path="/app/projects/:projectId/results" element={<LiveQaPage />} />
         <Route path="/app/projects/:projectId/queue" element={<QaQueuePage />} />
         <Route path="/app/projects/:projectId/issues/:issueId" element={<IssueDetailPage />} />
         <Route path="/app/projects/:projectId/issues/:issueId/re-qa" element={<ReQaResultPage />} />

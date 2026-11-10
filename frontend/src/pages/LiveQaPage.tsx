@@ -15,6 +15,7 @@ import { LivePreview, type PreviewSurface } from '../components/liveqa/LivePrevi
 import { QaItemList } from '../components/liveqa/QaItemList'
 import { ManualQaDetail } from '../components/liveqa/ManualQaDetail'
 import { CaptureStatusBox, FrameField, OptionalFields, RequiredFields } from '../components/liveqa/DraftFields'
+import { NoLocationForm } from '../components/liveqa/NoLocationForm'
 import { hasContent, newRequestId, type Draft } from '../components/liveqa/draft'
 
 // 실시간 QA 워크스페이스(시안 W-01~05, M-01~M-10C · SPEC AC29~AC31). 지금까지의 목록형 QA 결과 화면을 대신한다.
@@ -45,6 +46,8 @@ export function LiveQaPage() {
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [editingUrl, setEditingUrl] = useState(false)
   const [toast, setToast] = useState<{ text: string; sub: string } | null>(null)
+  /** 위치 없이 등록(location_basis none) 폼 — 배포 화면이 없거나 위치를 찍지 않을 때 */
+  const [noLocation, setNoLocation] = useState(false)
   /** 기준 프레임 고르기용(AC33) — 못 불러와도 등록은 막지 않는다 */
   const [frames, setFrames] = useState<{ frame_id: string; frame_name: string }[]>([])
   const [links, setLinks] = useState<ScreenFrameLink[]>([])
@@ -112,12 +115,13 @@ export function LiveQaPage() {
     const token = ++previewToken.current
     const m = item.manual_qa
     if (m) {
-      if (m.location_basis === 'capture_image' && m.capture_id) {
+      if (m.location_basis === 'capture_image' && m.capture_id && m.viewport) {
         setSurface({
           kind: 'image',
           attachment: { id: m.capture_id, kind: 'upload', page_url: null, width: m.viewport.width, height: m.viewport.height, created_at: item.created_at },
         })
-      } else {
+      } else if (m.page_path) {
+        // 위치 없이 등록한 항목도 경로를 적었으면 그 경로의 배포 화면을 연다(핀은 없다)
         setSurface({ kind: 'live', attachment: null })
         setPath(m.page_path)
       }
@@ -261,8 +265,9 @@ export function LiveQaPage() {
   const canPick = surface.kind === 'image' ? !!surface.attachment : !!target?.url && !blocked
   const registerHint = !target ? null
     : canPick ? null
-      : blocked ? '이 사이트는 화면 삽입이 막혀 있어요 — 위에서 스크린샷을 첨부하면 그 이미지 위에서 등록할 수 있어요.'
-        : isOwner ? '배포 주소를 먼저 입력해 주세요.' : '소유자가 배포 주소를 입력하면 등록할 수 있어요.'
+      : blocked ? '이 사이트는 화면 삽입이 막혀 있어요 — 스크린샷을 첨부해 그 위에서 찍거나, 위치 없이 등록할 수 있어요.'
+        : isOwner ? '배포 주소가 없어 위치 없이 등록해요 — 배포 주소를 넣으면 화면 위에서 위치를 찍을 수 있어요.'
+          : '배포 주소가 없어 위치 없이 등록해요.'
   const startRegister = () => {
     if (draft) {
       previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -272,8 +277,10 @@ export function LiveQaPage() {
       if (surface.kind === 'figma') backToLive()
       setRegisterMode(true)
       select(null)
-    } else if (!target?.url && isOwner) {
-      setEditingUrl(true)
+    } else {
+      // 배포 화면이 없거나 삽입이 막혔으면 위치 없이 등록한다(2026-11-10) — 스크린샷은 선택
+      setNoLocation(true)
+      select(null)
       return
     }
     previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -372,7 +379,16 @@ export function LiveQaPage() {
           <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(320px,440px)_minmax(0,1fr)]">
             <QaItemList issues={issues} members={members} selectedId={draft ? null : selectedId} onSelect={(id) => { if (!draft) select(id) }}
               onRegister={startRegister} registerHint={registerHint} registerActive={registerMode || !!draft} />
-            {draft?.expanded ? (
+            {noLocation && !draft ? (
+              <NoLocationForm projectId={projectId} frames={frames} links={links} nextPin={nextPin} onClose={() => setNoLocation(false)}
+                onCreated={(created) => {
+                  setIssues((list) => [created, ...(list ?? []).filter((i) => i.id !== created.id)])
+                  setNoLocation(false)
+                  select(created.id)
+                  void reload()
+                  setToast({ text: `${manualQaId(created.manual_qa!.pin_number)} 수동 QA를 등록했어요`, sub: '위치 없이 등록했어요 · 담당 팀은 직접 배정해 주세요' })
+                }} />
+            ) : draft?.expanded ? (
               <section className="rounded-xl border border-[#7c3aed]/50 bg-white p-5" aria-label="수동 QA 작성">
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="flex items-center gap-2 text-base font-bold text-black">

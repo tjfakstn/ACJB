@@ -440,7 +440,8 @@ export const SEVERITY_LABELS: Record<Severity, string> = {
 }
 
 export type CaptureStatus = 'captured' | 'failed' | 'user_attached' | 'none'
-export type LocationBasis = 'live_overlay' | 'capture_image'
+/** none=위치 없이 등록(배포 화면 없음, 2026-11-10) — 좌표·화면 크기가 없다 */
+export type LocationBasis = 'live_overlay' | 'capture_image' | 'none'
 
 export interface Viewport { width: number; height: number }
 
@@ -448,10 +449,10 @@ export interface ManualQa {
   /** 화면 표시 ID는 QA-M### */
   pin_number: number
   title: string
-  page_path: string
+  page_path: string | null
   page_url: string | null
-  anchor: { x_px: number; y_px: number; x_ratio: number; y_ratio: number }
-  viewport: Viewport
+  anchor: { x_px: number; y_px: number; x_ratio: number; y_ratio: number } | null
+  viewport: Viewport | null
   location_basis: LocationBasis
   capture_status: CaptureStatus
   capture_id: string | null
@@ -485,10 +486,12 @@ export interface ManualQaInput {
   client_request_id: string
   title: string
   description: string
-  page_path: string
-  anchor: { x_px: number; y_px: number }
-  viewport: Viewport
+  page_path?: string
+  anchor?: { x_px: number; y_px: number }
+  viewport?: Viewport
   location_basis: LocationBasis
+  /** location_basis none일 때 필수 — 사람이 적는 재현 절차 */
+  repro_steps?: string[]
   capture_id?: string
   capture_status?: 'failed' | 'none'
   severity?: Severity
@@ -659,7 +662,7 @@ export interface TraceFix {
 export interface CodeTrace {
   /** 커밋 메시지·PR 제목에 적으면 fixes에 연결된다 */
   issue_key: string
-  code: { path: string; line: number | null; symbol: string | null; commit_sha: string | null; url: string | null } | null
+  code: { basis: 'element' | 'screen'; path: string; line: number | null; symbol: string | null; commit_sha: string | null; url: string | null } | null
   related: { issue_id: string; property: StyleProperty; expected_value: string; actual_value: string; status: IssueStatus }[]
   /** 문제 코드가 들어온 커밋과 그 PR — basis line=그 줄, file=그 파일 */
   origin: { basis: 'line' | 'file'; commit: TraceCommit; pull_requests: TracePull[] } | null

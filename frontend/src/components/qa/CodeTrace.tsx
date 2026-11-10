@@ -56,7 +56,7 @@ export function CodeLinkCard({ trace, manual }: { trace: CodeTrace | null; manua
     <section className={PANEL}>
       <h2 className="text-base font-bold leading-6 text-black">연결 코드 파일 · 컴포넌트</h2>
       {!trace ? <p className="mt-4 text-xs text-qa-text-sub">불러오는 중…</p> : !code ? (
-        <Empty title="연결된 코드 파일이 없습니다" sub={manual ? '수동 QA는 배포 화면 위치로 등록해 코드 위치가 없어요.' : '이 이슈에는 코드 위치 기록이 없어요.'} />
+        <Empty title="연결된 코드 파일이 없습니다" sub={manual ? '등록할 때 기준 Figma 프레임을 고르면 그 화면 파일을 보여 줘요.' : '이 이슈에는 코드 위치 기록이 없어요.'} />
       ) : (
         <>
           <a href={code.url ?? undefined} target="_blank" rel="noreferrer" title={code.path}
@@ -64,6 +64,9 @@ export function CodeLinkCard({ trace, manual }: { trace: CodeTrace | null; manua
             <Icon name="file-code" className="h-4 w-4 flex-none text-gray-900" />
             <span className="min-w-0 flex-1 truncate text-xs font-medium leading-4 text-black">{code.path}</span>
           </a>
+          {code.basis === 'screen' && (
+            <p className="mt-2 text-xs leading-4 text-qa-text-sub">기준 Figma 프레임을 비교 분석이 짝지은 화면 파일이에요 · 줄 단위 위치는 없어요</p>
+          )}
           <div className="mt-4">
             <KvRows rows={[
               { label: '컴포넌트명', value: code.symbol ?? '-' },
@@ -116,7 +119,7 @@ export function GithubTraceCard({ trace, status, canAttach, onAttach, onDetach }
                 : <p className="mt-1.5 text-xs text-qa-text-sub">PR 없이 반영된 커밋이에요.</p>}
             </div>
           ) : fixes.length === 0 && (
-            <Empty title="연결된 커밋 · PR 정보가 없습니다" sub={trace.code ? '첫 QA 실행 시점에 확인된 Git 커밋 · PR 정보가 없어 표시하지 않아요.' : '수동 QA는 코드 위치가 없어, 고친 커밋·PR만 연결돼요.'} />
+            <Empty title="연결된 커밋 · PR 정보가 없습니다" sub={trace.code ? '첫 QA 실행 시점에 확인된 Git 커밋 · PR 정보가 없어 표시하지 않아요.' : '기준 Figma 프레임이 없어 코드 위치를 몰라요 · 고친 커밋·PR은 이슈 키로 연결돼요.'} />
           )}
           {!fixed && (
             <p className="mt-3 text-xs text-qa-text-sub">고친 뒤에는 커밋 메시지나 PR 제목에 <span className="font-mono font-medium text-black">{trace.issue_key}</span>를 넣으면 여기에 연결돼요.</p>

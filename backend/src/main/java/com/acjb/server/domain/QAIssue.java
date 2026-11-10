@@ -130,6 +130,17 @@ public class QAIssue {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    /** 담당 팀이 붙인 수정 PR·커밋 주소(AC34, V13) */
+    @Column(name = "fix_link_url", length = 500)
+    private String fixLinkUrl;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fix_link_by_id")
+    private Member fixLinkBy;
+
+    @Column(name = "fix_link_at")
+    private Instant fixLinkAt;
+
     public QAIssue(Project project, String description, String screenLocation, List<String> reproSteps,
                    PlatformScope platformScope, Environment environment, List<String> screenshots,
                    String figmaLink, StyleMismatch styleMismatch, MemberRole assignedTeam, Member reportedBy) {
@@ -161,6 +172,19 @@ public class QAIssue {
     }
 
     /** 상태 변경은 서비스에서 전이 규칙(AC6)을 검사한 뒤에만 호출한다 */
+    /** 고친 PR·커밋 GitHub 주소(AC34) — 담당 팀이 붙인다. 상태·알림과 무관 */
+    public void attachFixLink(String url, Member by, Instant now) {
+        this.fixLinkUrl = url;
+        this.fixLinkBy = by;
+        this.fixLinkAt = now;
+    }
+
+    public void clearFixLink() {
+        this.fixLinkUrl = null;
+        this.fixLinkBy = null;
+        this.fixLinkAt = null;
+    }
+
     public void changeStatus(IssueStatus next) {
         this.status = next;
     }

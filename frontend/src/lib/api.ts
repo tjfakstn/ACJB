@@ -395,6 +395,8 @@ export const PROPERTY_LABELS: Record<StyleProperty, string> = {
 export interface StyleMismatch {
   id: string
   frame_id: string | null
+  /** 첫 QA가 비교한 Figma 노드 — 자동 QA 미리보기에서 그 위치를 표시한다 */
+  node_id: string | null
   screen: string | null
   property: StyleProperty
   expected_value: string
@@ -527,6 +529,21 @@ export function captureImageUrl(projectId: string, captureId: string): string {
 
 export function createManualQa(projectId: string, input: ManualQaInput): Promise<QaIssue> {
   return request<QaIssue>('POST', `/api/v1/projects/${projectId}/manual-qa`, input)
+}
+
+/** 자동 QA 항목의 Figma 프레임 미리보기(AC32) — 이미지 주소는 Figma가 준 임시 주소, 노드 상자는 프레임 기준 비율 */
+export interface FramePreview {
+  frame_id: string
+  node_id: string | null
+  image_url: string
+  width: number
+  height: number
+  node_box: { x_ratio: number; y_ratio: number; w_ratio: number; h_ratio: number } | null
+}
+
+export function getFramePreview(projectId: string, frameId: string, nodeId: string | null): Promise<FramePreview> {
+  const q = nodeId ? `?node_id=${encodeURIComponent(nodeId)}` : ''
+  return request<FramePreview>('GET', `/api/v1/projects/${projectId}/figma/frames/${encodeURIComponent(frameId)}/preview${q}`)
 }
 
 /** 수동 QA 화면 표시 ID — 시안 QA-M### */

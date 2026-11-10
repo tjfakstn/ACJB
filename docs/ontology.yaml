@@ -66,7 +66,7 @@ classes:
     description: Figma 기준값과 구현 값이 다른 스타일 차이 한 건
     evidence: [로그 1, 로그 2, 로그 3, 로그 8, 로그 10, 로그 11, 관찰 1]
     attributes:
-      property: {type: enum, values: [color, font_weight, font_family, radius, shadow, spacing, text], evidence: [로그 3, 로그 8, 로그 9, 로그 10, 로그 11]}
+      property: {type: enum, values: [color, font_weight, font_size, font_family, radius, shadow, spacing, text], evidence: [로그 3, 로그 8, 로그 9, 로그 10, 로그 11]}
       expected_value: {type: string, note: "Figma 기준값(토큰 이름 포함 가능, 예 Gray 80). actual_value와 혼동 금지", evidence: [로그 8, 로그 11, 관찰 1]}
       actual_value: {type: string, note: "구현 화면에 실제 적용된 값(개발자 모드로 확인)", evidence: [로그 8, 로그 11, 관찰 1]}
     relations:
@@ -123,8 +123,24 @@ classes:
       severity: {type: enum, values: [critical, high, medium, low], note: "선택", evidence: [decision_log 2026-11-10]}
       expected_result: {type: string, note: "선택. 입력하지 않으면 비워 둔다", evidence: [decision_log 2026-11-10]}
       actual_result: {type: string, note: "선택. 입력하지 않으면 비워 둔다", evidence: [decision_log 2026-11-10]}
+      figma_frame: {type: object, note: "등록 때 고른 기준 FigmaFrame(id·이름). 서버가 경로로 고르지 않는다 — 화면이 연결된 프레임을 미리 고르고 사람이 확인(AC33)", evidence: [decision_log 2026-11-10]}
     relations:
       - captured_in: QaCapture
+        evidence: [decision_log 2026-11-10]
+      - designed_by: FigmaFrame
+        note: "0..1"
+        evidence: [decision_log 2026-11-10]
+
+  ScreenFrameLink:
+    description: 이 배포 화면 경로(Screen)는 이 FigmaFrame을 보고 구현했다는 연결. Screen.implements FigmaFrame을 경로 단위로 저장한 것
+    evidence: [decision_log 2026-11-10]
+    attributes:
+      page_path: {type: string, note: "/로 시작, :이름 조각은 어떤 한 조각과 맞는다. 한 경로에 여러 프레임(상태별 시안) 가능, 프레임 하나에 경로 하나", evidence: [decision_log 2026-11-10]}
+      frame_id: {type: string, note: "최근 성공한 비교 분석 매핑에 있는 프레임만", evidence: [decision_log 2026-11-10]}
+      frame_name: {type: string, note: "연결할 때의 이름", evidence: [decision_log 2026-11-10]}
+    relations:
+      - links: [Screen, FigmaFrame]
+        note: "소유자가 지정. 코드에서 추정하지 않는다(N19)"
         evidence: [decision_log 2026-11-10]
 
   QaCapture:

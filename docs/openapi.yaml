@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.8.1
+  version: 0.10.0
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -274,8 +274,8 @@ paths:
                 scope:
                   type: array
                   minItems: 1
-                  items: { type: string, enum: [size_spacing, color_typography, border_radius, layout, presence] }
-                  description: 크기·간격·위치 / 색상·타이포그래피 / 테두리·모서리 / 레이아웃 / UI 요소 존재 여부
+                  items: { type: string, enum: [size_spacing, color_typography, border_radius, text] }
+                  description: '간격·여백(spacing — padding·gap) / 색상·타이포그래피(color 글자·배경·테두리, font_weight, font_size) / 모서리(radius) / 고정 문구(text). 고른 범위의 property만 비교한다(2026-11-10 스파이크)'
       responses:
         '202':
           description: 접수됨
@@ -543,6 +543,7 @@ paths:
                 severity: { type: string, enum: [critical, high, medium, low], nullable: true }
                 expected_result: { type: string, nullable: true, maxLength: 1000 }
                 actual_result: { type: string, nullable: true, maxLength: 1000 }
+                figma_frame_id: { type: string, nullable: true, description: '이 화면의 기준 Figma 프레임(AC33). 최근 성공한 비교 분석 매핑에 있어야 한다. 없으면 서버가 고르지 않는다' }
       responses:
         '201':
           description: 등록됨
@@ -558,6 +559,77 @@ paths:
                 $ref: '#/components/schemas/QAIssueResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+
+  /projects/{projectId}/screen-links:
+    get:
+      tags: [Project]
+      summary: 화면 경로 ↔ Figma 프레임 연결 목록 (SPEC AC33, 2026-11-10)
+      description: 프로젝트 멤버 누구나. page_path asc, frame_name asc, frame_id asc
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/ScreenFrameLink' }
+                  error: { type: object, nullable: true, example: null }
+
+  /projects/{projectId}/screen-links/{frameId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - name: frameId
+        in: path
+        required: true
+        schema: { type: string, example: '12:34' }
+    put:
+      tags: [Project]
+      summary: 프레임에 배포 화면 경로 연결 (SPEC AC33)
+      description: >-
+        소유자만(403). 프레임은 최근 성공한 비교 분석 매핑에 있어야 한다(400). page_path는 /로 시작, 500자 이하, ?·# 없음(400).
+        :이름 조각은 어떤 한 조각과도 맞는다. 이미 있으면 바꾼다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [page_path]
+              properties:
+                page_path: { type: string, maxLength: 500, example: '/app/projects/:projectId' }
+      responses:
+        '200':
+          description: 저장됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/ScreenFrameLink' }
+                  error: { type: object, nullable: true, example: null }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Project]
+      summary: 프레임의 화면 경로 연결 삭제 (SPEC AC33)
+      description: 소유자만(403). 연결이 없어도 204
+      responses:
+        '204':
+          description: 삭제됨
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /projects/{projectId}/members:
     get:
@@ -1122,7 +1194,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [color, font_weight, font_family, radius, shadow, spacing, text]
+            enum: [color, font_weight, font_size, font_family, radius, shadow, spacing, text]
       responses:
         '200':
           description: OK
@@ -1664,6 +1736,22 @@ components:
         severity: { type: string, enum: [critical, high, medium, low], nullable: true }
         expected_result: { type: string, nullable: true }
         actual_result: { type: string, nullable: true }
+        figma_frame:
+          type: object
+          nullable: true
+          description: 등록할 때 고른 기준 Figma 프레임(AC33). 이름은 등록 때 값
+          properties:
+            frame_id: { type: string }
+            frame_name: { type: string }
+
+    ScreenFrameLink:
+      type: object
+      description: 이 배포 화면 경로는 이 Figma 프레임을 보고 구현했다 (docs/ontology.yaml ScreenFrameLink)
+      properties:
+        frame_id: { type: string }
+        frame_name: { type: string, description: 연결할 때의 프레임 이름 }
+        page_path: { type: string, description: '/로 시작. :이름 조각은 어떤 한 조각과도 맞는다' }
+        updated_at: { type: string, format: date-time }
 
     QaCapture:
       type: object
@@ -1707,7 +1795,7 @@ components:
         frame_id: { type: string, nullable: true, description: 기준이 된 FigmaFrame }
         node_id: { type: string, nullable: true, description: '비교한 Figma 노드(첫 QA·scan). 응답에만 담긴다(2026-11-10)' }
         screen: { type: string, nullable: true, description: 비교한 Screen(배포 화면) }
-        property: { type: string, enum: [color, font_weight, font_family, radius, shadow, spacing, text] }
+        property: { type: string, enum: [color, font_weight, font_size, font_family, radius, shadow, spacing, text] }
         expected_value: { type: string, description: Figma 기준값 }
         actual_value: { type: string, description: 구현 화면에 실제 적용된 값 }
 
@@ -1898,7 +1986,7 @@ components:
         scope:
           type: array
           nullable: true
-          items: { type: string, enum: [size_spacing, color_typography, border_radius, layout, presence] }
+          items: { type: string, enum: [size_spacing, color_typography, border_radius, text] }
           description: first_qa의 검증 범위. 다른 kind는 null
         demo: { type: boolean, description: 개발용 가짜 비교기로 돈 실행이면 true(시연용 값, 2026-11-08) }
         error_message: { type: string, nullable: true, description: 사용자에게 보여 줄 실패 사유 }

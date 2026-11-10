@@ -103,8 +103,13 @@ app:
     node-concurrency: 4
     max-code-chars: 400000
   # 첫 QA·Re-QA 비교기 — true면 개발용 가짜 비교기(시연용 값). 운영에서 켜지 않는다(SPEC 4절·N17, 2026-11-08)
+  # 실제 비교기(2026-11-10 스파이크) — 비교 분석과 같은 모델. 노드마다 1번 호출, 동시에 부르는 수
   qa:
     fake-comparator: ${QA_FAKE_COMPARATOR:false}
+    model: claude-sonnet-5-5
+    api-key: ${ANTHROPIC_API_KEY:}
+    timeout: 10m
+    concurrency: 4
   voyage:
     api-key: ${VOYAGE_API_KEY:}
     base-url: https://api.voyageai.com

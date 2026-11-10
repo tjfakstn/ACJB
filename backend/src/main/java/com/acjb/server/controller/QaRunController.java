@@ -48,8 +48,9 @@ public class QaRunController {
 
     @PostMapping("/re-qa")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public Map<String, Object> startReQa(@PathVariable Long projectId, @AuthenticationPrincipal OAuth2User principal) {
-        return ApiResponses.ok(service.startReQa(projectId, currentMember.require(principal)));
+    public Map<String, Object> startReQa(@PathVariable Long projectId, @RequestBody(required = false) JsonNode body,
+                                         @AuthenticationPrincipal OAuth2User principal) {
+        return ApiResponses.ok(service.startReQa(projectId, body, currentMember.require(principal)));
     }
 
     @GetMapping("/re-qa")

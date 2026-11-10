@@ -178,7 +178,7 @@ class QaRunApiTest {
         // 비교기에는 고른 범위의 property와 노드 짝만 넘긴다
         ArgumentCaptor<QaComparator.FirstQaInput> input = ArgumentCaptor.forClass(QaComparator.FirstQaInput.class);
         verify(comparator).compare(input.capture());
-        assertThat(input.getValue().properties()).containsExactly(StyleProperty.COLOR, StyleProperty.FONT_WEIGHT, StyleProperty.FONT_FAMILY);
+        assertThat(input.getValue().properties()).containsExactly(StyleProperty.COLOR, StyleProperty.FONT_WEIGHT, StyleProperty.FONT_SIZE);
         assertThat(input.getValue().targets()).extracting(QaComparator.Target::nodeId).containsExactly("12:34");
     }
 
@@ -385,5 +385,150 @@ class QaRunApiTest {
         fixedFirstQaIssue("12:34", StyleProperty.COLOR, "#1A73E8", "#2B7DE9");
         postAs("/re-qa", owner, null).andExpect(status().isAccepted());
         postAs("/re-qa", owner, null).andExpect(status().isConflict());
+    }
+
+    // --- AC28 Re-QA 검증 범위(2026-11-10) — 검사한 범위는 다시 판정, 새로 더한 범위는 매핑 전체를 새로 비교 ---
+
+    /** 성공한 첫 QA(고른 범위) */
+    private ProjectRun firstQaDone(String scopeCsv) {
+        ProjectRun r = runs.save(new ProjectRun(project, RunKind.FIRST_QA, owner, Instant.now()));
+        r.setScope(scopeCsv);
+        r.succeed(SHA, 0, 0, Instant.now());
+        em.flush();
+        return r;
+    }
+
+    @Test
+    void Re_QA에서_범위를_더하면_판정과_함께_새_범위만_같은_커밋에서_비교해_이슈로_만든다() throws Exception {
+        analyzed();
+        firstQaDone("color_typography");
+        QAIssue a = fixedFirstQaIssue("12:34", StyleProperty.COLOR, "#1A73E8", "#2B7DE9");
+        String head = "c".repeat(40);
+        when(comparator.recheck(any())).thenReturn(new QaComparator.ReQaResult(head, Map.of(a.getId(), "#1A73E8")));
+        when(comparator.compare(any())).thenReturn(new QaComparator.FirstQaResult(head, List.of(
+            new QaComparator.Finding("12:34", StyleProperty.TEXT, "주문하기", "주문", "src/components/Button.tsx", 12),
+            new QaComparator.Finding("12:34", StyleProperty.COLOR, "#000000", "#111111", "src/components/Button.tsx", 13)), 0));
+
+        postAs("/re-qa", owner, "{\"scope\":[\"color_typography\",\"text\"]}")
+            .andExpect(status().isAccepted())
+            .andExpect(jsonPath("$.data.scope.length()").value(2))
+            .andExpect(jsonPath("$.data.added_scope[0]").value("text"))
+            .andExpect(jsonPath("$.data.added_scope.length()").value(1))
+            .andExpect(jsonPath("$.data.covered_scope[0]").value("color_typography"))
+            .andExpect(jsonPath("$.data.covered_scope.length()").value(1));
+        Long runId = latestRun(RunKind.RE_QA);
+        reQaJob.run(runId);
+
+        ProjectRun run = reload(runId);
+        assertThat(run.getStatus()).isEqualTo(RunStatus.SUCCEEDED);
+        assertThat(run.getCreatedCount()).isEqualTo(1);
+        assertThat(run.getFoundCount()).isEqualTo(1);
+        // 새 범위 밖 property(color)는 버리고 센다(N17)
+        assertThat(run.getFoundDroppedCount()).isEqualTo(1);
+        assertThat(run.getCommitSha()).isEqualTo(head);
+        assertThat(issues.findById(a.getId()).orElseThrow().getStatus()).isEqualTo(IssueStatus.RESOLVED);
+        QAIssue found = issues.findAll().stream()
+            .filter(i -> i.getProject().getId().equals(project.getId()) && i.getStyleMismatch().getProperty() == StyleProperty.TEXT)
+            .findFirst().orElseThrow();
+        assertThat(found.getSource()).isEqualTo(IssueSource.FIRST_QA);
+        assertThat(found.getStatus()).isEqualTo(IssueStatus.NEEDS_CHECK);
+        assertThat(found.getAssignedTeam()).isNull();
+        assertThat(found.getFirstQaRun().getId()).isEqualTo(runId);
+        assertThat(found.getStyleMismatch().getExpectedValue()).isEqualTo("주문하기");
+        assertThat(found.getStyleMismatch().getActualValue()).isEqualTo("주문");
+        assertThat(notifications.count()).isZero();
+
+        // 새 범위의 property만, 판정과 같은 커밋에서 비교한다
+        ArgumentCaptor<QaComparator.FirstQaInput> input = ArgumentCaptor.forClass(QaComparator.FirstQaInput.class);
+        verify(comparator).compare(input.capture());
+        assertThat(input.getValue().properties()).containsExactly(StyleProperty.TEXT);
+        assertThat(input.getValue().commitSha()).isEqualTo(head);
+
+        // 이제 검사한 범위는 둘 다 — 다음 Re-QA 화면은 둘 다 잠근다
+        mvc.perform(get("/api/v1/projects/" + project.getId() + "/re-qa").with(oauth2Login().attributes(x -> x.put("email", front.getEmail()))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.found_count").value(1))
+            .andExpect(jsonPath("$.data.found_dropped_count").value(1))
+            .andExpect(jsonPath("$.data.covered_scope.length()").value(2));
+        mvc.perform(get("/api/v1/projects/" + project.getId() + "/first-qa").with(oauth2Login().attributes(x -> x.put("email", front.getEmail()))))
+            .andExpect(jsonPath("$.data.covered_scope[0]").value("color_typography"))
+            .andExpect(jsonPath("$.data.covered_scope[1]").value("text"));
+    }
+
+    @Test
+    void Re_QA_범위에서_검사한_범위를_빼거나_틀린_값이면_400이고_실행을_만들지_않는다() throws Exception {
+        analyzed();
+        firstQaDone("color_typography,border_radius");
+        fixedFirstQaIssue("12:34", StyleProperty.COLOR, "#1A73E8", "#2B7DE9");
+        long before = runCount();
+        postAs("/re-qa", owner, "{\"scope\":[\"color_typography\",\"text\"]}").andExpect(status().isBadRequest());
+        postAs("/re-qa", owner, "{\"scope\":[\"color_typography\",\"border_radius\",\"layout\"]}").andExpect(status().isBadRequest());
+        postAs("/re-qa", owner, "{\"scope\":[]}").andExpect(status().isBadRequest());
+        assertThat(runCount()).isEqualTo(before);
+    }
+
+    @Test
+    void fixed_이슈가_없어도_새_범위가_있으면_브랜치_최신_커밋에서_새_범위만_비교한다() throws Exception {
+        analyzed();
+        firstQaDone("color_typography");
+        String head = "d".repeat(40);
+        when(comparator.latestCommit("o/r", "main")).thenReturn(head);
+        when(comparator.compare(any())).thenReturn(new QaComparator.FirstQaResult(head, List.of(), 0));
+
+        postAs("/re-qa", owner, "{\"scope\":[\"color_typography\",\"border_radius\"]}").andExpect(status().isAccepted());
+        Long runId = latestRun(RunKind.RE_QA);
+        reQaJob.run(runId);
+
+        ProjectRun run = reload(runId);
+        assertThat(run.getStatus()).isEqualTo(RunStatus.SUCCEEDED);
+        assertThat(run.getFoundCount()).isZero();
+        assertThat(run.getCommitSha()).isEqualTo(head);
+        verify(comparator, never()).recheck(any());
+        ArgumentCaptor<QaComparator.FirstQaInput> input = ArgumentCaptor.forClass(QaComparator.FirstQaInput.class);
+        verify(comparator).compare(input.capture());
+        assertThat(input.getValue().commitSha()).isEqualTo(head);
+        assertThat(input.getValue().properties()).containsExactly(StyleProperty.RADIUS);
+    }
+
+    @Test
+    void fixed_이슈도_새_범위도_없으면_409() throws Exception {
+        analyzed();
+        firstQaDone("color_typography");
+        long before = runCount();
+        postAs("/re-qa", owner, "{\"scope\":[\"color_typography\"]}")
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error.code").value("NOT_READY"));
+        assertThat(runCount()).isEqualTo(before);
+    }
+
+    @Test
+    void 첫_QA가_성공하지_않았으면_범위를_더할_수_없다_409() throws Exception {
+        analyzed();
+        long before = runCount();
+        postAs("/re-qa", owner, "{\"scope\":[\"text\"]}")
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error.code").value("NOT_READY"));
+        assertThat(runCount()).isEqualTo(before);
+    }
+
+    @Test
+    void 새_범위_비교가_실패하면_판정도_새_이슈도_남지_않고_범위도_더해지지_않는다() throws Exception {
+        analyzed();
+        firstQaDone("color_typography");
+        QAIssue a = fixedFirstQaIssue("12:34", StyleProperty.COLOR, "#1A73E8", "#2B7DE9");
+        when(comparator.recheck(any())).thenReturn(new QaComparator.ReQaResult(SHA, Map.of(a.getId(), "#1A73E8")));
+        when(comparator.compare(any())).thenThrow(new QaFailedException("비교 실패"));
+        long issuesBefore = issues.count();
+
+        postAs("/re-qa", owner, "{\"scope\":[\"color_typography\",\"text\"]}").andExpect(status().isAccepted());
+        Long runId = latestRun(RunKind.RE_QA);
+        reQaJob.run(runId);
+
+        assertThat(reload(runId).getStatus()).isEqualTo(RunStatus.FAILED);
+        assertThat(issues.findById(a.getId()).orElseThrow().getStatus()).isEqualTo(IssueStatus.FIXED);
+        assertThat(verifications.findByIssueIdOrderByVerifiedAtDescIdDesc(a.getId())).isEmpty();
+        assertThat(issues.count()).isEqualTo(issuesBefore);
+        mvc.perform(get("/api/v1/projects/" + project.getId() + "/re-qa").with(oauth2Login().attributes(x -> x.put("email", owner.getEmail()))))
+            .andExpect(jsonPath("$.data.covered_scope.length()").value(1));
     }
 }

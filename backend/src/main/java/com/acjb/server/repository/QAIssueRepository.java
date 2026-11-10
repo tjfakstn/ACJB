@@ -59,4 +59,10 @@ public interface QAIssueRepository extends JpaRepository<QAIssue, Long> {
     long countByProjectId(Long projectId);
 
     long countByProjectIdAndStatusNot(Long projectId, IssueStatus status);
+
+    /** 같은 Figma 요소에서 나온 첫 QA 이슈(AC34 코드 추적의 related) — id 오름차순 */
+    @org.springframework.data.jpa.repository.Query("select i from QAIssue i join i.styleMismatch m where i.project.id = :projectId "
+        + "and i.source = com.acjb.server.domain.IssueSource.FIRST_QA and m.nodeId = :nodeId order by i.id asc")
+    List<QAIssue> findFirstQaByElement(@org.springframework.data.repository.query.Param("projectId") Long projectId,
+                                       @org.springframework.data.repository.query.Param("nodeId") String nodeId);
 }

@@ -1,5 +1,7 @@
 package com.acjb.server.liveqa;
 
+import java.util.List;
+
 import java.net.URI;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -30,6 +32,22 @@ final class LiveQaValidation {
             throw ApiException.badRequest("page_path는 /로 시작하는 " + PATH_MAX + "자 이하 경로여야 합니다(공백 없이).");
         }
         return path;
+    }
+
+    static final int STEP_MAX = 500;
+    static final int STEPS_MAX = 10;
+
+    /** 위치 없이 등록할 때 사람이 적는 재현 절차 — 1~10개, 각 500자 이하, 빈 줄은 뺀다(AC1: 비면 거부) */
+    static List<String> reproSteps(List<String> raw) {
+        List<String> steps = raw == null ? List.of()
+            : raw.stream().filter(java.util.Objects::nonNull).map(String::strip).filter(st -> !st.isEmpty()).toList();
+        if (steps.isEmpty()) {
+            throw ApiException.badRequest("필수 항목이 비어 있습니다: repro_steps — 위치 없이 등록할 때는 재현 절차를 적어 주세요.");
+        }
+        if (steps.size() > STEPS_MAX || steps.stream().anyMatch(st -> st.length() > STEP_MAX)) {
+            throw ApiException.badRequest("재현 절차는 " + STEPS_MAX + "개 이하, 각 " + STEP_MAX + "자 이하로 적어 주세요.");
+        }
+        return steps;
     }
 
     static Viewport viewport(LiveQaRequests.ViewportInput v) {

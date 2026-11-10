@@ -52,24 +52,26 @@ public class ManualQaPin {
     @Column(nullable = false, length = 100, updatable = false)
     private String title;
 
-    @Column(name = "page_path", nullable = false, length = 500, updatable = false)
+    /** 위치 없이 등록(NONE)하면 비어 있을 수 있다 */
+    @Column(name = "page_path", length = 500, updatable = false)
     private String pagePath;
 
     /** 등록할 때의 배포 주소 + 경로. 첨부 이미지 기준이고 배포 주소가 없었으면 null */
     @Column(name = "page_url", length = 1500, updatable = false)
     private String pageUrl;
 
-    @Column(name = "x_px", nullable = false, updatable = false)
-    private int xPx;
+    /** 좌표·화면 크기 — 위치 없이 등록(NONE)하면 모두 null(V14) */
+    @Column(name = "x_px", updatable = false)
+    private Integer xPx;
 
-    @Column(name = "y_px", nullable = false, updatable = false)
-    private int yPx;
+    @Column(name = "y_px", updatable = false)
+    private Integer yPx;
 
-    @Column(name = "viewport_width", nullable = false, updatable = false)
-    private int viewportWidth;
+    @Column(name = "viewport_width", updatable = false)
+    private Integer viewportWidth;
 
-    @Column(name = "viewport_height", nullable = false, updatable = false)
-    private int viewportHeight;
+    @Column(name = "viewport_height", updatable = false)
+    private Integer viewportHeight;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
@@ -99,11 +101,18 @@ public class ManualQaPin {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** 등록할 때 사람이 확인한 기준 Figma 프레임(AC33). 이름은 그때 값 */
+    @Column(name = "figma_frame_id", length = 50, updatable = false)
+    private String figmaFrameId;
+
+    @Column(name = "figma_frame_name", length = 255, updatable = false)
+    private String figmaFrameName;
+
     @SuppressWarnings("java:S107") // 위치·캡처·선택 입력을 한 번에 받는 등록 전용 생성자
     public ManualQaPin(Project project, QAIssue issue, int pinNumber, String clientRequestId, String title, String pagePath,
-                       String pageUrl, int xPx, int yPx, int viewportWidth, int viewportHeight, LocationBasis locationBasis,
+                       String pageUrl, Integer xPx, Integer yPx, Integer viewportWidth, Integer viewportHeight, LocationBasis locationBasis,
                        CaptureStatus captureStatus, QaCapture capture, Severity severity, String expectedResult,
-                       String actualResult, Instant createdAt) {
+                       String actualResult, String figmaFrameId, String figmaFrameName, Instant createdAt) {
         this.project = project;
         this.issue = issue;
         this.pinNumber = pinNumber;
@@ -121,6 +130,8 @@ public class ManualQaPin {
         this.severity = severity;
         this.expectedResult = expectedResult;
         this.actualResult = actualResult;
+        this.figmaFrameId = figmaFrameId;
+        this.figmaFrameName = figmaFrameName;
         this.createdAt = createdAt;
     }
 }

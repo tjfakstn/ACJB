@@ -4,6 +4,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +40,8 @@ import com.acjb.server.service.TeamNotifier;
 /**
  * 자동 Re-QA(AC28) 실행. fixed인 첫 QA 이슈마다 같은 노드·같은 파일을 다시 비교해
  * 같으면 pass → resolved, 다르면 fail → needs_recheck(담당 팀 recheck_failed 알림, AC11). verified_by는 실행한 소유자.
- * 다시 읽지 못한 이슈·그사이 상태가 바뀐 이슈는 바꾸지 않고 건너뛴다(N18). 실패하면 아무 이슈도 바꾸지 않는다(한 트랜잭션)
+ * 다시 읽지 못한 이슈·그사이 상태가 바뀐 이슈는 바꾸지 않고 건너뛴다(N18). 실패하면 아무 이슈도 바꾸지 않는다(한 트랜잭션).
+ * 새로 더한 검증 범위(added_scope, 2026-11-10)가 있으면 같은 커밋에서 그 범위만 매핑 전체를 비교해 새 이슈로 저장한다
  */
 @Component
 public class ReQaJob {
@@ -51,12 +54,13 @@ public class ReQaJob {
     private final StatusHistoryRepository histories;
     private final TeamNotifier teamNotifier;
     private final QaComparator comparator;
+    private final FirstQaSupport support;
     private final ApplicationEventPublisher events;
     private final TransactionTemplate tx;
     private final Clock clock;
 
     public ReQaJob(ProjectRunRepository runs, QAIssueRepository issues, VerificationRepository verifications,
-                   StatusHistoryRepository histories, TeamNotifier teamNotifier, QaComparator comparator,
+                   StatusHistoryRepository histories, TeamNotifier teamNotifier, QaComparator comparator, FirstQaSupport support,
                    ApplicationEventPublisher events, PlatformTransactionManager txManager, Clock clock) {
         this.runs = runs;
         this.issues = issues;
@@ -64,6 +68,7 @@ public class ReQaJob {
         this.histories = histories;
         this.teamNotifier = teamNotifier;
         this.comparator = comparator;
+        this.support = support;
         this.events = events;
         this.tx = new TransactionTemplate(txManager);
         this.clock = clock;
@@ -75,22 +80,52 @@ public class ReQaJob {
         run(event.runId());
     }
 
+    /** 실행 준비 — 판정할 fixed 이슈와, 새로 더한 범위가 있으면 그 비교 입력(커밋은 아직 비교 분석의 것) */
+    private record Prepared(QaComparator.ReQaInput recheck, QaComparator.FirstQaInput added) {
+    }
+
     public void run(Long runId) {
-        QaComparator.ReQaInput input = tx.execute(s -> {
-            ProjectRun run = runs.findById(runId).orElse(null);
-            if (run == null) {
-                return null;
-            }
-            run.start();
-            return inputs(run);
-        });
-        if (input == null) {
+        Prepared prepared;
+        try {
+            prepared = tx.execute(s -> {
+                ProjectRun run = runs.findById(runId).orElse(null);
+                if (run == null) {
+                    return null;
+                }
+                run.start();
+                Set<QaScope> added = FirstQaJob.parseScope(run.getAddedScope());
+                return new Prepared(inputs(run), added.isEmpty() ? null : support.input(run.getProject(), added, null));
+            });
+        } catch (QaFailedException e) {
+            fail(runId, e.getMessage());
+            return;
+        }
+        if (prepared == null) {
             return;
         }
         try {
-            QaComparator.ReQaResult result = comparator.recheck(input);
+            QaComparator.ReQaInput input = prepared.recheck();
+            QaComparator.ReQaResult result = input.items().isEmpty() ? new QaComparator.ReQaResult(null, Map.of())
+                : comparator.recheck(input);
+            String sha = result.commitSha();
+            QaComparator.FirstQaInput addedInput = null;
+            QaComparator.FirstQaResult addedResult = null;
+            if (prepared.added() != null) {
+                // 새 범위는 판정과 같은 커밋(브랜치 최신)에서 비교한다 — 이미 고친 차이가 다시 이슈가 되지 않게
+                String head = sha != null ? sha : comparator.latestCommit(input.repo(), input.branch());
+                QaComparator.FirstQaInput a = prepared.added();
+                addedInput = head == null ? a
+                    : new QaComparator.FirstQaInput(a.repo(), head, a.figmaFileKey(), a.scope(), a.properties(), a.targets());
+                addedResult = comparator.compare(addedInput);
+                if (sha == null) {
+                    sha = addedResult.commitSha();
+                }
+            }
             boolean demo = comparator.demo();
-            tx.executeWithoutResult(s -> save(runId, input, result, demo));
+            String commitSha = sha;
+            QaComparator.FirstQaInput finalAddedInput = addedInput;
+            QaComparator.FirstQaResult finalAddedResult = addedResult;
+            tx.executeWithoutResult(s -> save(runId, input, result, commitSha, finalAddedInput, finalAddedResult, demo));
         } catch (QaFailedException e) {
             fail(runId, e.getMessage());
         } catch (RuntimeException e) {
@@ -112,10 +147,12 @@ public class ReQaJob {
                     m.getExpectedValue(), m.getActualValue(), (int) verifications.countByIssueIdAndSource(i.getId(), VerificationSource.RE_QA));
             })
             .toList();
-        return new QaComparator.ReQaInput(p.getGithubRepo(), sha, items);
+        return new QaComparator.ReQaInput(p.getGithubRepo(), p.getGithubBranch(), sha, p.getFigmaFileKey(), items);
     }
 
-    private void save(Long runId, QaComparator.ReQaInput input, QaComparator.ReQaResult result, boolean demo) {
+    /** 판정과 새 범위의 이슈를 한 트랜잭션으로 — 실패하면 둘 다 남지 않는다 */
+    private void save(Long runId, QaComparator.ReQaInput input, QaComparator.ReQaResult result, String commitSha,
+                      QaComparator.FirstQaInput addedInput, QaComparator.FirstQaResult addedResult, boolean demo) {
         ProjectRun run = runs.findById(runId).orElseThrow();
         Long projectId = run.getProject().getId();
         int passed = 0;
@@ -141,12 +178,14 @@ public class ReQaJob {
                 passed++;
             }
         }
+        // 새로 더한 범위(AC28, 2026-11-10) — 첫 QA와 같은 근거 규칙(N17)으로 저장. 담당 팀이 없으므로 알림 없음
+        FirstQaSupport.Saved found = addedInput == null ? new FirstQaSupport.Saved(0, 0) : support.save(run, addedInput, addedResult, demo);
         if (demo) {
             run.markDemo();
         }
-        run.succeedReQa(result.commitSha(), passed, failed, skipped, clock.instant());
-        if (failed > 0) {
-            // fail 재검증은 재검증 범위 제안(AC20)의 검색 문서가 된다
+        run.succeedReQa(commitSha, passed, failed, skipped, found.created(), found.dropped(), clock.instant());
+        if (failed > 0 || found.created() > 0) {
+            // fail 재검증과 새 이슈는 재검증 범위 제안(AC20)의 검색 문서가 된다
             events.publishEvent(new EmbeddingSourcesChanged(projectId));
         }
     }

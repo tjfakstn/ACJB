@@ -331,6 +331,9 @@ export interface ProjectRun {
   /** re_qa가 새로 더한 범위에서 만든 이슈 수·버린 수. 다른 kind는 null */
   found_count?: number | null
   found_dropped_count?: number | null
+  /** 첫 QA·Re-QA 비교 진행률 — 비교한 Figma 요소 수/전체(2026-11-10). 비교를 시작하기 전이면 null */
+  progress_done?: number | null
+  progress_total?: number | null
   /** 개발용 가짜 비교기로 돈 실행([시연용] — 2026-11-08) */
   demo: boolean
   error_message: string | null
@@ -350,7 +353,9 @@ export function getAnalysis(projectId: string): Promise<ProjectRun | null> {
 
 export interface NodeMapping { node_id: string; node_name: string; code_path: string; code_symbol: string }
 export interface FrameMapping { frame_id: string; frame_name: string; code_path: string; nodes: NodeMapping[] }
-export interface MappingList { run: ProjectRun | null; commit_sha: string | null; items: FrameMapping[] }
+/** 비교 분석이 코드 파일을 찾지 못한 화면 — 이슈가 아니라 확인해 볼 곳(2026-11-10). section은 속한 Figma 섹션 이름 */
+export interface UnmappedFrame { frame_id: string; frame_name: string; section: string | null }
+export interface MappingList { run: ProjectRun | null; commit_sha: string | null; items: FrameMapping[]; unmapped_frames?: UnmappedFrame[] }
 
 /** 최근 성공한 비교 분석의 매핑 — 프레임 이름순, 그 안 노드 이름순. 없으면 items 빈 배열 */
 export function getMappings(projectId: string): Promise<MappingList> {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ApiError, deleteScreenLink, fetchMe, formatDateTime, getMappings, getProjectDetail, listScreenLinks, putScreenLink,
-  type FrameMapping, type MappingList, type Me, type ProjectDetail, type ScreenFrameLink,
+  type FrameMapping, type MappingList, type UnmappedFrame, type Me, type ProjectDetail, type ScreenFrameLink,
 } from '../lib/api'
 import { AppHeader } from '../components/projects/AppHeader'
 import { WorkspaceSidebar } from '../components/members/WorkspaceSidebar'
@@ -139,11 +139,47 @@ export function MappingPage() {
                       link={linkOf(current.frame_id)} canEdit={isOwner} onChange={(l) => onLinkChange(current.frame_id, l)} />} />
                 )}
               </div>
+              <UnmappedFrames frames={data.unmapped_frames ?? []} fileKey={detail?.figma?.file_key ?? null} projectId={projectId} />
             </>
           )}
         </main>
       </div>
     </div>
+  )
+}
+
+/**
+ * 비교 분석이 코드 파일을 찾지 못한 화면(2026-11-10). 아직 구현하지 않은 화면일 수도, AI가 놓친 것일 수도 있어
+ * 이슈로 만들지 않고 "확인해 볼 곳"으로만 보여 준다 — 구현이 빠졌다면 사람이 수동 QA로 등록한다
+ */
+function UnmappedFrames({ frames, fileKey, projectId }: { frames: UnmappedFrame[]; fileKey: string | null; projectId: string }) {
+  if (frames.length === 0) return null
+  return (
+    <section className={`${CARD} mt-8 rounded-2xl p-5`}>
+      <div className="flex items-center gap-2">
+        <h2 className="text-base font-bold text-black">코드를 찾지 못한 화면</h2>
+        <span className="flex h-6 items-center rounded-full bg-qa-warning/10 px-2 text-xs font-medium text-black">{frames.length}개</span>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-qa-text-sub">
+        비교 분석이 구현 파일을 찾지 못한 Figma 화면이에요. 아직 구현하지 않았거나 AI가 놓쳤을 수 있어 자동으로 QA 문제로 만들지 않아요.
+        구현이 빠진 화면이라면 <Link to={`/app/projects/${projectId}/results`} className="font-medium text-qa-primary-hover hover:underline">QA 결과</Link>에서 수동 QA로 등록해 주세요.
+        이 화면들은 첫 QA 비교 대상이 아니에요.
+      </p>
+      <ul className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {frames.map((f) => (
+          <li key={f.frame_id} className="flex min-h-11 items-center gap-2 rounded-lg border border-qa-border px-4 py-2 text-sm">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-black">{f.frame_name}</span>
+              {f.section && <span className="block truncate text-xs text-qa-text-sub">{f.section}</span>}
+            </span>
+            {fileKey && (
+              <a href={`https://www.figma.com/design/${fileKey}?node-id=${encodeURIComponent(f.frame_id.replace(/:/g, '-'))}`} target="_blank" rel="noreferrer"
+                className="flex-none text-xs font-medium text-qa-primary-hover hover:underline">Figma에서 보기</a>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 

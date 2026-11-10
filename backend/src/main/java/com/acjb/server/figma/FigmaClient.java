@@ -41,4 +41,14 @@ public interface FigmaClient {
 
     /** 여러 노드의 원본 document(하위 트리 전체) — GET /v1/files/{key}/nodes?ids=a,b,… 없는 id는 결과에서 빠진다 */
     Map<String, JsonNode> nodeDocuments(String fileKey, List<String> ids);
+
+    /** 노드의 Figma 캔버스 좌표 상자(absoluteBoundingBox) */
+    record Box(double x, double y, double width, double height) {
+    }
+
+    /** 노드들의 좌표 상자 — GET /v1/files/{key}/nodes?ids=…&depth=1. 없는 id·상자가 없는 노드는 결과에서 빠진다(실시간 QA 워크스페이스, AC32) */
+    Map<String, Box> bounds(String fileKey, List<String> ids);
+
+    /** 노드를 PNG로 렌더링한 임시 이미지 주소 — GET /v1/images/{key}?ids={id}&format=png&scale={scale}. 렌더링할 수 없으면 Optional.empty() */
+    Optional<String> renderUrl(String fileKey, String nodeId, double scale);
 }

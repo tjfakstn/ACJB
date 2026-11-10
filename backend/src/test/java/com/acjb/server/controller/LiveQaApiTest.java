@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oauth2Login;
@@ -20,6 +21,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import javax.imageio.ImageIO;
@@ -42,6 +45,8 @@ import com.acjb.server.domain.MemberRole;
 import com.acjb.server.domain.Project;
 import com.acjb.server.domain.ProjectMember;
 import com.acjb.server.domain.QaCapture;
+import com.acjb.server.figma.FigmaApiException;
+import com.acjb.server.figma.FigmaClient;
 import com.acjb.server.github.GithubApiException;
 import com.acjb.server.github.GithubClient;
 import com.acjb.server.liveqa.CaptureFailedException;
@@ -81,6 +86,7 @@ class LiveQaApiTest {
     @MockitoBean PageCapturer capturer;
     @MockitoBean GithubClient github;
     @MockitoBean EmbedChecker embedChecker;
+    @MockitoBean FigmaClient figma;
 
     Project project;
     Member owner;
@@ -452,5 +458,52 @@ class LiveQaApiTest {
         assertThat(pins.count()).isZero();
         assertThat(captures.count()).isZero();
         verify(capturer, never()).capture(eq(DEPLOY), anyInt(), anyInt());
+    }
+
+    // ---------------------------------------------------------------- AC32 자동 QA 항목의 Figma 프레임 미리보기
+
+    private void figmaConnected() {
+        project.connectFigma("https://www.figma.com/design/KEY/x?node-id=1-1", "KEY", "파일", "1:1", "페이지",
+            com.acjb.server.domain.FigmaScope.PAGE, Instant.now());
+        em.flush();
+        when(figma.isConfigured()).thenReturn(true);
+    }
+
+    @Test
+    void 프레임_이미지와_노드_상자를_프레임_기준_비율로_주고_잠시_기억한다() throws Exception {
+        figmaConnected();
+        when(figma.bounds("KEY", List.of("10:1", "10:5"))).thenReturn(Map.of(
+            "10:1", new FigmaClient.Box(100, 200, 1280, 720),
+            "10:5", new FigmaClient.Box(1100, 210, 128, 72)));
+        when(figma.renderUrl("KEY", "10:1", 1)).thenReturn(Optional.of("https://figma-alpha-api.s3/x.png"));
+        for (int i = 0; i < 2; i++) {
+            mvc.perform(as(get(base() + "/figma/frames/10:1/preview?node_id=10:5"), front))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.image_url").value("https://figma-alpha-api.s3/x.png"))
+                .andExpect(jsonPath("$.data.width").value(1280))
+                .andExpect(jsonPath("$.data.height").value(720))
+                .andExpect(jsonPath("$.data.node_box.x_ratio").value(0.7813))
+                .andExpect(jsonPath("$.data.node_box.y_ratio").value(0.0139))
+                .andExpect(jsonPath("$.data.node_box.w_ratio").value(0.1))
+                .andExpect(jsonPath("$.data.node_box.h_ratio").value(0.1));
+        }
+        // 두 번째는 기억해 둔 결과 — Figma 호출 한도(429)를 아낀다
+        verify(figma, times(1)).renderUrl("KEY", "10:1", 1);
+    }
+
+    @Test
+    void Figma가_없거나_id가_잘못되거나_프레임이_없으면_거부한다() throws Exception {
+        mvc.perform(as(get(base() + "/figma/frames/10:1/preview"), front))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.error.code").value("NOT_READY"));
+        figmaConnected();
+        mvc.perform(as(get(base() + "/figma/frames/abc/preview"), front)).andExpect(status().isBadRequest());
+        when(figma.bounds("KEY", List.of("10:9"))).thenReturn(Map.of());
+        mvc.perform(as(get(base() + "/figma/frames/10:9/preview"), front)).andExpect(status().isNotFound());
+        when(figma.bounds("KEY", List.of("10:8"))).thenThrow(new FigmaApiException("한도", 429, false, 30, null));
+        mvc.perform(as(get(base() + "/figma/frames/10:8/preview"), front))
+            .andExpect(status().isBadGateway())
+            .andExpect(jsonPath("$.error.code").value("CONNECTION_FAILED"))
+            .andExpect(jsonPath("$.error.message").value("Figma 요청 한도를 넘었어요. 30초 뒤 다시 시도해 주세요."));
+        mvc.perform(as(get(base() + "/figma/frames/10:1/preview"), outsider)).andExpect(status().isForbidden());
     }
 }

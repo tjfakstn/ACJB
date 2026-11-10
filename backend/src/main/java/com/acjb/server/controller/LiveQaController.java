@@ -23,6 +23,7 @@ import com.acjb.server.auth.CurrentMember;
 import com.acjb.server.common.ApiResponses;
 import com.acjb.server.liveqa.CaptureService;
 import com.acjb.server.liveqa.DeployTargetService;
+import com.acjb.server.liveqa.FramePreviewService;
 import com.acjb.server.liveqa.LiveQaRequests;
 import com.acjb.server.liveqa.ManualQaService;
 
@@ -37,10 +38,12 @@ public class LiveQaController {
     private final DeployTargetService deployTargets;
     private final CaptureService captures;
     private final ManualQaService manualQa;
+    private final FramePreviewService framePreviews;
     private final CurrentMember currentMember;
 
     public LiveQaController(DeployTargetService deployTargets, CaptureService captures, ManualQaService manualQa,
-                            CurrentMember currentMember) {
+                            FramePreviewService framePreviews, CurrentMember currentMember) {
+        this.framePreviews = framePreviews;
         this.deployTargets = deployTargets;
         this.captures = captures;
         this.manualQa = manualQa;
@@ -81,6 +84,13 @@ public class LiveQaController {
             .cacheControl(CacheControl.maxAge(java.time.Duration.ofDays(7)).cachePrivate())
             .header("X-Content-Type-Options", "nosniff")
             .body(image.bytes());
+    }
+
+    /** 자동 QA 항목의 Figma 프레임(과 불일치 노드 상자) — 배포 경로가 없는 첫 QA 이슈를 고르면 미리보기 자리에 보여 준다(AC32) */
+    @GetMapping("/figma/frames/{frameId}/preview")
+    public Map<String, Object> framePreview(@PathVariable Long projectId, @PathVariable String frameId,
+                                            @RequestParam(name = "node_id", required = false) String nodeId) {
+        return ApiResponses.ok(framePreviews.preview(projectId, frameId, nodeId));
     }
 
     @PostMapping("/manual-qa")

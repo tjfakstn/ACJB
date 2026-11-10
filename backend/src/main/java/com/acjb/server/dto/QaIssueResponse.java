@@ -82,10 +82,11 @@ public record QaIssueResponse(
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record StyleMismatchView(String id, String frameId, String screen, String property, String expectedValue, String actualValue) {
+    public record StyleMismatchView(String id, String frameId, String nodeId, String screen, String property, String expectedValue,
+                                    String actualValue) {
         public static StyleMismatchView of(StyleMismatch m) {
             return m == null ? null
-                : new StyleMismatchView(String.valueOf(m.getId()), m.getFrameId(), m.getScreen(), lower(m.getProperty()),
+                : new StyleMismatchView(String.valueOf(m.getId()), m.getFrameId(), m.getNodeId(), m.getScreen(), lower(m.getProperty()),
                     m.getExpectedValue(), m.getActualValue());
         }
     }

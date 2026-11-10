@@ -1,0 +1,157 @@
+package com.acjb.server.service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.acjb.server.common.ApiException;
+import com.acjb.server.domain.IssueStatus;
+import com.acjb.server.domain.Member;
+import com.acjb.server.domain.MemberRole;
+import com.acjb.server.domain.Notification;
+import com.acjb.server.domain.NotificationEvent;
+import com.acjb.server.domain.QAIssue;
+import com.acjb.server.domain.StatusHistory;
+import com.acjb.server.dto.QaIssueResponse;
+import com.acjb.server.repository.ManualQaPinRepository;
+import com.acjb.server.repository.NotificationRepository;
+import com.acjb.server.repository.ProjectMemberRepository;
+import com.acjb.server.repository.QAIssueRepository;
+import com.acjb.server.repository.StatusHistoryRepository;
+
+import tools.jackson.databind.JsonNode;
+
+/**
+ * PATCH /projects/{projectId}/qa-issues/{issueId} — 상태(in_progress·fixed)·담당 팀 변경(2026-11-08 담당자 → 담당 팀).
+ * 검사 순서: 요청 형태(400) → 이슈 존재(404) → 권한(403, AC13) → 전이(409, AC6) → 변경.
+ * 어느 단계에서 거부돼도 아무것도 바꾸지 않는다 — 검사를 모두 끝낸 뒤에만 엔티티를 고친다.
+ */
+@Service
+public class QaIssuePatchService {
+
+    private static final Set<String> ALLOWED_FIELDS = Set.of("status", "assigned_team");
+    /** PATCH로 in_progress가 될 수 있는 상태(AC6, 2026-11-07) */
+    private static final Set<IssueStatus> STARTABLE_FROM = Set.of(IssueStatus.NEEDS_CHECK, IssueStatus.NEEDS_RECHECK);
+    /** PATCH로 fixed가 될 수 있는 상태(AC6) — in_progress를 건너뛰는 것도 허용. fixed → resolved/needs_recheck는 재검증 등록으로만 */
+    private static final Set<IssueStatus> FIXABLE_FROM = Set.of(IssueStatus.NEEDS_CHECK, IssueStatus.NEEDS_RECHECK, IssueStatus.IN_PROGRESS);
+    private static final String IN_APP = "in_app";
+
+    private final QAIssueRepository issues;
+    private final ProjectMemberRepository projectMembers;
+    private final StatusHistoryRepository histories;
+    private final NotificationRepository notifications;
+    private final TeamNotifier teamNotifier;
+    private final ManualQaPinRepository pins;
+
+    public QaIssuePatchService(QAIssueRepository issues, ProjectMemberRepository projectMembers, StatusHistoryRepository histories,
+                               NotificationRepository notifications, TeamNotifier teamNotifier, ManualQaPinRepository pins) {
+        this.pins = pins;
+        this.issues = issues;
+        this.projectMembers = projectMembers;
+        this.histories = histories;
+        this.notifications = notifications;
+        this.teamNotifier = teamNotifier;
+    }
+
+    @Transactional
+    public QaIssueResponse patch(Long projectId, String issueId, JsonNode body, Member actor) {
+        // 1) 요청 형태 — status·assigned_team 외 필드는 400(N6, 골든 케이스 ng-005)
+        if (body == null || !body.isObject()) {
+            throw ApiException.badRequest("요청 본문은 JSON 객체여야 합니다.");
+        }
+        List<String> unknown = new ArrayList<>();
+        body.propertyNames().forEach(name -> {
+            if (!ALLOWED_FIELDS.contains(name)) unknown.add(name);
+        });
+        if (!unknown.isEmpty()) {
+            throw ApiException.badRequest("수정할 수 없는 필드입니다: " + String.join(", ", unknown) + " (status·assigned_team만 가능)");
+        }
+        if (body.isEmpty()) {
+            throw ApiException.badRequest("변경할 값이 없습니다. status 또는 assigned_team을 보내세요.");
+        }
+        IssueStatus requestedStatus = body.has("status") ? parseStatus(body.get("status")) : null;
+        MemberRole requestedTeam = body.has("assigned_team") ? parseTeam(body.get("assigned_team")) : null;
+
+        // 2) 이슈 — 다른 프로젝트 이슈는 404로 숨긴다(N10)
+        Long id = parseIdOrNull(issueId);
+        // 쓰기 잠금으로 읽는다 — 동시 요청은 여기서 차례를 기다린다
+        QAIssue issue = id == null ? null : issues.findForUpdate(id, projectId).orElse(null);
+        if (issue == null) {
+            throw ApiException.notFound("이슈를 찾을 수 없습니다.");
+        }
+
+        if (requestedStatus != null) {
+            // 3) 권한(AC13) — 상태를 바꾸는 요청은 값과 상관없이 "변경 전" 담당 팀의 역할을 가진 멤버만. 팀이 없으면 누구도 불가,
+            //    소유자도 역할이 같아야 한다. 전이 검사보다 먼저 해서, 권한 없는 사람의 잘못된 전이 요청도 409가 아니라 403이다(au-006)
+            MemberRole team = issue.getAssignedTeam();
+            MemberRole actorRole = projectMembers.findByProjectIdAndMemberId(projectId, actor.getId()).map(pm -> pm.getRole()).orElse(null);
+            if (team == null || team != actorRole) {
+                throw ApiException.forbidden("상태는 이 이슈의 담당 팀 역할을 가진 멤버만 바꿀 수 있습니다.");
+            }
+            // 4) 전이(AC6) — PATCH는 needs_check/needs_recheck → in_progress, needs_check/needs_recheck/in_progress → fixed만.
+            //    같은 상태로의 전이(in_progress → in_progress, fixed → fixed)도 409(N7)
+            boolean allowed = switch (requestedStatus) {
+                case IN_PROGRESS -> STARTABLE_FROM.contains(issue.getStatus());
+                case FIXED -> FIXABLE_FROM.contains(issue.getStatus());
+                default -> false;
+            };
+            if (!allowed) {
+                throw ApiException.conflict("허용되지 않은 상태 전이입니다: " + lower(issue.getStatus()) + " → " + lower(requestedStatus)
+                    + ". PATCH는 needs_check·needs_recheck → in_progress, needs_check·needs_recheck·in_progress → fixed만 가능하고,"
+                    + " resolved·needs_recheck는 재검증으로만 바뀝니다.");
+            }
+        }
+
+        // 5) 변경 — 여기까지 오면 거부될 일이 없다
+        if (requestedTeam != null && requestedTeam != issue.getAssignedTeam()) {
+            issue.assignTeam(requestedTeam);
+            // AC3: 새로 지정되거나 바뀐 팀의 역할 멤버 각각에게 1건씩. 같은 팀 재지정은 알림 없음(N5, 골든 케이스 ng-004)
+            teamNotifier.notifyTeam(issue, requestedTeam, NotificationEvent.ISSUE_CREATED);
+        }
+        if (requestedStatus != null) {
+            issue.changeStatus(requestedStatus);
+            histories.save(new StatusHistory(issue, requestedStatus, actor));
+            if (requestedStatus == IssueStatus.FIXED) {
+                // AC4: 등록자에게 1건. in_progress는 알림을 만들지 않는다(N5 — 알림 종류 3개 고정)
+                notifications.save(new Notification(issue, NotificationEvent.FIXED, issue.getReportedBy(), IN_APP));
+            }
+        }
+        issues.flush();
+        return QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()),
+            pins.findByIssueId(issue.getId()).orElse(null));
+    }
+
+    private static IssueStatus parseStatus(JsonNode node) {
+        if (node == null || !node.isString()) {
+            throw ApiException.badRequest("status는 문자열이어야 합니다.");
+        }
+        String raw = node.asString();
+        for (IssueStatus s : IssueStatus.values()) {
+            if (lower(s).equals(raw)) {
+                return s;
+            }
+        }
+        throw ApiException.badRequest("status 값이 올바르지 않습니다: " + raw);
+    }
+
+    /** 담당 팀은 지정·변경만 가능하다 — null로 비우면 400, 정해진 4개 값이 아니면 400(AC13, 골든 케이스 au-007) */
+    private static MemberRole parseTeam(JsonNode node) {
+        return Teams.parse(node == null || !node.isString() ? null : node.asString());
+    }
+
+    private static Long parseIdOrNull(String raw) {
+        try {
+            return raw == null ? null : Long.valueOf(raw.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String lower(IssueStatus s) {
+        return s.name().toLowerCase(Locale.ROOT);
+    }
+}

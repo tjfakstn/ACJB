@@ -1,0 +1,58 @@
+# QAting 운영 배포 — 서버에서 저장소 루트로 가서: docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+# 값은 deploy/.env(커밋 금지, deploy/.env.example 참고)
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?deploy/.env 에 DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-qating}
+      MYSQL_USER: ${DB_USER:-qating}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?deploy/.env 에 DB_PASSWORD}
+      TZ: Asia/Seoul
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DB_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    # 포트를 밖으로 열지 않는다 — 백엔드만 내부망으로 접속
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      SCAN_ALLOW_LOCALHOST: "false"
+      QA_FAKE_COMPARATOR: "false"
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      DOMAIN: ${DOMAIN:?deploy/.env 에 DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  mysql-data:
+  caddy-data:
+  caddy-config:

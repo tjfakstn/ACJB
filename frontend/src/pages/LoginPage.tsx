@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchMe } from '../lib/api'
+import { fetchMe, takeAfterLogin } from '../lib/api'
 import { GoogleLoginButton } from '../components/GoogleLoginButton'
 
 // Figma 와이어프레임 '랜딩/로그인 화면' 참고 (13:96) — 지금은 1차 와이어프레임이라
@@ -11,13 +11,19 @@ export function LoginPage() {
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
+    // 정리된 effect의 응답은 무시한다 — StrictMode에서 두 번 이동해 저장된 경로를 덮어쓰지 않게(LandingPage와 같은 이유)
+    let cancelled = false
     fetchMe().then((me) => {
+      if (cancelled) return
       if (me.authenticated) {
-        navigate('/app', { replace: true })
+        navigate(takeAfterLogin() ?? '/app/projects', { replace: true })
       } else {
         setChecking(false)
       }
     })
+    return () => {
+      cancelled = true
+    }
   }, [navigate])
 
   if (checking) {

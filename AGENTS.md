@@ -16,26 +16,29 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 
 어휘 층 발췌 — 전체 구조·관계·근거는 `docs/ontology.yaml`.
 
-- **QAIssue**: `description`, `screen_location`, `repro_steps`, `platform_scope`(common/aos/ios — 이슈 분류용), `screenshots`, `figma_link`, `status`(needs_check/fixed/needs_recheck/resolved), `status_history`, `assigned_to`, `reported_by`
-- **StyleMismatch**: `property`(color/font_weight/font_family/radius/shadow/spacing/text), `expected_value`(Figma 기준값), `actual_value`(구현 값) — 둘 다 있어야 저장(↔ AC2). QAIssue에 연결되면 `style_mismatch` 필드. 자동 추출(scan) 포함 여부는 스파이크 결과로 결정
-- **Verification**: `result`(pass/fail), `scope`, `verified_by`, `verified_at` — `qa_issue_id`로 QAIssue에 종속. `pass`→`resolved`, `fail`→`needs_recheck`
-- **Notification**: `event`(issue_created/fixed/recheck_failed), `channel` — 등록 시 담당자에게, 조치 완료(`fixed`) 시 등록자에게, 재검증 `fail` 시 담당자에게 정확히 1건씩
+- **QAIssue**: `description`, `screen_location`, `repro_steps`, `platform_scope`(common/aos/ios — 이슈 분류용), `screenshots`, `figma_link`, `status`(needs_check/in_progress/fixed/needs_recheck/resolved — `in_progress`는 건너뛸 수 있음), `status_history`, `assigned_team`(planner/designer/frontend/backend — 담당 팀, 프로젝트 역할과 같은 값, 2026-11-08), `reported_by`, `source`(manual/first_qa)
+- **StyleMismatch**: `property`(color/font_weight/font_size/font_family/radius/shadow/spacing/text), `expected_value`(Figma 기준값), `actual_value`(구현 값) — 둘 다 있어야 저장(↔ AC2). QAIssue에 연결되면 `style_mismatch` 필드. 자동 추출은 v1 포함: 프로젝트 초기에는 Figma ↔ GitHub 코드 **첫 QA**(비교 분석으로 매핑 → 소유자가 [첫 QA 실행], 프로젝트당 성공 1번)가 근거가 둘 다 있는 차이만 이슈로 자동 저장하고(N17), 이후에는 단일 컴포넌트 scan(웹·color/font_weight/radius 한정) — `docs/SPEC.md` 4절, 2026-11-07
+- **Verification**: `result`(pass/fail), `scope`, `source`(manual/re_qa), `observed_value`(Re-QA가 다시 읽은 구현 값), `verified_by`, `verified_at` — `qa_issue_id`로 QAIssue에 종속. `pass`→`resolved`, `fail`→`needs_recheck`. 사람이 등록하거나(등록자), 소유자가 실행한 **자동 Re-QA**가 만든다(첫 QA 이슈만, 2026-11-08)
+- **Notification**: `event`(issue_created/fixed/recheck_failed), `channel` — 담당 팀 지정 시 그 팀 역할 멤버 각각에게, 조치 완료(`fixed`) 시 등록자에게, 재검증 `fail` 시 담당 팀 역할 멤버 각각에게 정확히 1건씩
 - **IssueReportContext**: 자유서술 텍스트 파싱 결과 — `screen`, `element`, `symptom`, `repro_steps`, `platform_scope`. 텍스트에 없는 값은 지어내지 않고 비워 `missing`에 담아 되물음
 - **Environment**: `platform`(aos/ios/web), `device`, `browser`, `deploy_stage`(local/staging/production) — QAIssue의 실제 발생 환경
 - **FigmaFrame**(`name`, `frame_url`) / **Screen**(`name`, `entry_condition`): 각각 디자인 기준 화면 / 배포된 실제 구현 화면. `StyleMismatch`가 이 둘을 비교
-- **Member**: QA에 참여하는 팀원 — `role`(designer/developer/planner)
+- **Member**: QA에 참여하는 팀원 — 구글 로그인 이메일로 식별, 처음 로그인할 때 생성. `role`(designer/frontend/backend/planner)은 **프로젝트마다** 따로 있다(초대받은 사람은 수락할 때 고르고, 만든 사람은 미지정으로 시작, 이후 변경은 소유자만)
+- **Project**: QA 단위 — 로그인한 사용자 누구나 만들고, 만든 사람이 소유자(owner). 멤버 제거·역할 변경·Figma/GitHub 연결·비교 분석·첫 QA 실행·Re-QA 실행은 소유자만. 열면 작업공간 홈으로 간다
+- **ManualQaPin**: 실시간 QA 워크스페이스에서 배포 화면(또는 첨부 이미지) 위에 찍은 수동 QA 위치 — `pin_number`(화면 ID `QA-M###`), `title`, `page_path`, `anchor`(px·비율), `viewport`, `location_basis`(live_overlay/capture_image), `capture_status`(captured/failed/user_attached/none), 선택 `severity`·`expected_result`·`actual_result`. QAIssue(`source: manual`)에 1:1로 붙는다. 배포 주소는 `Project.deploy_url`, 없으면 GitHub 최근 성공 배포 주소(AC29~AC31, 2026-11-10)
+- **Invitation**: 멤버가 구글 이메일로 보낸 초대 — `status`(pending/accepted/canceled/expired), 7일 만료(재전송하면 그 초대를 7일 연장). 같은 구글 계정으로 로그인해 수락해야 멤버가 된다. 시드 데이터로 멤버를 넣던 방식은 폐기(2026-11-04)
 
-혼동 주의: `QAIssue.platform_scope`(이슈 분류용, common 포함)와 `Environment.platform`(실제 발생 환경, aos/ios/web만)은 다른 값 집합이다 — 혼용하지 말 것. `IssueReportContext.screen`(파싱 결과, 화면 이름만)과 `QAIssue.screen_location`(자유 텍스트, screen+element가 합쳐진 값)도 다른 필드다 — 파싱 응답을 그대로 DB 컬럼에 넣지 않는다(`src/qating/prompts/parse_query.md` 필드 매핑 표 참고). GitHub 연동(`github_issue_url` 등)은 v1 비포함(`docs/openapi.yaml`에 `deprecated: true`로 설계만 남음) — 새로 만들지 말 것.
+혼동 주의: `QAIssue.platform_scope`(이슈 분류용, common 포함)와 `Environment.platform`(실제 발생 환경, aos/ios/web만)은 다른 값 집합이다 — 혼용하지 말 것. `IssueReportContext.screen`(파싱 결과, 화면 이름만)과 `QAIssue.screen_location`(자유 텍스트, screen+element가 합쳐진 값)도 다른 필드다 — 파싱 응답을 그대로 DB 컬럼에 넣지 않는다(`src/qating/prompts/parse_query.md` 필드 매핑 표 참고). GitHub **이슈·PR** 연동(`github_issue_url` 등)은 v1 비포함(`docs/openapi.yaml`에 `deprecated: true`로 설계만 남음) — 새로 만들지 말 것. GitHub는 연결된 공개 저장소의 코드·커밋·PR을 읽기만 한다(첫 QA 2026-11-07, 이슈 상세 코드 추적 AC34 2026-11-10) — 이슈·PR을 만들거나 바꾸지 않는다.
 
 ## 3. 절대 규칙 (위반한 결과물은 수용하지 않는다)
 
 1. QA 이슈 등록 시 `description`·`screen_location`·`repro_steps`·`platform_scope` 중 하나라도 비어 있으면 등록을 거부(400)한다 — 빠진 항목을 지어내지 않는다. (↔ SPEC.md AC1)
 2. `StyleMismatch`는 `expected_value`와 `actual_value`가 **둘 다** 있을 때만 저장한다 — 근거 없이 "다름"만 저장하지 않는다. (↔ AC2)
-3. QA 이슈가 등록될 때 담당자(`assigned_to`)가 지정돼 있거나 이후 PATCH로 담당자가 새로 지정·변경되면, 그 담당자에게 `Notification`(`issue_created`)을 **정확히 1건** 생성한다(담당자가 없으면 생성하지 않는다). 상태가 `fixed`로 바뀌면 등록자에게 `Notification`(`fixed`)을, 재검증 `fail`로 `needs_recheck`가 되면 담당자에게 `Notification`(`recheck_failed`)을 정확히 1건 생성한다 — 중복 생성하거나 누락하지 않는다. (↔ AC3, AC4, AC11)
-4. 정해진 상태 전이만 허용한다: `needs_check`/`needs_recheck` → `fixed`는 PATCH로만, `fixed` → `resolved`/`needs_recheck`는 재검증 등록으로만 일어난다. 그 외 요청은 거부(409)하고, 허용된 모든 변경은 `status_history`에 남긴다. (↔ AC6)
+3. QA 이슈가 등록될 때 담당 팀(`assigned_team`)이 지정돼 있거나 이후 PATCH로 담당 팀이 새로 지정·변경되면, 그 프로젝트에서 역할이 그 팀인 멤버 **각각에게** `Notification`(`issue_created`)을 **정확히 1건씩** 생성한다(팀이 없거나 그 역할 멤버가 없으면 생성하지 않는다). 상태가 `fixed`로 바뀌면 등록자에게 `Notification`(`fixed`)을, 재검증(수동·Re-QA) `fail`로 `needs_recheck`가 되면 담당 팀 역할 멤버 각각에게 `Notification`(`recheck_failed`)을 정확히 1건씩 생성한다 — 중복 생성하거나 누락하지 않는다. (↔ AC3, AC4, AC11)
+4. 정해진 상태 전이만 허용한다: `needs_check`/`needs_recheck` → `in_progress`, `in_progress` → `fixed`, `needs_check`/`needs_recheck` → `fixed`는 PATCH로만, `fixed` → `resolved`/`needs_recheck`는 재검증 등록이나 Re-QA로만 일어난다. 그 외 요청은 거부(409)하고, 허용된 모든 변경은 `status_history`에 남긴다. (↔ AC6)
 5. 재검증을 조회·등록할 때는 최초 등록된 재현 절차(`repro_steps`)를 그대로 반환한다 — 재입력을 요구하지 않는다. (↔ AC5)
 6. `/projects/{projectId}/**`는 로그인한 그 프로젝트 멤버만 호출한다(미인증 401, 비멤버 403). (↔ AC12)
-7. `fixed` 처리는 그 이슈의 담당자만, 재검증 등록은 그 이슈의 등록자만 할 수 있다(그 외 403). 권한 검사를 상태 전이 검사보다 먼저 하고, 거부된 요청은 아무 데이터도 바꾸지 않는다. (↔ AC13)
+7. `in_progress`·`fixed` 처리는 프로젝트 역할이 그 이슈의 담당 팀인 멤버만(팀이 없으면 누구도 불가), 재검증 등록은 그 이슈의 등록자만(등록자가 프로젝트에서 제거됐으면 소유자), Re-QA 실행은 소유자만 할 수 있다(그 외 403). 권한 검사를 상태 전이 검사보다 먼저 하고, 거부된 요청은 아무 데이터도 바꾸지 않는다. (↔ AC13)
 
 ## 4. 금지 사항 (에이전트에게 위임할 때 항상 걸린다)
 
@@ -46,7 +49,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 5. 확인되지 않은 API 스펙을 추측해서 구현하지 않는다 — 모르면 물어본다.
 6. `main` 브랜치에 직접 커밋하지 않는다 (7절 Git 규칙 참고).
 7. 시크릿(Google Client Secret, DB 비밀번호 등)을 코드나 로그에 남기지 않는다.
-8. `docs/SPEC.md` 6.1절 금지 기준(N1~N13)을 어기지 않는다 — 값을 지어내 채우거나, 일부만 저장하거나, 정해지지 않은 상태·알림·엔드포인트를 만들지 않는다.
+8. `docs/SPEC.md` 6.1절 금지 기준(N1~N18)을 어기지 않는다 — 값을 지어내 채우거나, 일부만 저장하거나, 정해지지 않은 상태·알림·엔드포인트를 만들지 않는다.
 
 **모호할 때**: 추측해서 진행하지 말고, 확인이 필요한 지점을 명시하고 멈춘다.
 
@@ -91,10 +94,10 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 | --- | --- | --- |
 | Frontend | React + Vite + TypeScript + Tailwind CSS | Spring API를 호출하는 순수 SPA |
 | Backend | Spring Boot(Java 21) | |
-| DB | TODO | |
+| DB | MySQL | 개발 단계부터 MySQL 사용(2026-10-28 결정 — 배포 때 DB를 바꾸지 않는다). 접속 정보는 `.env`, 키는 `.env.example`에 추가 |
 | 인증 | Google OAuth2 (구현됨) | |
-| 외부 연동 | Figma API | GitHub 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
-| 인프라 / 배포 | TODO | |
+| 외부 연동 | Figma API, GitHub API(공개 저장소 코드·커밋·PR 읽기 — 첫 QA 2026-11-07, 코드 추적 2026-11-10), Claude API(parse·비교 분석·첫 QA·이력 기반 점검 후보), Gmail SMTP(초대 메일), Voyage AI(임베딩 — 이력 기반 점검 후보 검색, 2026-11-05) | GitHub 이슈·PR 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
+| 인프라 / 배포 | AWS Lightsail(서울, Ubuntu 24.04) 1대 + docker compose — Caddy(HTTPS·프론트 정적 파일)·백엔드·MySQL (2026-11-10) | 구성·절차는 `deploy/README.md`, 값은 서버의 `deploy/.env` |
 
 결정 배경: [docs/decision_log.md](docs/decision_log.md)
 
@@ -110,6 +113,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 ├── frontend/           # React + Vite 프로젝트
 ├── config/
 ├── data/
+├── deploy/             # 운영 배포(docker compose·Caddy·Dockerfile) — 절차는 deploy/README.md
 ├── docs/               # PROBLEM/SPEC/ontology/openapi/decision_log/ssot/research/spikes
 ├── evals/
 ├── src/qating/         # 데이터 모델 스키마(JSON Schema), 프롬프트

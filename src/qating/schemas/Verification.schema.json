@@ -8,6 +8,8 @@
     "qa_issue_id": { "type": "string" },
     "result": { "type": "string", "enum": ["pass", "fail"] },
     "scope": { "type": ["string", "null"], "description": "재확인 범위(해당 화면만 / 관련 화면 전체)" },
+    "source": { "type": "string", "enum": ["manual", "re_qa"], "description": "manual=등록자가 직접, re_qa=자동 Re-QA(2026-11-08)" },
+    "observed_value": { "type": ["string", "null"], "description": "Re-QA가 다시 읽은 구현 값" },
     "verified_by": { "type": "string" },
     "verified_at": { "type": "string", "format": "date-time" }
   },

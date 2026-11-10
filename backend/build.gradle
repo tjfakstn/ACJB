@@ -19,12 +19,24 @@ repositories {
 }
 
 dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
+	// 초대 메일(AC17) — Gmail SMTP
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
+	// parse(AC8): Claude API 호출과 LLM 출력의 JSON Schema 검증(AGENTS.md 5절)
+	implementation 'com.anthropic:anthropic-java:3.2.0'
+	implementation 'com.networknt:json-schema-validator:1.5.6'
+	// 단일 컴포넌트 scan(SPEC 4절): 배포 화면을 헤드리스 크로미움으로 열어 getComputedStyle을 읽는다(2026-11-04 설만수 결정)
+	implementation 'com.microsoft.playwright:playwright:1.63.0'
+	// 스키마 변경은 db/migration의 SQL 파일로만 한다(2026-11-05 Flyway 도입, ddl-auto는 validate)
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	implementation 'org.flywaydb:flyway-mysql'
+	runtimeOnly 'com.mysql:mysql-connector-j'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
@@ -36,4 +48,23 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// 파싱·재검증 범위 제안 프롬프트와 출력 스키마의 정본은 저장소 루트 src/qating/ 에 있다.
+// 복사본을 두지 않고 빌드 때 classpath(qating/...)로 가져와 정본 하나만 고치면 되게 한다.
+processResources {
+	from('../src/qating') {
+		include 'prompts/parse_query.md', 'schemas/IssueReportContext.schema.json',
+			'prompts/recheck_scope.md', 'schemas/RecheckSuggestion.schema.json'
+		into 'qating'
+	}
+}
+
+// scan용 크로미움만 내려받는다(약 150MB, ~/Library/Caches/ms-playwright 등 OS 캐시). 처음 한 번: ./gradlew playwrightInstall
+tasks.register('playwrightInstall', JavaExec) {
+	group = 'qating'
+	description = 'scan용 Playwright 크로미움 설치'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.microsoft.playwright.CLI'
+	args = ['install', 'chromium']
 }

@@ -25,9 +25,12 @@ classes:
       repro_steps: {type: list, evidence: [로그 1, 로그 6, 로그 9]}
       screenshots: {type: list, evidence: [로그 2, 로그 10, 관찰 1]}
       figma_link: {type: string, evidence: [관찰 1]}
+      fix_link: {type: string, note: "고친 PR·커밋 GitHub 주소(담당 팀이 붙임, 0..1). 커밋 메시지·PR 제목의 이슈 키 QA-{id}로도 연결된다 — GitHub는 읽기만(AC34)", evidence: [decision_log 2026-11-10]}
       platform_scope: {type: enum, values: [common, aos, ios], note: "이슈 분류용(공통=AOS·iOS 모두). 실제 발생 환경은 Environment", evidence: [로그 8, 관찰 1]}
-      status: {type: enum, values: [needs_check, fixed, needs_recheck, resolved], note: "확인 필요 → 조치 완료 → (재확인 pass) 해결 완료 / (fail) 재확인 필요 → 조치 완료. fixed로 바뀔 때 Notification(event=fixed) 발생", evidence: [로그 8, 관찰 1]}
+      status: {type: enum, values: [needs_check, in_progress, fixed, needs_recheck, resolved], note: "확인 필요 → (수정 중, 건너뛸 수 있음) → 조치 완료 → (재확인 pass) 해결 완료 / (fail) 재확인 필요 → 수정 중·조치 완료. fixed로 바뀔 때 Notification(event=fixed) 발생. in_progress는 2026-11-07 시안 반영(알림 없음)", evidence: [로그 8, 관찰 1, decision_log 2026-11-07]}
+      source: {type: enum, values: [manual, first_qa], note: "manual=사람이 등록(파싱·스타일 차이 경유 포함), first_qa=첫 QA가 근거로 자동 저장(담당 팀 없이 시작)", evidence: [decision_log 2026-11-07]}
       status_history: {type: list, note: "상태 변경 시각·변경자", evidence: [로그 8, 관찰 1]}
+      assigned_team: {type: enum, values: [planner, designer, frontend, backend], note: "담당 팀 — 그 프로젝트에서 이 역할인 멤버들. 사람(assigned_to) 대신 팀에 배정한다(시안 ASN)", evidence: [decision_log 2026-11-08]}
     relations:
       - about: Screen
         evidence: [로그 2, 로그 11, 관찰 1]
@@ -35,12 +38,13 @@ classes:
         evidence: [로그 1, 로그 8, 로그 9, 관찰 1]
       - reported_by: Member
         evidence: [로그 11, 로그 12]
-      - assigned_to: Member
-        evidence: [관찰 1]
       - originates_from: StyleMismatch
         evidence: [로그 8, 관찰 1]
       - checked_by: Verification
         evidence: [로그 1, 로그 2, 로그 8, 관찰 1]
+      - pinned_at: ManualQaPin
+        note: "실시간 QA 워크스페이스에서 배포 화면 위치를 찍어 등록한 수동 QA만(0..1)"
+        evidence: [decision_log 2026-11-10]
 
   Screen:
     description: 배포된 앱·웹의 실제 구현 화면
@@ -63,7 +67,7 @@ classes:
     description: Figma 기준값과 구현 값이 다른 스타일 차이 한 건
     evidence: [로그 1, 로그 2, 로그 3, 로그 8, 로그 10, 로그 11, 관찰 1]
     attributes:
-      property: {type: enum, values: [color, font_weight, font_family, radius, shadow, spacing, text], evidence: [로그 3, 로그 8, 로그 9, 로그 10, 로그 11]}
+      property: {type: enum, values: [color, font_weight, font_size, font_family, radius, shadow, spacing, text], evidence: [로그 3, 로그 8, 로그 9, 로그 10, 로그 11]}
       expected_value: {type: string, note: "Figma 기준값(토큰 이름 포함 가능, 예 Gray 80). actual_value와 혼동 금지", evidence: [로그 8, 로그 11, 관찰 1]}
       actual_value: {type: string, note: "구현 화면에 실제 적용된 값(개발자 모드로 확인)", evidence: [로그 8, 로그 11, 관찰 1]}
     relations:
@@ -88,15 +92,97 @@ classes:
       result: {type: enum, values: [pass, fail], note: "fail이면 QAIssue.status = needs_recheck", evidence: [로그 8, 관찰 1]}
       verified_at: {type: datetime, evidence: [로그 8]}
       scope: {type: string, note: "재확인 범위(해당 화면만 / 관련 화면 전체)", evidence: [로그 2, 로그 6, 로그 9, 로그 12]}
+      source: {type: enum, values: [manual, re_qa], note: "manual=등록자가 재현 절차로 직접, re_qa=소유자가 실행한 자동 Re-QA(첫 QA 이슈만)", evidence: [decision_log 2026-11-08]}
+      observed_value: {type: string, note: "Re-QA가 다시 읽은 구현 값(수정 후)", evidence: [decision_log 2026-11-08]}
     relations:
       - verified_by: Member
         evidence: [로그 1]
 
   Member:
-    description: QA에 참여하는 팀원
+    description: QA에 참여하는 팀원. 구글 로그인 이메일로 식별하며, 처음 로그인할 때 만들어진다
     evidence: [로그 2, 로그 3, 로그 11, 로그 12]
     attributes:
-      role: {type: enum, values: [designer, developer, planner], evidence: [로그 3, 로그 11]}
+      email: {type: string, note: "구글 로그인 이메일. 초대 수락 때 초대받은 이메일과 같아야 한다", evidence: [decision_log 2026-11-04]}
+    relations:
+      - joins: Project
+        note: "프로젝트마다 role(designer/frontend/backend/planner)이 따로 있다 — 같은 사람이 프로젝트 A에선 개발자, B에선 기획자일 수 있다. 초대받은 사람은 수락할 때 고르고 만든 사람은 미지정으로 시작한다. 이후 변경은 소유자만(2026-11-07)"
+        evidence: [로그 3, 로그 11, decision_log 2026-11-04]
+
+  # --- 실시간 QA 워크스페이스 (2026-11-10 결정으로 추가, 시안 M-01~M-10) ---
+  # 인터뷰 로그의 "캡처에 위치를 표시해 전달"(로그 2, 10, 관찰 1)을 화면 위 핀으로 구조화한 것. evidence는 decision_log — 검토자 확인 필요
+  ManualQaPin:
+    description: 배포 화면(또는 첨부 이미지) 위에 사람이 찍은 수동 QA 위치와 그때의 캡처 한 건. QAIssue 하나에 속한다
+    evidence: [로그 2, 로그 10, 관찰 1, decision_log 2026-11-10]
+    attributes:
+      pin_number: {type: integer, note: "프로젝트마다 1부터, 저장 성공 때 발급. 화면 표시 ID는 QA-M###", evidence: [decision_log 2026-11-10]}
+      title: {type: string, note: "필수, 100자 이하", evidence: [decision_log 2026-11-10]}
+      page_path: {type: string, note: "배포 주소 기준 경로(/로 시작). 교차 출처 화면은 경로를 읽을 수 없어 사람이 확인한 값", evidence: [decision_log 2026-11-10]}
+      anchor: {type: object, note: "x_px·y_px(기준 viewport 안의 픽셀)과 그 비율. 스크롤 위치는 알 수 없어 저장하지 않는다", evidence: [decision_log 2026-11-10]}
+      viewport: {type: object, note: "width·height — 등록할 때 보던 화면 크기", evidence: [decision_log 2026-11-10]}
+      location_basis: {type: enum, values: [live_overlay, capture_image, none], note: "none=위치 없이 등록(배포 화면 없음 — 좌표·화면 크기 없음, 재현 절차는 사람이 적음, 2026-11-10). 실시간 화면 위에서 찍었는지, 첨부 이미지 위에서 찍었는지", evidence: [decision_log 2026-11-10]}
+      capture_status: {type: enum, values: [captured, failed, user_attached, none], note: "서버 캡처 성공/실패, 사용자 첨부, 캡처 없음", evidence: [decision_log 2026-11-10]}
+      severity: {type: enum, values: [critical, high, medium, low], note: "선택", evidence: [decision_log 2026-11-10]}
+      expected_result: {type: string, note: "선택. 입력하지 않으면 비워 둔다", evidence: [decision_log 2026-11-10]}
+      actual_result: {type: string, note: "선택. 입력하지 않으면 비워 둔다", evidence: [decision_log 2026-11-10]}
+      figma_frame: {type: object, note: "등록 때 고른 기준 FigmaFrame(id·이름). 서버가 경로로 고르지 않는다 — 화면이 연결된 프레임을 미리 고르고 사람이 확인(AC33)", evidence: [decision_log 2026-11-10]}
+    relations:
+      - captured_in: QaCapture
+        evidence: [decision_log 2026-11-10]
+      - designed_by: FigmaFrame
+        note: "0..1"
+        evidence: [decision_log 2026-11-10]
+
+  ScreenFrameLink:
+    description: 이 배포 화면 경로(Screen)는 이 FigmaFrame을 보고 구현했다는 연결. Screen.implements FigmaFrame을 경로 단위로 저장한 것
+    evidence: [decision_log 2026-11-10]
+    attributes:
+      page_path: {type: string, note: "/로 시작, :이름 조각은 어떤 한 조각과 맞는다. 한 경로에 여러 프레임(상태별 시안) 가능, 프레임 하나에 경로 하나", evidence: [decision_log 2026-11-10]}
+      frame_id: {type: string, note: "최근 성공한 비교 분석 매핑에 있는 프레임만", evidence: [decision_log 2026-11-10]}
+      frame_name: {type: string, note: "연결할 때의 이름", evidence: [decision_log 2026-11-10]}
+    relations:
+      - links: [Screen, FigmaFrame]
+        note: "소유자가 지정. 코드에서 추정하지 않는다(N19)"
+        evidence: [decision_log 2026-11-10]
+
+  QaCapture:
+    description: 서버 브라우저가 찍은 배포 화면 캡처 또는 사용자가 첨부한 이미지 한 장
+    evidence: [로그 2, 로그 10, 관찰 1, decision_log 2026-11-10]
+    attributes:
+      kind: {type: enum, values: [auto, upload], note: "auto=서버가 같은 주소·viewport로 렌더링, upload=사용자 첨부(png·jpeg·webp, 5MB 이하)", evidence: [decision_log 2026-11-10]}
+      page_url: {type: string, note: "auto일 때 연 주소", evidence: [decision_log 2026-11-10]}
+      width: {type: integer, evidence: [decision_log 2026-11-10]}
+      height: {type: integer, evidence: [decision_log 2026-11-10]}
+
+  # --- 운영 구조 (2026-11-04 팀 결정으로 추가) ---
+  # 아래 두 클래스는 인터뷰 로그가 아니라 팀 결정(사용자가 직접 프로젝트를 만들고 팀원을 초대)에서 나왔다.
+  # 이 파일의 "역추적되지 않는 항목은 두지 않는다" 규칙의 예외라서 evidence를 decision_log로 둔다 — 검토자 확인 필요
+  Project:
+    description: 한 팀이 QA를 진행하는 단위. 이슈·알림·Figma 프레임·스타일 차이는 모두 한 프로젝트에 속한다
+    evidence: [decision_log 2026-11-04]
+    attributes:
+      name: {type: string, evidence: [decision_log 2026-11-04]}
+      description: {type: string, note: "선택, 200자 이하. 작업공간·초대 미리보기·초대 메일에 보인다", evidence: [decision_log 2026-11-07]}
+      figma_connection: {type: object, note: "연결된 Figma 파일(url·file_key·이름). 서버 Figma 토큰으로 보기 권한을 확인한 뒤에만 저장", evidence: [decision_log 2026-11-07]}
+      github_connection: {type: object, note: "연결된 공개 GitHub 저장소(url·owner/repo). 코드를 읽기만 한다", evidence: [decision_log 2026-11-07]}
+      analysis_status: {type: enum, values: [none, queued, running, succeeded, failed], note: "비교 분석(Figma 노드 ↔ 코드 위치 매핑)의 최근 상태", evidence: [decision_log 2026-11-07]}
+      first_qa_status: {type: enum, values: [none, queued, running, succeeded, failed], note: "첫 QA 실행의 최근 상태. succeeded는 프로젝트당 1번", evidence: [decision_log 2026-11-07]}
+      deploy_url: {type: string, note: "실시간 QA 워크스페이스가 띄우는 배포 주소. 소유자가 입력한 값이 우선, 없으면 연결된 GitHub 저장소의 최근 성공 배포 주소를 읽는다", evidence: [decision_log 2026-11-10]}
+    relations:
+      - owned_by: Member
+        note: "만든 사람이 소유자. 멤버 제거는 소유자만"
+        evidence: [decision_log 2026-11-04]
+
+  Invitation:
+    description: 프로젝트 멤버가 다른 사람을 구글 이메일로 초대한 일 한 건. 받은 사람이 같은 구글 계정으로 수락해야 멤버가 된다
+    evidence: [decision_log 2026-11-04]
+    attributes:
+      email: {type: string, evidence: [decision_log 2026-11-04]}
+      status: {type: enum, values: [pending, accepted, canceled, expired], note: "7일 뒤 만료. 같은 이메일로 다시 초대하거나 재전송하면 새 초대 대신 그 대기 초대의 만료를 7일 연장하고 링크를 새로 발급(2026-11-07)", evidence: [decision_log 2026-11-04, decision_log 2026-11-07]}
+    relations:
+      - to_join: Project
+        evidence: [decision_log 2026-11-04]
+      - invited_by: Member
+        evidence: [decision_log 2026-11-04]
 
   Notification:
     description: 이슈 등록·조치 사실을 상대에게 알리는 일
@@ -123,9 +209,10 @@ classes:
       - becomes: QAIssue
         evidence: [로그 1, 로그 11]
         
-# 범위 안(QAting이 직접 생성·관리): QAIssue, StyleMismatch, Verification, Notification, IssueReportContext, Member
+# 범위 안(QAting이 직접 생성·관리): QAIssue, StyleMismatch, Verification, Notification, IssueReportContext, Member, Project, Invitation
 # 외부 참조(다른 시스템이 관리, QAting은 식별자·링크·값만 기록):
-#   - FigmaFrame — Figma가 원본. frame_url과 이름만 참조 (값 자동 추출 여부는 docs/spikes/ 스파이크 결과로 결정)
+#   - FigmaFrame — Figma가 원본. frame_url과 이름만 참조. 값 자동 추출(scan)은 v1 포함(2026-10-28), 초기 전체 비교 + 단일 컴포넌트 혼합(2026-11-04), 초기 전체 비교는 Figma ↔ GitHub 코드 첫 QA로(2026-11-07) — SPEC.md 4절
+#   - GitHub 저장소 — 공개 저장소의 코드만 읽는다(첫 QA 입력, 2026-11-07). 이슈·PR은 다루지 않는다
 #   - Screen — 팀의 배포 앱·웹. 화면 이름과 진입 조건만 기록
 #   - Environment — 기기·OS·브라우저·배포 단계는 사용자가 입력한 값을 기록만 함
 #   - Notification.channel — 이메일·Slack 등 외부 채널로 전달만 함
@@ -134,6 +221,7 @@ classes:
 #   - E2E 회귀 테스트 자동화 (로그 2 유지비용, 로그 9 Playwright 기사용 — decision_log 9/9에서 MVP 제외). 재확인은 사람이 하고 기록만 다룬다
 #   - 디자인 변경 전파·토큰 동기화 (로그 1, 2, 10, 11, 12 — 페인은 크지만 로그 11처럼 기존 우회로(Tokens Studio)가 있어 v1 제외, v2 후보)
 #   - 예외 상황 UI 재제작 (로그 7 — 디자인 작업 자체)
-#   - 외부 이슈 트래커(GitHub Issues·Jira 등) 연동 (로그 2, 8, 11, 12 — 쓰는 트래커가 Jira·Notion·엑셀로 제각각, v2 후보)
+#   - 외부 이슈 트래커(GitHub Issues·Jira 등) 연동 (로그 2, 8, 11, 12 — 쓰는 트래커가 Jira·Notion·엑셀로 제각각, v2 후보). GitHub 코드 읽기는 범위 안
+#   - 비공개 GitHub 저장소 접근(GitHub App) — v1은 공개 저장소만(2026-11-07)
 # 부정 신호: 로그 4, 9는 Figma-구현 차이가 AI/Figma MCP로 이미 줄었다고 답함 → StyleMismatch 비중은 PROBLEM.md에서 재검토
 # 핵심 흐름: Screen --(대조)--> FigmaFrame → StyleMismatch --(등록)--> QAIssue --(Notification)--> Member --(수정 후)--> Verification

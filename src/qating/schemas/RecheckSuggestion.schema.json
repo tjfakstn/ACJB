@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RecheckSuggestion",
+  "description": "재검증 범위 제안 LLM 출력 (SPEC AC20, docs/design-recheck-suggestions.md 6·7절). 서버는 받은 뒤 이 스키마로 검증하고, 벗어나면 전체를 실패(502 SUGGESTION_FAILED)로 처리한다. evidence_ids가 비었거나 검색 결과에 없던 id가 있는 제안은 스키마가 아니라 서버의 근거 id 검사가 버린다. 프롬프트 정본: src/qating/prompts/recheck_scope.md",
+  "type": "object",
+  "properties": {
+    "suggestions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "properties": {
+          "screen": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 },
+          "evidence_ids": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["screen", "reason", "evidence_ids"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["suggestions"],
+  "additionalProperties": false
+}

@@ -1,0 +1,1050 @@
+{
+  "run_at": "2026-11-06T15:07:01",
+  "config": {
+    "llm_model": "claude-sonnet-5",
+    "embedding_model": "voyage-4",
+    "dimension": 1024,
+    "top_k": 8,
+    "judge": true,
+    "thresholds": {
+      "drop_rate_max": 0.1,
+      "recall_min": 0.6,
+      "grounded_min": 0.9
+    }
+  },
+  "voyage_calls": 2,
+  "summary": {
+    "cases": 16,
+    "errors": [],
+    "recall": 1.0,
+    "drop_rate": 0.0,
+    "noise_rate": 0.031,
+    "grounded_rate": 0.8,
+    "useful_mean": 2.7,
+    "empty_history_skips_llm": true,
+    "suggestions_kept": 32,
+    "suggestions_dropped": 0,
+    "checks": {
+      "drop_rate": true,
+      "recall": true,
+      "empty_history_skips_llm": true,
+      "no_errors": true,
+      "grounded_rate": false
+    },
+    "passed": false
+  },
+  "cases": [
+    {
+      "id": "ev-001",
+      "pattern": "공통 컴포넌트 색",
+      "documents": 8,
+      "searched": [
+        "i1",
+        "m1",
+        "i2",
+        "i4",
+        "i3",
+        "n1",
+        "n3",
+        "n2"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "주문 완료 화면 확인 버튼",
+          "reason": "주문 완료 화면의 확인 버튼도 공통 Primary 버튼 색상이 시안과 다르다는 보고가 있어, 동일한 Primary 버튼 색 토큰 수정이 영향을 미쳤을 가능성이 높습니다.",
+          "evidence": [
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "i1"
+          ]
+        },
+        {
+          "screen": "상품 상세 화면",
+          "reason": "상품 상세 화면의 btn-primary 요소도 색상이 기대값(#1A73E8)과 실제값(#1A74E8)이 달라, 같은 Primary 버튼 색 토큰 문제가 재현될 수 있습니다.",
+          "evidence": [
+            "style_mismatch:1"
+          ],
+          "evidence_refs": [
+            "m1"
+          ]
+        },
+        {
+          "screen": "장바구니 화면 주문하기 버튼",
+          "reason": "장바구니의 주문하기 버튼도 공통 Primary 버튼을 사용하며 시안과 스타일 차이가 보고된 바 있어, 색 토큰 변경 시 함께 확인이 필요합니다.",
+          "evidence": [
+            "qa_issue:3"
+          ],
+          "evidence_refs": [
+            "i2"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 3,
+      "hits": [
+        {
+          "screen": "주문 완료 화면",
+          "hit": true
+        },
+        {
+          "screen": "상품 상세 화면",
+          "hit": true
+        },
+        {
+          "screen": "장바구니 화면",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서에 동일한 공통 Primary 버튼 색상 불일치가 명시되어 있어 근거가 정확하고 토큰 수정 영향 가능성이 높다."
+        },
+        {
+          "index": 1,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서의 색상 기대값·실제값 불일치 내용이 그대로 반영되어 있고 동일한 버튼 컴포넌트 색 문제로 연관성이 높다."
+        },
+        {
+          "index": 2,
+          "grounded": true,
+          "useful": 1,
+          "note": "문서는 모서리 둥글기 문제를 다루는데 reason이 이를 '스타일 차이'로 뭉뚱그려 색 토큰 문제처럼 보이게 하여 실제 영향 가능성은 낮다."
+        }
+      ]
+    },
+    {
+      "id": "ev-002",
+      "pattern": "문구 일괄 변경",
+      "documents": 8,
+      "searched": [
+        "m1",
+        "i1",
+        "i3",
+        "i2",
+        "n3",
+        "i4",
+        "n2",
+        "n1"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "로그아웃 확인 팝업",
+          "reason": "동일한 팝업 버튼(.dialog-actions .btn-secondary) 스타일 불일치로 '닫기' 대신 '취소'가 표시되는 동일한 문제가 보고되어, 같은 수정 작업이 이 화면도 함께 적용됐는지 확인이 필요합니다.",
+          "evidence": [
+            "style_mismatch:1"
+          ],
+          "evidence_refs": [
+            "m1"
+          ]
+        },
+        {
+          "screen": "주소 삭제 확인 팝업 버튼",
+          "reason": "팝업 버튼 문구를 '닫기'로 통일하기로 한 동일한 정책 위반 사례로, 같은 공통 컴포넌트 수정이 누락되지 않았는지 함께 확인해야 합니다.",
+          "evidence": [
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "i1"
+          ]
+        },
+        {
+          "screen": "쿠폰 사용 확인 팝업",
+          "reason": "쿠폰 사용 팝업도 동일하게 '취소' 문구가 남아있는 사례로, 같은 공통 팝업 버튼 문구 통일 작업의 영향 범위로 함께 재검증이 필요합니다.",
+          "evidence": [
+            "qa_issue:3"
+          ],
+          "evidence_refs": [
+            "i2"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 3,
+      "hits": [
+        {
+          "screen": "주소 삭제 확인 팝업",
+          "hit": true
+        },
+        {
+          "screen": "쿠폰 사용 확인 팝업",
+          "hit": true
+        },
+        {
+          "screen": "로그아웃 확인 팝업",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서에 명시된 선택자와 기대/실제 문구 불일치 내용을 그대로 인용하여 근거가 적절함."
+        },
+        {
+          "index": 1,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서의 '닫기로 통일' 정책과 '취소'로 남아있는 사실을 정확히 반영함."
+        },
+        {
+          "index": 2,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서에 기재된 쿠폰 팝업의 '취소' 문구 문제를 그대로 인용해 근거가 타당함."
+        }
+      ]
+    },
+    {
+      "id": "ev-003",
+      "pattern": "색 토큰",
+      "documents": 8,
+      "searched": [
+        "i1",
+        "m2",
+        "m1",
+        "i2",
+        "i3",
+        "n3",
+        "n2",
+        "n1"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "FAQ 화면",
+          "reason": "FAQ 답변 텍스트(.faq-answer)의 color가 기대 #3D3D3D(Gray 80)인데 실제 #262626(Gray 90)로 적용되어, 공통 텍스트 색 토큰 Gray 80 수정과 동일한 패턴의 색상 오류가 보고되었습니다.",
+          "evidence": [
+            "style_mismatch:1",
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "m1",
+            "i1"
+          ]
+        },
+        {
+          "screen": "이용약관 화면",
+          "reason": "이용약관 화면의 .terms-body 요소도 color가 기대 #3D3D3D(Gray 80) 대신 실제 #262626(Gray 90)로 적용되어 있어, 같은 공통 텍스트 색 토큰 문제가 있을 수 있습니다.",
+          "evidence": [
+            "style_mismatch:2"
+          ],
+          "evidence_refs": [
+            "m2"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 2,
+      "hits": [
+        {
+          "screen": "FAQ 화면",
+          "hit": true
+        },
+        {
+          "screen": "이용약관 화면",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": false,
+          "useful": 3,
+          "note": "문서에는 색상 hex값만 있고 'Gray 80/90' 토큰명은 대상 이슈에서 가져온 것으로 근거 문서에 없는 사실이 추가됨."
+        },
+        {
+          "index": 1,
+          "grounded": false,
+          "useful": 3,
+          "note": "이용약관 문서 역시 hex값만 제시되어 있는데 'Gray 80/90' 토큰명을 덧붙여 근거 문서에 없는 사실을 추가함."
+        }
+      ]
+    },
+    {
+      "id": "ev-004",
+      "pattern": "연결 화면 흐름",
+      "documents": 7,
+      "searched": [
+        "i1",
+        "i2",
+        "v1",
+        "i3",
+        "n3",
+        "n1",
+        "i4"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "회원가입 완료 화면",
+          "reason": "찜하기 → 로그인/가입 플로우에서 로그인 후 리다이렉트와 동일하게 가입 완료 후에도 이전 화면이 아닌 홈으로 이동하는 동일한 유형의 리다이렉트 문제가 보고되었습니다.",
+          "evidence": [
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "i1"
+          ]
+        },
+        {
+          "screen": "소셜 로그인 콜백 화면",
+          "reason": "로그인 화면에서 이어지는 로그인 흐름의 일부로, 소셜 로그인 콜백 후 이동 처리에도 문제가 있었고 재검증에서 실패하여 카카오·구글 모두 콜백 후 이동 확인이 필요합니다.",
+          "evidence": [
+            "qa_issue:3",
+            "verification:1"
+          ],
+          "evidence_refs": [
+            "i2",
+            "v1"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 2,
+      "hits": [
+        {
+          "screen": "회원가입 완료 화면",
+          "hit": true
+        },
+        {
+          "screen": "소셜 로그인 콜백 화면",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서에 있는 찜하기→가입→홈 이동 사실만 사용했고 리다이렉트 로직 공유 가능성은 합리적 추론이다."
+        },
+        {
+          "index": 1,
+          "grounded": true,
+          "useful": 2,
+          "note": "두 문서의 내용을 정확히 반영했으나, 흰 화면 멈춤 문제는 리다이렉트 목적지 문제와는 다른 결함일 수 있어 연관성이 다소 불확실하다."
+        }
+      ]
+    },
+    {
+      "id": "ev-005",
+      "pattern": "작은 화면 레이아웃",
+      "documents": 7,
+      "searched": [
+        "i1",
+        "i2",
+        "i4",
+        "i3",
+        "n3",
+        "n2",
+        "n1"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "상품 상세 화면 상단 헤더",
+          "reason": "아이폰 SE에서 제목이 길면 뒤로가기 버튼과 겹치는 동일한 공통 헤더 컴포넌트 이슈이므로, 주문서 헤더 수정이 이 화면에도 영향을 주는지 함께 확인해야 합니다.",
+          "evidence": [
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "i1"
+          ]
+        },
+        {
+          "screen": "배송지 관리 화면 헤더",
+          "reason": "헤더 제목 길이로 인한 레이아웃 깨짐(두 줄 표시) 이슈가 보고된 바 있어 공통 헤더 컴포넌트 수정 시 함께 재검증이 필요합니다.",
+          "evidence": [
+            "qa_issue:3"
+          ],
+          "evidence_refs": [
+            "i2"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 2,
+      "hits": [
+        {
+          "screen": "상품 상세 화면",
+          "hit": true
+        },
+        {
+          "screen": "배송지 관리 화면",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서의 증상(아이폰 SE, 긴 제목이 뒤로가기 버튼과 겹침)이 대상 이슈와 사실상 동일하며 공통 헤더 컴포넌트 추론도 합리적이다."
+        },
+        {
+          "index": 1,
+          "grounded": true,
+          "useful": 2,
+          "note": "문서 내용(제목이 길어 두 줄로 내려감)은 정확히 인용했으나 플랫폼(aos)과 증상(겹침이 아닌 줄바꿈)이 달라 이번 ios 겹침 수정과의 연관성은 불확실하다."
+        }
+      ]
+    },
+    {
+      "id": "ev-006",
+      "pattern": "공통 카드 radius",
+      "documents": 8,
+      "searched": [
+        "m2",
+        "m1",
+        "i1",
+        "i2",
+        "n1",
+        "i3",
+        "n3",
+        "n2"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "검색 결과 화면",
+          "reason": "공통 ProductCard 컴포넌트를 사용하는 검색 결과 화면에서도 동일하게 radius가 기대 12px인데 실제 8px로 나타난 기록이 있어 같은 수정으로 회귀 확인이 필요합니다.",
+          "evidence": [
+            "style_mismatch:1"
+          ],
+          "evidence_refs": [
+            "m1"
+          ]
+        },
+        {
+          "screen": "찜 목록 화면",
+          "reason": "찜 목록 화면의 .product-card도 radius 기대 12px/실제 8px로 동일한 문제가 기록되어 있어 공통 컴포넌트 수정 시 함께 확인해야 합니다.",
+          "evidence": [
+            "style_mismatch:2"
+          ],
+          "evidence_refs": [
+            "m2"
+          ]
+        },
+        {
+          "screen": "카테고리 상품 목록",
+          "reason": "같은 공통 ProductCard 컴포넌트를 사용하는 카테고리 상품 목록에서 그림자 스타일 불일치 이슈가 있어, radius 수정 작업이 다른 스타일 속성에 영향을 주지 않았는지 함께 확인할 필요가 있습니다.",
+          "evidence": [
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "i1"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 3,
+      "hits": [
+        {
+          "screen": "검색 결과 화면",
+          "hit": true
+        },
+        {
+          "screen": "찜 목록 화면",
+          "hit": true
+        },
+        {
+          "screen": "카테고리 상품 목록",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "placeholder"
+        },
+        null,
+        null
+      ]
+    },
+    {
+      "id": "ev-007",
+      "pattern": "데이터 연결",
+      "documents": 8,
+      "searched": [
+        "i1",
+        "i2",
+        "v1",
+        "i4",
+        "i3",
+        "n3",
+        "n2",
+        "n1"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "주문서 화면 결제 금액",
+          "reason": "장바구니 쿠폰 적용 시 주문서 결제 금액에 할인이 반영되지 않는 문제가 보고되어, 합계 계산 로직 수정이 이 화면에도 영향을 줄 수 있다.",
+          "evidence": [
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "i1"
+          ]
+        },
+        {
+          "screen": "결제 완료 화면 결제 금액",
+          "reason": "쿠폰 적용 주문에서 결제 완료 화면 금액이 실제 결제 금액과 다르게 표시되는 문제가 있었고, 재검증에서도 쿠폰 적용 주문만 금액이 다르다고 확인되어 합계 로직 수정과 연관될 가능성이 높다.",
+          "evidence": [
+            "qa_issue:3",
+            "verification:1"
+          ],
+          "evidence_refs": [
+            "i2",
+            "v1"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 2,
+      "hits": [
+        {
+          "screen": "주문서 화면",
+          "hit": true
+        },
+        {
+          "screen": "결제 완료 화면",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "qa_issue:2 내용과 일치하며 쿠폰 합계 계산 로직과 직접 연관된다."
+        },
+        {
+          "index": 1,
+          "grounded": true,
+          "useful": 3,
+          "note": "qa_issue:3과 verification:1의 내용을 정확히 반영했고 쿠폰 적용 시 금액 오류로 합계 로직과 밀접히 연관된다."
+        }
+      ]
+    },
+    {
+      "id": "ev-008",
+      "pattern": "같은 이슈 반복 실패",
+      "documents": 7,
+      "searched": [
+        "v1",
+        "i2",
+        "i1",
+        "n3",
+        "i3",
+        "n2",
+        "n1"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "홈 화면 상단 알림 배지",
+          "reason": "과거 재검증 실패 기록에서 알림 읽음 처리 수정 시 앱 상단 알림 배지 숫자도 함께 확인해야 한다고 명시되어 있고, 실제로 배지 숫자가 갱신되지 않는 이슈가 보고된 바 있습니다.",
+          "evidence": [
+            "verification:1",
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "v1",
+            "i1"
+          ]
+        },
+        {
+          "screen": "푸시 알림 탭 후 이동 화면",
+          "reason": "같은 읽음 처리 로직과 관련해 푸시 알림을 통해 진입했을 때도 읽음 처리가 되지 않는 동일 계열의 이슈가 있어 함께 확인이 필요합니다.",
+          "evidence": [
+            "qa_issue:3"
+          ],
+          "evidence_refs": [
+            "i2"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 2,
+      "hits": [
+        {
+          "screen": "홈 화면 상단 알림 배지",
+          "hit": true
+        },
+        {
+          "screen": "푸시 알림 탭 후 이동 화면",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "재검증 실패 기록에 명시된 배지 확인 필요성과 실제 배지 이슈 보고가 근거 문서 내용과 일치한다."
+        },
+        {
+          "index": 1,
+          "grounded": true,
+          "useful": 3,
+          "note": "푸시 알림 진입 시 읽음 처리 안 되는 이슈가 동일한 읽음 처리 API 로직과 관련되어 있어 근거와 일치하고 회귀 확인에 유용하다."
+        }
+      ]
+    },
+    {
+      "id": "ev-009",
+      "pattern": "공통 날짜 포맷",
+      "documents": 7,
+      "searched": [
+        "i1",
+        "i2",
+        "i4",
+        "i3",
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "리뷰 목록",
+          "reason": "공통 날짜 포맷 함수를 사용하여 MM/DD로 표시되던 동일한 증상이 있어, 함수 수정 시 함께 영향을 받을 수 있습니다.",
+          "evidence": [
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "i1"
+          ]
+        },
+        {
+          "screen": "공지사항 목록",
+          "reason": "시안(YYYY.MM.DD)과 다르게 날짜가 표시되던 이슈로, 같은 공통 날짜 포맷 함수 변경의 영향을 받을 수 있습니다.",
+          "evidence": [
+            "qa_issue:3"
+          ],
+          "evidence_refs": [
+            "i2"
+          ]
+        },
+        {
+          "screen": "포인트 내역 화면",
+          "reason": "날짜 관련 표시 오류(시간대로 인한 날짜 밀림)가 있었던 화면으로, 공통 날짜 포맷 함수 수정이 날짜 계산에 영향을 줄 수 있습니다.",
+          "evidence": [
+            "qa_issue:4"
+          ],
+          "evidence_refs": [
+            "i3"
+          ]
+        },
+        {
+          "screen": "주문 내역 화면 필터",
+          "reason": "같은 주문 내역 화면 내 기능으로, 날짜 포맷 함수 수정이 기간 필터 동작에도 영향을 줄 수 있는지 함께 확인이 필요합니다.",
+          "evidence": [
+            "qa_issue:5"
+          ],
+          "evidence_refs": [
+            "i4"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 4,
+      "hits": [
+        {
+          "screen": "리뷰 목록",
+          "hit": true
+        },
+        {
+          "screen": "공지사항 목록",
+          "hit": true
+        },
+        {
+          "screen": "포인트 내역 화면",
+          "hit": true
+        }
+      ],
+      "noise": [
+        "주문 내역 화면 필터"
+      ],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": false,
+          "useful": 3,
+          "note": "문서에는 MM/DD 증상만 있고 '공통 날짜 포맷 함수 사용'은 대상 이슈의 사실을 끌어와 단정한 것이라 근거 부족이지만, 동일 증상이라 재검증 가치는 높다."
+        },
+        {
+          "index": 1,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서의 포맷 불일치 증상을 바탕으로 같은 함수 영향 가능성을 '받을 수 있다'는 추론으로 표현해 근거문서와 부합한다."
+        },
+        {
+          "index": 2,
+          "grounded": true,
+          "useful": 2,
+          "note": "문서는 시간대로 인한 날짜 밀림 문제로 포맷 함수와 직접 관련은 불확실하나 '영향을 줄 수 있다'는 추론 표현이라 근거는 유지된다."
+        },
+        {
+          "index": 3,
+          "grounded": true,
+          "useful": 1,
+          "note": "같은 화면이지만 필터 동작 문제로 날짜 포맷 수정과 직접적 연관성이 낮다."
+        }
+      ]
+    },
+    {
+      "id": "ev-010",
+      "pattern": "기록 없음",
+      "documents": 0,
+      "searched": [],
+      "llm_called": false,
+      "suggestions": [],
+      "dropped": 0,
+      "hits": [],
+      "noise": [],
+      "scores": []
+    },
+    {
+      "id": "ev-011",
+      "pattern": "관련 없는 기록만",
+      "documents": 6,
+      "searched": [
+        "n3",
+        "i1",
+        "n2",
+        "i2",
+        "n1",
+        "m1"
+      ],
+      "llm_called": true,
+      "suggestions": [],
+      "dropped": 0,
+      "raw_count": 0,
+      "hits": [],
+      "noise": [],
+      "scores": []
+    },
+    {
+      "id": "ev-012",
+      "pattern": "스캔 기록만 근거",
+      "documents": 7,
+      "searched": [
+        "m1",
+        "m2",
+        "m3",
+        "n1",
+        "n2",
+        "i1",
+        "n3"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "설정 화면",
+          "reason": "공통 Body 텍스트 스타일(.menu-item-label)을 공유하며 동일하게 font-weight 기대 500/실제 600 불일치가 보고되어, 공통 스타일 수정 시 함께 적용되는지 확인이 필요합니다.",
+          "evidence": [
+            "style_mismatch:1"
+          ],
+          "evidence_refs": [
+            "m1"
+          ]
+        },
+        {
+          "screen": "고객센터 화면",
+          "reason": "공통 Body 텍스트 스타일(.menu-item-label)을 공유하며 동일하게 font-weight 기대 500/실제 600 불일치가 보고되어, 공통 스타일 수정이 반영되는지 재확인이 필요합니다.",
+          "evidence": [
+            "style_mismatch:2"
+          ],
+          "evidence_refs": [
+            "m2"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 2,
+      "hits": [
+        {
+          "screen": "설정 화면",
+          "hit": true
+        },
+        {
+          "screen": "고객센터 화면",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서에 동일 요소(.menu-item-label)와 동일한 font-weight 불일치(500→600)가 명시되어 있어 사실과 일치한다."
+        },
+        {
+          "index": 1,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서에 동일 요소(.menu-item-label)와 동일한 font-weight 불일치가 명시되어 있어 공통 스타일 수정의 영향을 받을 가능성이 높다."
+        }
+      ]
+    },
+    {
+      "id": "ev-013",
+      "pattern": "iOS 하단 고정 버튼",
+      "documents": 7,
+      "searched": [
+        "i1",
+        "i2",
+        "i4",
+        "i3",
+        "n3",
+        "n1",
+        "n2"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "주문서 화면 하단 결제 버튼",
+          "reason": "하단 고정 버튼 공통 레이아웃에 safe area 여백을 추가하는 수정이므로, 동일한 공통 레이아웃을 쓰는 주문서 화면의 결제 버튼도 홈 인디케이터 겹침 여부를 같이 확인해야 합니다.",
+          "evidence": [
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "i1"
+          ]
+        },
+        {
+          "screen": "리뷰 작성 화면 등록 버튼",
+          "reason": "하단 고정 버튼 공통 레이아웃 변경이 리뷰 작성 화면의 등록 버튼에도 영향을 줄 수 있어 눌림 영역과 여백을 함께 확인해야 합니다.",
+          "evidence": [
+            "qa_issue:3"
+          ],
+          "evidence_refs": [
+            "i2"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 2,
+      "hits": [
+        {
+          "screen": "주문서 화면",
+          "hit": true
+        },
+        {
+          "screen": "리뷰 작성 화면",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": false,
+          "useful": 3,
+          "note": "주문서 화면이 동일한 공통 레이아웃을 쓴다는 사실은 evidence 문서에 없고 대상 이슈의 수정 내용을 그대로 가져와 단정했다."
+        },
+        {
+          "index": 1,
+          "grounded": false,
+          "useful": 2,
+          "note": "리뷰 등록 버튼 이슈는 화면 하단에 붙어 눌리기 어렵다는 내용일 뿐 공통 레이아웃 사용 여부나 홈 인디케이터 겹침과는 무관한데 이를 단정적으로 연결했다."
+        }
+      ]
+    },
+    {
+      "id": "ev-014",
+      "pattern": "비슷한 단어 함정",
+      "documents": 7,
+      "searched": [
+        "m1",
+        "i1",
+        "n2",
+        "i2",
+        "n1",
+        "i3",
+        "n3"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "카카오 로그인 버튼",
+          "reason": "같은 color 값(#FEE500)에 대한 스타일 불일치 이슈로, 동일 색상 기준을 사용하는 버튼이므로 함께 재검증이 필요합니다.",
+          "evidence": [
+            "style_mismatch:1"
+          ],
+          "evidence_refs": [
+            "m1"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 1,
+      "hits": [
+        {
+          "screen": "카카오 로그인 버튼",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서에 명시된 기대/실제 색상 불일치 내용과 일치하며 동일 색상 기준(#FEE500)을 다루므로 회귀 검증에 유용하다."
+        }
+      ]
+    },
+    {
+      "id": "ev-015",
+      "pattern": "탭 구조 변경",
+      "documents": 7,
+      "searched": [
+        "i2",
+        "v1",
+        "i1",
+        "i3",
+        "n3",
+        "n1",
+        "n2"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "마이 탭 진입 화면",
+          "reason": "탭 순서 변경(홈-카테고리-찜-마이)과 탭 인덱스 매핑 오류가 같은 원인으로, 마이 탭을 누르면 찜 목록이 먼저 보이는 문제가 보고되었고 재검증도 실패했으므로 함께 확인해야 합니다.",
+          "evidence": [
+            "qa_issue:3",
+            "verification:1"
+          ],
+          "evidence_refs": [
+            "i2",
+            "v1"
+          ]
+        },
+        {
+          "screen": "푸시 알림 딥링크 이동",
+          "reason": "찜 관련 딥링크(찜 상품 할인 푸시)가 탭 인덱스 매핑에 의존해 마이 탭으로 잘못 이동하는 문제가 있어, 탭 인덱스 수정 시 같이 영향받을 수 있습니다.",
+          "evidence": [
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "i1"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 2,
+      "hits": [
+        {
+          "screen": "마이 탭",
+          "hit": true
+        },
+        {
+          "screen": "푸시 알림 딥링크",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "근거 문서들이 마이 탭 진입 시 찜 목록이 먼저 보이고 재검증도 실패했다는 사실을 그대로 반영하며 탭 인덱스 문제와 직접 관련된다."
+        },
+        {
+          "index": 1,
+          "grounded": false,
+          "useful": 2,
+          "note": "qa_issue:2는 푸시가 마이 탭으로 잘못 이동한다는 사실만 있고 '탭 인덱스 매핑에 의존'한다는 근거는 문서에 없는 추가된 사실이다."
+        }
+      ]
+    },
+    {
+      "id": "ev-016",
+      "pattern": "검색 걸러내기(문서 8개 초과)",
+      "documents": 13,
+      "searched": [
+        "i2",
+        "i1",
+        "n1",
+        "x8",
+        "n3",
+        "x6",
+        "x7",
+        "x5"
+      ],
+      "llm_called": true,
+      "suggestions": [
+        {
+          "screen": "배송지 추가 화면",
+          "reason": "새 주소를 기본으로 추가할 때 기존 기본 주소가 해제되지 않는 문제가 있었으므로, 기본 배송지 저장 로직 수정이 이 화면의 기본 설정 해제 동작에도 영향을 줄 수 있어 함께 확인이 필요합니다.",
+          "evidence": [
+            "qa_issue:3"
+          ],
+          "evidence_refs": [
+            "i2"
+          ]
+        },
+        {
+          "screen": "주문서 화면 배송지",
+          "reason": "기본 배송지를 변경해도 주문서에는 예전 주소가 기본으로 표시되는 이슈가 있었는데, 이는 기본 배송지 저장 로직과 직결된 문제이므로 수정 후 함께 재확인해야 합니다.",
+          "evidence": [
+            "qa_issue:2"
+          ],
+          "evidence_refs": [
+            "i1"
+          ]
+        }
+      ],
+      "dropped": 0,
+      "raw_count": 2,
+      "hits": [
+        {
+          "screen": "주문서 화면",
+          "hit": true
+        },
+        {
+          "screen": "배송지 추가 화면",
+          "hit": true
+        }
+      ],
+      "noise": [],
+      "scores": [
+        {
+          "index": 0,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서 내용과 일치하며 동일한 기본 배송지 저장 로직을 공유할 가능성이 높아 유용하다."
+        },
+        {
+          "index": 1,
+          "grounded": true,
+          "useful": 3,
+          "note": "문서 내용과 일치하며 기본 배송지 저장 로직 변경의 영향을 직접 받을 수 있는 화면이라 유용하다."
+        }
+      ]
+    }
+  ]
+}

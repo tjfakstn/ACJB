@@ -1,0 +1,207 @@
+package com.acjb.server.domain;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.AttributeOverrides;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderColumn;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+/**
+ * QA 중 발견되어 등록·전달되는 수정 요청 한 건.
+ * 등록 후 repro_steps·screen_location·environment는 바꾸지 않는다(SPEC 6.1 N6) — setter를 두지 않았다.
+ * 상태 전이·알림 생성 같은 규칙은 서비스에서 AC6·AC13에 맞춰 구현한다.
+ */
+@Entity
+@Table(name = "qa_issues", indexes = {
+    // 목록 고정 정렬(created_at desc, id desc)과 상태·담당자·등록자 필터 — docs/db-schema.md 4절
+    @Index(name = "idx_qa_issues_project_created", columnList = "project_id, created_at DESC, id DESC"),
+    @Index(name = "idx_qa_issues_project_status", columnList = "project_id, status"),
+    @Index(name = "idx_qa_issues_project_team", columnList = "project_id, assigned_team"),
+    @Index(name = "idx_qa_issues_reported_by", columnList = "reported_by_id")
+})
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class QAIssue {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "project_id")
+    private Project project;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String description;
+
+    @Column(nullable = false)
+    private String screenLocation;
+
+    @ElementCollection
+    @CollectionTable(name = "qa_issue_repro_steps", joinColumns = @JoinColumn(name = "qa_issue_id"))
+    @OrderColumn(name = "step_order")
+    @Column(name = "step", nullable = false, length = 500)
+    private List<String> reproSteps = new ArrayList<>();
+
+    @Enumerated(EnumType.STRING)
+
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 10)
+    private PlatformScope platformScope;
+
+    @Embedded
+    @AttributeOverrides({
+        @AttributeOverride(name = "platform", column = @Column(name = "env_platform", length = 10)),
+        @AttributeOverride(name = "device", column = @Column(name = "env_device", length = 100)),
+        @AttributeOverride(name = "browser", column = @Column(name = "env_browser", length = 100)),
+        @AttributeOverride(name = "deployStage", column = @Column(name = "env_deploy_stage", length = 10))
+    })
+    private Environment environment;
+
+    @ElementCollection
+    @CollectionTable(name = "qa_issue_screenshots", joinColumns = @JoinColumn(name = "qa_issue_id"))
+    @OrderColumn(name = "position")
+    @Column(name = "url", nullable = false, length = 1000)
+    private List<String> screenshots = new ArrayList<>();
+
+    @Column(length = 500)
+    private String figmaLink;
+
+    /** 스타일 차이 이슈일 때만. 사람이 입력한 차이도 style_mismatches 행을 먼저 만들어 연결한다 */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "style_mismatch_id", updatable = false)
+    private StyleMismatch styleMismatch;
+
+    @Enumerated(EnumType.STRING)
+
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "status", nullable = false, length = 20)
+    private IssueStatus status = IssueStatus.NEEDS_CHECK;
+
+    /** 사람이 등록한 이슈는 manual, 첫 QA가 근거로 저장한 이슈는 first_qa(AC23) */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "source", nullable = false, length = 10, updatable = false)
+    private IssueSource source = IssueSource.MANUAL;
+
+    /** source=first_qa일 때 만든 첫 QA 실행 */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "first_qa_run_id", updatable = false)
+    private ProjectRun firstQaRun;
+
+    /** 담당 팀 — 그 프로젝트에서 이 역할인 멤버들(AC3·AC13, 2026-11-08 사람 → 팀). 없으면 null */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "assigned_team", length = 10)
+    private MemberRole assignedTeam;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "reported_by_id", updatable = false)
+    private Member reportedBy;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(nullable = false)
+    private Instant updatedAt;
+
+    /** 담당 팀이 붙인 수정 PR·커밋 주소(AC34, V13) */
+    @Column(name = "fix_link_url", length = 500)
+    private String fixLinkUrl;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fix_link_by_id")
+    private Member fixLinkBy;
+
+    @Column(name = "fix_link_at")
+    private Instant fixLinkAt;
+
+    public QAIssue(Project project, String description, String screenLocation, List<String> reproSteps,
+                   PlatformScope platformScope, Environment environment, List<String> screenshots,
+                   String figmaLink, StyleMismatch styleMismatch, MemberRole assignedTeam, Member reportedBy) {
+        this.project = project;
+        this.description = description;
+        this.screenLocation = screenLocation;
+        this.reproSteps = new ArrayList<>(reproSteps);
+        this.platformScope = platformScope;
+        this.environment = environment;
+        this.screenshots = screenshots == null ? new ArrayList<>() : new ArrayList<>(screenshots);
+        this.figmaLink = figmaLink;
+        this.styleMismatch = styleMismatch;
+        this.assignedTeam = assignedTeam;
+        this.reportedBy = reportedBy;
+    }
+
+    /**
+     * 첫 QA가 저장하는 이슈(AC23) — 공통 플랫폼, 담당 팀 없음, 등록자는 실행한 소유자.
+     * 재현 절차는 ["'{프레임}' 화면을 연다", "'{노드}'를 확인한다"]
+     */
+    public static QAIssue firstQa(Project project, ProjectRun run, String description, String frameName, String nodeName,
+                                  StyleMismatch mismatch, Member reporter) {
+        QAIssue issue = new QAIssue(project, description, frameName + " / " + nodeName,
+            List.of("'" + frameName + "' 화면을 연다", "'" + nodeName + "'를 확인한다"),
+            PlatformScope.COMMON, null, List.of(), null, mismatch, null, reporter);
+        issue.source = IssueSource.FIRST_QA;
+        issue.firstQaRun = run;
+        return issue;
+    }
+
+    /** 상태 변경은 서비스에서 전이 규칙(AC6)을 검사한 뒤에만 호출한다 */
+    /** 고친 PR·커밋 GitHub 주소(AC34) — 담당 팀이 붙인다. 상태·알림과 무관 */
+    public void attachFixLink(String url, Member by, Instant now) {
+        this.fixLinkUrl = url;
+        this.fixLinkBy = by;
+        this.fixLinkAt = now;
+    }
+
+    public void clearFixLink() {
+        this.fixLinkUrl = null;
+        this.fixLinkBy = null;
+        this.fixLinkAt = null;
+    }
+
+    public void changeStatus(IssueStatus next) {
+        this.status = next;
+    }
+
+    public void assignTeam(MemberRole team) {
+        this.assignedTeam = team;
+    }
+
+    @PrePersist
+    void onCreate() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        this.updatedAt = Instant.now();
+    }
+}

@@ -3,7 +3,30 @@
 /* Figma 공용 컴포넌트(Button/Input/Image)에서 뽑은 색상 — Tailwind 기본 gray/red 스케일과 거의 일치해서
    커스텀 팔레트 없이 Tailwind 기본 클래스(gray-50~900, red-300/900)를 그대로 사용합니다. */
 
+/* QAting 브랜드 토큰 — Figma 변수(02 Projects — Refined)에서 가져온 값.
+   WHY: 02 프로젝트 화면부터 blue/purple/teal 기반의 리파인 팔레트가 쓰여서,
+   Tailwind 기본 스케일로 대체가 어려운 색만 토큰으로 정의한다.
+   TODO(최유정): 디자인 토큰 정본으로 승격할지 확정 — 확정되면 Button 등 공용 컴포넌트에도 반영. */
+@theme {
+  --color-qa-primary: #007fff;
+  --color-qa-primary-hover: #0072dc;
+  --color-qa-logo: #965fff;
+  --color-qa-success: #1e8782;
+  --color-qa-warning: #fc1b1f;
+  --color-qa-sub: #9b9eaf;
+  /* 시안 "전체 서비스 최종 통합 UI"의 보조 본문색(설명·힌트) — 2026-11-07 */
+  --color-qa-text-sub: #5f5f5f;
+  --color-qa-border: #e2e8f0;
+  --color-qa-surface: #f9fafb;
+}
+
 body {
   margin: 0;
   font-family: 'Pretendard', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 단계별 진행을 모를 때 쓰는 움직이는 진행 막대(비교 분석 CON-06) */
+@keyframes qa-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
 }

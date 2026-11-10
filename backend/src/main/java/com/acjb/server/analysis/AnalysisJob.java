@@ -90,7 +90,7 @@ public class AnalysisJob {
     public AnalysisJob(FigmaClient figma, GithubClient github, DesignCodeMapper mapper, ProjectRunRepository runs,
                        DesignCodeMappingRepository mappings, PlatformTransactionManager txManager, Clock clock,
                        @Value("${app.analysis.node-concurrency:4}") int nodeConcurrency,
-                       @Value("${app.analysis.max-code-chars:400000}") int maxCodeChars) {
+                       @Value("${app.analysis.max-code-chars:1000000}") int maxCodeChars) {
         this.figma = figma;
         this.github = github;
         this.mapper = mapper;

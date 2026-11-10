@@ -133,3 +133,44 @@ export function OptionalFields({ draft, onChange }: { draft: Draft; onChange: (p
     </>
   )
 }
+
+/** 기준 Figma 프레임(AC33) — 찍은 경로에 연결된 프레임을 위에 두고, 사람이 확인해 고른다. 고르지 않으면 비워 둔다 */
+export function FrameField({ draft, frames, suggested, onChange }: {
+  draft: Draft
+  frames: { frame_id: string; frame_name: string }[]
+  suggested: { frame_id: string; frame_name: string }[]
+  onChange: (patch: Partial<Draft>) => void
+}) {
+  const suggestedIds = new Set(suggested.map((f) => f.frame_id))
+  const others = frames.filter((f) => !suggestedIds.has(f.frame_id))
+  return (
+    <label className="mt-3 block">
+      <span className="flex items-center gap-1 text-xs font-medium text-black">
+        <Icon name="figma" className="h-3.5 w-3.5" />기준 Figma 프레임 <span className="font-normal text-qa-text-sub">선택</span>
+      </span>
+      {frames.length === 0 ? (
+        <span className="mt-1 block text-xs text-qa-text-sub">비교 분석 매핑이 없어 고를 프레임이 없어요.</span>
+      ) : (
+        <>
+          <select value={draft.frameId ?? ''} disabled={draft.saving} onChange={(e) => onChange({ frameId: e.target.value || null })}
+            className={`${INPUT} mt-1 border-qa-border`}>
+            <option value="">선택 안 함</option>
+            {suggested.length > 0 && (
+              <optgroup label={`이 경로(${draft.pagePath})에 연결된 프레임`}>
+                {suggested.map((f) => <option key={f.frame_id} value={f.frame_id}>{f.frame_name}</option>)}
+              </optgroup>
+            )}
+            <optgroup label={suggested.length > 0 ? '다른 프레임' : '매핑된 프레임'}>
+              {others.map((f) => <option key={f.frame_id} value={f.frame_id}>{f.frame_name}</option>)}
+            </optgroup>
+          </select>
+          <span className="mt-1 block text-xs text-qa-text-sub">
+            {suggested.length === 0 ? '이 경로에 연결된 프레임이 없어요 · 매핑 화면에서 경로를 연결할 수 있어요'
+              : suggested.length > 1 ? `이 경로에 연결된 프레임이 ${suggested.length}개예요 · 해당하는 상태를 골라 주세요`
+                : '이 경로에 연결된 프레임을 골라 뒀어요'}
+          </span>
+        </>
+      )}
+    </label>
+  )
+}

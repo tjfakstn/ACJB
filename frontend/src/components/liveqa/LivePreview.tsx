@@ -262,7 +262,8 @@ function Overlay({ registerMode, scale, base, cursor, setCursor, toLocal, onPick
   // 이 화면(경로·첨부 이미지)에 찍힌 핀만 보여 준다
   const visible = pins.filter((i) => {
     const m = i.manual_qa!
-    return m.location_basis === basis && (basis === 'capture_image' ? m.capture_id === attachmentId : m.page_path === path)
+    // 위치 없이 등록한 항목(none)은 좌표가 없어 핀을 그리지 않는다
+    return !!m.anchor && m.location_basis === basis && (basis === 'capture_image' ? m.capture_id === attachmentId : m.page_path === path)
   })
   return (
     <>
@@ -284,7 +285,7 @@ function Overlay({ registerMode, scale, base, cursor, setCursor, toLocal, onPick
             title={`${manualQaId(m.pin_number)} · ${m.title}`}
             className={`absolute z-20 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-[11px] font-bold text-white shadow ${
               active ? 'bg-qa-primary-hover ring-4 ring-qa-primary/30' : 'bg-[#7c3aed]'} ${registerMode ? 'opacity-40' : ''}`}
-            style={{ left: m.anchor.x_ratio * base.width * scale, top: m.anchor.y_ratio * base.height * scale }}>
+            style={{ left: (m.anchor?.x_ratio ?? 0) * base.width * scale, top: (m.anchor?.y_ratio ?? 0) * base.height * scale }}>
             {m.pin_number}
           </button>
         )

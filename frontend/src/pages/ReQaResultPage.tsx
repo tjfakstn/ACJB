@@ -6,7 +6,7 @@ import {
 import { Icon } from '../components/common/Icon'
 import { CARD, WorkflowStepper } from '../components/workspace/WorkspaceCards'
 import {
-  ErrorCard, KeyValue, Loading, OUTLINE_BTN, PageTitle, PRIMARY_BTN, ProgressChip, QaShell, TeamTag, Verdict, issueParts, issueTitle,
+  ErrorCard, KeyValue, Loading, OUTLINE_BTN, PageTitle, PRIMARY_BTN, ProgressChip, QaShell, TeamTag, Verdict, issueFrame, issueParts, issueTitle,
   loadErrorMessage, useProject,
 } from '../components/qa/QaParts'
 
@@ -122,7 +122,7 @@ export function ReQaResultPage() {
                   <KeyValue rows={[
                     { label: '이슈 ID', value: `#${issue.id}` },
                     { label: 'Figma 요소', value: issueParts(issue).element },
-                    { label: 'Figma 프레임', value: issueParts(issue).screen },
+                    { label: 'Figma 프레임', value: issueFrame(issue, detail.figma?.file_key ?? null)?.name ?? '-' },
                     { label: '담당 팀', value: <TeamTag team={issue.assigned_team} /> },
                     { label: '수정 진행', value: <ProgressChip status={issue.status} /> },
                   ]} />

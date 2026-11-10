@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  ApiError, fetchMe, getProjectDetail, PROPERTY_LABELS, TEAM_LABELS, type IssueStatus, type Me, type ProjectDetail, type QaIssue, type Team,
+  ApiError, fetchMe, figmaFrameUrl, getProjectDetail, PROPERTY_LABELS, TEAM_LABELS, type IssueStatus, type Me, type ProjectDetail, type QaIssue, type Team,
 } from '../../lib/api'
 import { AppHeader } from '../projects/AppHeader'
 import { WorkspaceSidebar } from '../members/WorkspaceSidebar'
@@ -230,10 +230,20 @@ export function KeyValue({ rows }: { rows: { label: string; value: ReactNode }[]
 /** 첫 QA 이슈의 screen_location은 "화면 / 요소" — 요소 이름을 앞에 쓴다 */
 export function issueParts(issue: QaIssue): { screen: string; element: string } {
   // 수동 QA(AC31)는 화면 = 찍은 경로, 요소 = 사람이 쓴 제목
-  if (issue.manual_qa) return { screen: issue.manual_qa.page_path, element: issue.manual_qa.title }
+  if (issue.manual_qa) return { screen: issue.manual_qa.page_path ?? issue.manual_qa.figma_frame?.frame_name ?? issue.screen_location, element: issue.manual_qa.title }
   const i = issue.screen_location.lastIndexOf(' / ')
   return i < 0 ? { screen: issue.screen_location, element: issue.screen_location }
     : { screen: issue.screen_location.slice(0, i), element: issue.screen_location.slice(i + 3) }
+}
+
+/** 이슈의 기준 Figma 프레임 — 자동 QA는 비교한 프레임, 수동 QA는 등록 때 고른 프레임(AC33). 없으면 null */
+export function issueFrame(issue: QaIssue, fileKey: string | null): { name: string; href: string | null } | null {
+  if (issue.manual_qa) {
+    const f = issue.manual_qa.figma_frame
+    return f ? { name: f.frame_name, href: issue.figma_link ?? (fileKey ? figmaFrameUrl(fileKey, f.frame_id) : null) } : null
+  }
+  const frameId = issue.style_mismatch?.frame_id
+  return { name: issueParts(issue).screen, href: fileKey && frameId ? figmaFrameUrl(fileKey, frameId) : issue.figma_link }
 }
 
 export function issueTitle(issue: QaIssue): string {

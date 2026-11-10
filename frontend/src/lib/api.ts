@@ -322,8 +322,15 @@ export interface ProjectRun {
   dropped_count: number
   /** re_qa에서 여전히 달라 fail로 판정한 수. 다른 kind는 null */
   failed_count: number | null
-  /** first_qa가 고른 검증 범위 */
+  /** first_qa는 고른 검증 범위, re_qa는 그 실행의 전체 범위(이전 범위 + 새로 더한 범위) */
   scope: QaScope[] | null
+  /** re_qa에서 새로 더해 비교한 범위(2026-11-10). 다른 kind는 null */
+  added_scope?: QaScope[] | null
+  /** first-qa·re-qa 응답에만 — 지금까지 검사한 범위. Re-QA 화면은 이 범위를 잠근다 */
+  covered_scope?: QaScope[] | null
+  /** re_qa가 새로 더한 범위에서 만든 이슈 수·버린 수. 다른 kind는 null */
+  found_count?: number | null
+  found_dropped_count?: number | null
   /** 개발용 가짜 비교기로 돈 실행([시연용] — 2026-11-08) */
   demo: boolean
   error_message: string | null
@@ -616,9 +623,12 @@ export function getFirstQa(projectId: string): Promise<ProjectRun | null> {
   return request<ProjectRun | null>('GET', `/api/v1/projects/${projectId}/first-qa`)
 }
 
-/** 소유자만. fixed인 첫 QA 이슈가 없거나 첫 QA·Re-QA가 진행 중이면 409 NOT_READY */
-export function startReQa(projectId: string): Promise<ProjectRun> {
-  return request<ProjectRun>('POST', `/api/v1/projects/${projectId}/re-qa`)
+/**
+ * 소유자만. scope는 지금까지 검사한 범위(covered_scope)를 모두 담아야 하고(빼면 400), 그 밖의 범위는 새로 비교해 이슈로 만든다(AC28).
+ * fixed인 첫 QA 이슈도 새 범위도 없거나 첫 QA·Re-QA가 진행 중이면 409 NOT_READY
+ */
+export function startReQa(projectId: string, scope: QaScope[]): Promise<ProjectRun> {
+  return request<ProjectRun>('POST', `/api/v1/projects/${projectId}/re-qa`, { scope })
 }
 
 /** 최근 Re-QA — 실행한 적이 없으면 null */

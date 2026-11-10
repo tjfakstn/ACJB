@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { fetchMe, takeAfterLogin } from '../lib/api'
+import { fetchMe, peekAfterLogin, takeAfterLogin } from '../lib/api'
 import {
   CheckCircle,
   Dot,
@@ -175,10 +175,23 @@ const DIFF_ROWS = [
 export function LandingPage() {
   const navigate = useNavigate()
   // 서버는 로그인에 성공하면 항상 '/'(여기)로 보낸다 — 로그인한 사용자는 하던 곳(초대 링크 등)이나 프로젝트 목록으로 넘긴다
+  // 정리된(먼저 실행된) effect의 응답은 무시한다 — 개발 모드 StrictMode는 effect를 두 번 실행하는데,
+  // 둘 다 이동하면 첫 번째가 꺼내 간 초대 경로를 두 번째가 '/app/projects'로 덮어썼다.
+  // 로그아웃(계정 전환)으로 여기 왔는데 초대 경로가 남아 있으면 초대 화면으로 돌려보내 그 화면에서 다시 로그인하게 한다.
   useEffect(() => {
+    let cancelled = false
     fetchMe().then((me) => {
-      if (me.authenticated) navigate(takeAfterLogin() ?? '/app/projects', { replace: true })
+      if (cancelled) return
+      if (me.authenticated) {
+        navigate(takeAfterLogin() ?? '/app/projects', { replace: true })
+      } else {
+        const pending = peekAfterLogin()
+        if (pending?.startsWith('/invitations/')) navigate(pending, { replace: true })
+      }
     })
+    return () => {
+      cancelled = true
+    }
   }, [navigate])
 
   return (

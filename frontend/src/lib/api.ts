@@ -282,15 +282,25 @@ export function rememberAfterLogin(path: string) {
   }
 }
 
-export function takeAfterLogin(): string | null {
+/** 적어 둔 경로를 읽기만 한다(지우지 않음). 앱 안의 경로만 따른다 — 외부 주소로 보내는 열린 리다이렉트를 막는다 */
+export function peekAfterLogin(): string | null {
   try {
     const path = sessionStorage.getItem(AFTER_LOGIN_KEY)
-    sessionStorage.removeItem(AFTER_LOGIN_KEY)
-    // 앱 안의 경로만 따른다 — 외부 주소로 보내는 열린 리다이렉트를 막는다
     return path && path.startsWith('/') && !path.startsWith('//') ? path : null
   } catch {
     return null
   }
+}
+
+/** 적어 둔 경로를 꺼내고 지운다 — 로그인 뒤 한 번만 따른다 */
+export function takeAfterLogin(): string | null {
+  const path = peekAfterLogin()
+  try {
+    sessionStorage.removeItem(AFTER_LOGIN_KEY)
+  } catch {
+    // 저장소를 못 쓰면 지울 것도 없다
+  }
+  return path
 }
 
 export function formatDate(iso: string): string {

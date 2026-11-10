@@ -72,7 +72,7 @@ public class FirstQaJob {
             return;
         }
         try {
-            QaComparator.FirstQaResult result = comparator.compare(input);
+            QaComparator.FirstQaResult result = comparator.compare(input.withProgress(progressOf(runId)));
             boolean demo = comparator.demo();
             tx.executeWithoutResult(s -> save(runId, input, result, demo));
         } catch (QaFailedException e) {
@@ -97,6 +97,19 @@ public class FirstQaJob {
         if (saved.created() > 0) {
             events.publishEvent(new EmbeddingSourcesChanged(run.getProject().getId()));
         }
+    }
+
+    /** 비교 진행률을 실행에 남긴다 — 묶음이 끝날 때마다 짧은 트랜잭션으로. 기록이 실패해도 비교는 계속한다 */
+    private QaComparator.Progress progressOf(Long runId) {
+        return (done, total) -> {
+            synchronized (this) {
+                try {
+                    tx.executeWithoutResult(s -> runs.findById(runId).ifPresent(r -> r.progress(done, total)));
+                } catch (RuntimeException e) {
+                    log.warn("첫 QA 진행률 기록 실패 run_id={}", runId);
+                }
+            }
+        };
     }
 
     private void fail(Long runId, String message) {

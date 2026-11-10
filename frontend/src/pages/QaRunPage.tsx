@@ -12,6 +12,7 @@ import {
 
 // 디자인 QA 실행(시안 QA-01·02·02F·03, SPEC AC23)과 Re-QA 실행(시안 RQA-01·02, AC28).
 // 첫 QA가 성공하기 전에는 첫 QA 화면, 그 뒤로는 Re-QA 화면이다 — 첫 QA는 프로젝트당 성공 1번이라서.
+// Re-QA도 검증 범위를 고른다(2026-11-10): 지금까지 검사한 범위는 잠겨 늘 다시 확인하고, 더 고른 범위는 매핑 전체를 새로 비교한다.
 // 시안과 다른 점:
 //  - Figma "프레임 수·컴포넌트 수·마지막 동기화", GitHub "최근 커밋·관련 PR"은 서버가 주지 않는다 —
 //    대신 비교 분석이 찾은 화면·요소 짝 수와 분석한 커밋을 보여 준다(관련 PR은 v1 비포함)
@@ -47,7 +48,9 @@ export function QaRunPage() {
       setFirstQa(f)
       setReQa(r)
       setIssues(list)
-      if (f?.scope) setScope(f.scope)
+      // Re-QA는 지금까지 검사한 범위에서 시작한다 — 더 고를 범위만 사람이 켠다
+      const covered = f?.status === 'succeeded' ? (f.covered_scope ?? f.scope) : f?.scope
+      if (covered) setScope(covered)
       setLoadError(null)
     } catch (e) {
       setLoadError(loadErrorMessage(e))
@@ -81,7 +84,10 @@ export function QaRunPage() {
           setReQa(r)
           if (r?.status === 'succeeded') {
             const targets = reQaTargets.current
-            navigate(targets.length === 1 ? `/app/projects/${projectId}/issues/${targets[0]}/re-qa` : `/app/projects/${projectId}/queue`,
+            // 새 범위만 비교했으면 판정 결과가 없다 — 새로 만든 이슈가 있는 QA 결과로 간다
+            navigate(targets.length === 0 ? `/app/projects/${projectId}/results`
+              : targets.length === 1 && !(r.added_scope?.length) ? `/app/projects/${projectId}/issues/${targets[0]}/re-qa`
+                : `/app/projects/${projectId}/queue`,
               { state: { reQaRunId: r.id } })
           } else if (r && r.status === 'failed') {
             void load()
@@ -99,6 +105,10 @@ export function QaRunPage() {
   if (!me) return null
   const isOwner = !!detail && detail.owner_id === me.id
   const reQaMode = firstQa?.status === 'succeeded' && !justFinished
+  /** 지금까지 검사한 범위(첫 QA + 이전 Re-QA가 더한 범위) — Re-QA에서 뺄 수 없다 */
+  const covered: QaScope[] = firstQa?.covered_scope ?? firstQa?.scope ?? []
+  const added = scope.filter((s) => !covered.includes(s))
+  const canReQa = targets.length > 0 || added.length > 0
 
   const runFirstQa = async () => {
     setSubmitting(true)
@@ -117,7 +127,7 @@ export function QaRunPage() {
     setActionError(null)
     try {
       reQaTargets.current = targets.map((t) => t.id)
-      setReQa(await startReQa(projectId))
+      setReQa(await startReQa(projectId, QA_SCOPES.map((s) => s.value).filter((v) => scope.includes(v) || covered.includes(v))))
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Re-QA를 시작하지 못했어요.')
     } finally {
@@ -133,7 +143,7 @@ export function QaRunPage() {
         crumbs={[{ label: detail?.name ?? '프로젝트', to: `/app/projects/${projectId}` }, { label: reQaMode ? 'Re-QA 실행' : '디자인 QA 실행' }]}
         title={reQaMode ? 'Re-QA 실행' : '디자인 QA 실행'}
         description={reQaMode
-          ? '수정 완료된 문제를 첫 QA와 같은 기준으로 다시 검증합니다. 결과는 이전 QA와 비교해 표시돼요.'
+          ? '수정 완료된 문제를 첫 QA와 같은 기준으로 다시 검증하고, 새로 고른 검증 범위가 있으면 함께 비교합니다.'
           : '검증 범위와 비교 대상을 선택하면 Figma 디자인과 구현 코드를 자동으로 비교합니다.'}
         actions={justFinished ? <Link to={`/app/projects/${projectId}/results`} className="text-sm font-medium text-qa-primary-hover hover:underline">QA 결과 목록</Link> : undefined}
       />
@@ -141,23 +151,33 @@ export function QaRunPage() {
         <>
           <WorkflowStepper current={reQaMode ? 5 : justFinished ? 2 : 1} />
           {reQaMode
-            ? <ReQaBanner run={reQa} running={reRunning} onRetry={runReQa} canRun={isOwner && targets.length > 0 && !submitting} />
+            ? <ReQaBanner run={reQa} running={reRunning} onRetry={runReQa} canRun={isOwner && canReQa && !submitting} />
             : <FirstQaBanner run={firstQa} running={firstRunning} justFinished={justFinished} projectId={projectId}
                 onRetry={runFirstQa} canRun={isOwner && scope.length > 0 && !submitting} />}
 
           <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <div className="flex min-w-0 flex-col gap-6">
               <TargetSummary detail={detail} analysis={analysis} firstQa={firstQa} reQaMode={reQaMode} />
-              <ScopeCard scope={scope} onChange={setScope} locked={reQaMode || firstRunning || justFinished || !isOwner} />
+              <ScopeCard scope={scope} onChange={setScope} fixed={reQaMode ? covered : []}
+                locked={(reQaMode && (reRunning || covered.length === QA_SCOPES.length)) || firstRunning || justFinished || !isOwner}
+                lockReason={justFinished ? '첫 QA 때 고른 범위예요.'
+                  : firstRunning || (reQaMode && reRunning) ? '실행 중에는 바꿀 수 없어요.'
+                    : !isOwner ? '검증 범위는 소유자만 고를 수 있어요.'
+                      : reQaMode && covered.length === QA_SCOPES.length ? '모든 검증 범위를 이미 검사했어요. Re-QA는 수정 완료된 문제를 다시 확인해요.'
+                        : null}
+                fixedReason={reQaMode ? '잠긴 범위는 지금까지 검사한 범위라 수정 완료된 문제를 다시 확인해요. 새로 고른 범위는 매핑된 화면 전체를 새로 비교해 차이를 새 문제로 만들어요.' : null} />
               {reQaMode ? <ReQaTargets targets={targets} projectId={projectId} /> : <CompareTargets detail={detail} mapping={mapping} scope={scope} />}
               {reQaMode ? (
                 <ActionBar
-                  title={reRunning ? `Re-QA 실행 중 · ${formatDateTime(reQa!.created_at)} 시작` : `Re-QA 준비 · 재검증 대상 ${targets.length}건 (수정 완료)`}
+                  title={reRunning ? `Re-QA 실행 중 · ${formatDateTime(reQa!.created_at)} 시작`
+                    : `Re-QA 준비 · 재검증 대상 ${targets.length}건 (수정 완료)${added.length > 0 ? ` · 새 검증 범위 ${added.length}개` : ''}`}
                   sub={reRunning ? '실행이 끝날 때까지 새 Re-QA를 시작할 수 없어요.'
-                    : targets.length === 0 ? '담당 팀이 문제를 수정 완료로 바꾸면 Re-QA를 실행할 수 있어요.'
-                      : `수정 완료로 표시된 ${targets.length}건을 다시 비교해요. 나머지 문제는 이번 Re-QA 대상이 아니에요.`}
+                    : !canReQa ? '담당 팀이 문제를 수정 완료로 바꾸거나, 아직 검사하지 않은 검증 범위를 고르면 Re-QA를 실행할 수 있어요.'
+                      : [targets.length > 0 ? `수정 완료로 표시된 ${targets.length}건을 다시 비교해요.` : null,
+                        added.length > 0 ? `새로 고른 ${added.map(scopeLabel).join('·')}은(는) 매핑된 화면 전체를 비교해 차이를 새 문제로 만들어요.` : null]
+                        .filter(Boolean).join(' ')}
                   button={
-                    <button type="button" className={PRIMARY_BTN} disabled={!isOwner || reRunning || targets.length === 0 || submitting}
+                    <button type="button" className={PRIMARY_BTN} disabled={!isOwner || reRunning || !canReQa || submitting}
                       onClick={runReQa} title={isOwner ? undefined : 'Re-QA는 프로젝트 소유자만 실행할 수 있어요'}>
                       {reRunning ? <><Icon name="refresh" className="h-4 w-4 animate-spin" />Re-QA 실행 중</> : 'Re-QA 실행'}
                     </button>}
@@ -278,22 +298,55 @@ function SourceRow({ icon, title, sub, ok }: { icon: string; title: string; sub:
   )
 }
 
-function ScopeCard({ scope, onChange, locked }: { scope: QaScope[]; onChange: (s: QaScope[]) => void; locked: boolean }) {
-  const toggle = (v: QaScope) => onChange(scope.includes(v) ? scope.filter((s) => s !== v) : QA_SCOPES.map((s) => s.value).filter((s) => s === v || scope.includes(s)))
+function scopeLabel(v: QaScope): string {
+  return QA_SCOPES.find((s) => s.value === v)?.label ?? v
+}
+
+/** fixed — 켠 채로 잠근 범위(Re-QA의 지금까지 검사한 범위). 나머지만 사람이 켜고 끈다 */
+function ScopeCard({ scope, onChange, locked, lockReason, fixed, fixedReason }: {
+  scope: QaScope[]
+  onChange: (s: QaScope[]) => void
+  locked: boolean
+  lockReason: string | null
+  fixed: QaScope[]
+  fixedReason: string | null
+}) {
+  const toggle = (v: QaScope) => {
+    if (fixed.includes(v)) return
+    onChange(scope.includes(v) ? scope.filter((s) => s !== v) : QA_SCOPES.map((s) => s.value).filter((s) => s === v || scope.includes(s)))
+  }
   return (
     <section className={`${CARD} p-5`}>
       <SectionTitle n={2} aside={<span className="text-xs text-qa-text-sub">{scope.length}개 선택</span>}>QA 검증 범위</SectionTitle>
+      <p className="mt-1 text-xs text-qa-text-sub">고른 범위만 Figma 값과 코드 값을 비교해요.</p>
       <fieldset disabled={locked} className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
         <legend className="sr-only">QA 검증 범위</legend>
-        {QA_SCOPES.map((s) => (
-          <label key={s.value} className={`flex items-center gap-2 text-sm text-black ${locked ? 'cursor-default' : 'cursor-pointer'}`}>
-            <input type="checkbox" checked={scope.includes(s.value)} onChange={() => toggle(s.value)}
-              className="h-4 w-4 accent-qa-primary-hover disabled:opacity-70" />
-            {s.label}
+        {QA_SCOPES.map((s) => {
+          const isFixed = fixed.includes(s.value)
+          const isNew = fixed.length > 0 && !isFixed && scope.includes(s.value)
+          return (
+          <label key={s.value} className={`flex items-start gap-2 text-sm text-black ${locked || isFixed ? 'cursor-default' : 'cursor-pointer'}`}>
+            <input type="checkbox" checked={isFixed || scope.includes(s.value)} onChange={() => toggle(s.value)} disabled={isFixed}
+              className="mt-0.5 h-4 w-4 flex-none accent-qa-primary-hover disabled:opacity-70" />
+            <span>
+              <span className="flex items-center gap-1.5">
+                {s.label}
+                {isFixed && <Icon name="lock" className="h-3.5 w-3.5 text-qa-text-sub" />}
+                {isNew && <span className="rounded bg-[#eef4ff] px-1.5 py-0.5 text-[11px] font-medium text-qa-primary-hover">새 범위</span>}
+              </span>
+              <span className="block text-xs text-qa-text-sub">{s.detail}</span>
+            </span>
           </label>
-        ))}
+          )
+        })}
       </fieldset>
-      {!locked && scope.length === 0 && <p role="alert" className="mt-3 text-xs text-qa-warning">검증 범위를 하나 이상 골라 주세요.</p>}
+      {locked && lockReason && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-qa-text-sub"><Icon name="lock" className="h-3.5 w-3.5 flex-none" />{lockReason}</p>
+      )}
+      {!locked && fixedReason && (
+        <p className="mt-3 flex items-start gap-1.5 text-xs text-qa-text-sub"><Icon name="lock" className="mt-px h-3.5 w-3.5 flex-none" />{fixedReason}</p>
+      )}
+      {!locked && fixed.length === 0 && scope.length === 0 && <p role="alert" className="mt-3 text-xs text-qa-warning">검증 범위를 하나 이상 골라 주세요.</p>}
     </section>
   )
 }
@@ -407,7 +460,7 @@ function HistoryCard({ firstQa, reQa, running }: { firstQa: ProjectRun | null; r
             <div className="mt-2 text-sm font-medium text-black">첫 QA · {formatDateTime(firstQa.finished_at ?? firstQa.created_at)}</div>
             <div className="mt-1 text-xs text-qa-text-sub">
               FAIL {firstQa.created_count}건 발견{reQa?.status === 'succeeded'
-                ? ` · 최근 Re-QA ${formatDateTime(reQa.finished_at ?? reQa.created_at)} (해결 ${reQa.created_count} · 재실패 ${reQa.failed_count ?? 0})`
+                ? ` · 최근 Re-QA ${formatDateTime(reQa.finished_at ?? reQa.created_at)} (해결 ${reQa.created_count} · 재실패 ${reQa.failed_count ?? 0}${reQa.added_scope?.length ? ` · 새 범위 ${reQa.added_scope.map(scopeLabel).join('·')}에서 ${reQa.found_count ?? 0}건 발견` : ''})`
                 : ' · 아직 Re-QA 기록 없음'}
             </div>
           </>

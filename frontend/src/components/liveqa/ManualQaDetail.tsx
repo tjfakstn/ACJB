@@ -34,7 +34,7 @@ export function ManualQaDetail({ issue, projectId, members, onClose, onAssigned,
   const capture = m.capture_id ? (
     <div className="relative overflow-hidden rounded-lg border border-qa-border bg-qa-surface">
       <img src={captureImageUrl(projectId, m.capture_id)} alt={`${manualQaId(m.pin_number)} 등록 당시 화면`} className="block w-full" />
-      {markerOnCapture && <Marker n={m.pin_number} x={m.anchor.x_ratio} y={m.anchor.y_ratio} />}
+      {markerOnCapture && m.anchor && <Marker n={m.pin_number} x={m.anchor.x_ratio} y={m.anchor.y_ratio} />}
     </div>
   ) : null
 
@@ -59,10 +59,10 @@ export function ManualQaDetail({ issue, projectId, members, onClose, onAssigned,
           {manualQaId(m.pin_number)} · {m.title}
         </h2>
         <div className="mt-1 text-xs text-qa-text-sub">
-          등록자 {reporter} · 핀 {m.pin_number} · {m.location_basis === 'capture_image' ? '첨부 이미지 기준' : `페이지 ${m.page_path}`} · 수동 QA
+          등록자 {reporter} · 핀 {m.pin_number} · {m.location_basis === 'capture_image' ? '첨부 이미지 기준' : m.location_basis === 'none' ? `위치 없이 등록${m.page_path ? ` · 페이지 ${m.page_path}` : ''}` : `페이지 ${m.page_path}`} · 수동 QA
         </div>
-        {m.location_basis === 'live_overlay' && m.page_path !== currentPath && (
-          <button type="button" onClick={() => onGoToPath(m.page_path)} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-qa-primary-hover hover:underline">
+        {m.location_basis === 'live_overlay' && m.page_path && m.page_path !== currentPath && (
+          <button type="button" onClick={() => onGoToPath(m.page_path!)} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-qa-primary-hover hover:underline">
             <Icon name="map-pin" className="h-3.5 w-3.5" />배포 화면을 {m.page_path}로 바꿔 핀 보기
           </button>
         )}
@@ -80,7 +80,7 @@ export function ManualQaDetail({ issue, projectId, members, onClose, onAssigned,
             )}
           </div>
           <div className="mt-1.5 flex items-center justify-between text-xs text-qa-text-sub">
-            <span>{m.capture_status === 'user_attached' ? '사용자 첨부' : m.capture_status === 'captured' ? `서버 캡처 · ${m.viewport.width}×${m.viewport.height}` : ''}</span>
+            <span>{m.capture_status === 'user_attached' ? '사용자 첨부' : m.capture_status === 'captured' ? `서버 캡처${m.viewport ? ` · ${m.viewport.width}×${m.viewport.height}` : ''}` : ''}</span>
             {m.capture_id && (
               <button type="button" onClick={() => setZoom(true)} className="inline-flex items-center gap-1 font-medium text-qa-primary-hover">
                 <Icon name="maximize" className="h-3.5 w-3.5" />확대
@@ -93,7 +93,7 @@ export function ManualQaDetail({ issue, projectId, members, onClose, onAssigned,
             { label: '문제 설명', value: <span className="whitespace-pre-wrap">{issue.description}</span> },
             ...(m.expected_result ? [{ label: '기대 결과', value: m.expected_result }] : []),
             ...(m.actual_result ? [{ label: '실제 결과', value: <span className="text-qa-warning">{m.actual_result}</span> }] : []),
-            { label: '연결 위치', value: `x ${m.anchor.x_px}, y ${m.anchor.y_px} · 기준 ${m.viewport.width}×${m.viewport.height}` },
+            { label: '연결 위치', value: m.anchor && m.viewport ? `x ${m.anchor.x_px}, y ${m.anchor.y_px} · 기준 ${m.viewport.width}×${m.viewport.height}` : '위치 없이 등록' },
           ]} />
           <p className="mt-3 rounded-lg bg-qa-surface px-3 py-2 text-xs text-qa-text-sub">
             수동 등록 항목은 사람이 확인한 문제라 자동 검사 PASS/FAIL 판정이 없어요. 수정 진행 상태로 관리해요.
@@ -115,7 +115,7 @@ export function ManualQaDetail({ issue, projectId, members, onClose, onAssigned,
             </div>
             <div className="relative">
               <img src={captureImageUrl(projectId, m.capture_id)} alt="" className="block max-w-full" />
-              {markerOnCapture && <Marker n={m.pin_number} x={m.anchor.x_ratio} y={m.anchor.y_ratio} />}
+              {markerOnCapture && m.anchor && <Marker n={m.pin_number} x={m.anchor.x_ratio} y={m.anchor.y_ratio} />}
             </div>
           </div>
         </div>

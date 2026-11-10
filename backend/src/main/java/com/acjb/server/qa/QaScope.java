@@ -49,6 +49,17 @@ public enum QaScope {
         return Optional.empty();
     }
 
+    /** 저장된 쉼표 구분 값 → 범위. 없는 값은 건너뛴다 */
+    public static Set<QaScope> parseCsv(String csv) {
+        Set<QaScope> scope = EnumSet.noneOf(QaScope.class);
+        if (csv != null && !csv.isBlank()) {
+            for (String raw : csv.split(",")) {
+                parse(raw).ifPresent(scope::add);
+            }
+        }
+        return scope;
+    }
+
     /** 고른 범위 전체의 property — 정해진 순서(enum 순서) */
     public static List<StyleProperty> propertiesOf(Set<QaScope> scopes) {
         EnumSet<StyleProperty> all = EnumSet.noneOf(StyleProperty.class);

@@ -70,24 +70,60 @@ public class QaRunService {
         run.setScope(scope.stream().map(QaScope::value).collect(Collectors.joining(",")));
         run = runs.save(run);
         events.publishEvent(new FirstQaRequested(run.getId()));
-        return ProjectRunView.of(run);
+        return ProjectRunView.of(run, List.of());
     }
 
+    /**
+     * AC28 — scope를 빼면 지금까지 검사한 범위만 다시 판정한다. 검사한 범위는 뺄 수 없고(400), 그 밖의 범위는 새로 비교한다(2026-11-10).
+     * 검사 순서: 소유자(403) → 요청 형태(400) → 준비 상태(409)
+     */
     @Transactional
-    public ProjectRunView startReQa(Long projectId, Member requester) {
+    public ProjectRunView startReQa(Long projectId, JsonNode body, Member requester) {
         Project project = ownedProject(projectId, requester, "Re-QA는 프로젝트 소유자만 실행할 수 있어요.");
-        checkIdle(projectId);
-        if (issues.countByProjectIdAndStatusAndSource(projectId, IssueStatus.FIXED, IssueSource.FIRST_QA) == 0) {
-            throw notReady("수정 완료된 첫 QA 문제가 없어요. 담당 팀이 수정 완료로 바꾼 뒤에 실행할 수 있어요.");
+        Set<QaScope> covered = coveredScope(projectId);
+        Set<QaScope> scope = body == null || body.get("scope") == null || body.get("scope").isNull() ? EnumSet.noneOf(QaScope.class)
+            : parseScope(body);
+        if (!scope.isEmpty() && !scope.containsAll(covered)) {
+            throw ApiException.badRequest("지금까지 검사한 범위(" + values(covered) + ")는 Re-QA에서 뺄 수 없어요.");
         }
-        ProjectRun run = runs.save(new ProjectRun(project, RunKind.RE_QA, requester, clock.instant()));
+        Set<QaScope> added = EnumSet.noneOf(QaScope.class);
+        added.addAll(scope);
+        added.removeAll(covered);
+        checkIdle(projectId);
+        if (!added.isEmpty() && !runs.existsByProjectIdAndKindAndStatus(projectId, RunKind.FIRST_QA, RunStatus.SUCCEEDED)) {
+            throw notReady("첫 QA를 먼저 마쳐야 Re-QA에서 범위를 더할 수 있어요.");
+        }
+        if (added.isEmpty() && issues.countByProjectIdAndStatusAndSource(projectId, IssueStatus.FIXED, IssueSource.FIRST_QA) == 0) {
+            throw notReady("수정 완료된 첫 QA 문제가 없어요. 담당 팀이 수정 완료로 바꾼 뒤에 실행하거나, 검사하지 않은 범위를 더해 주세요.");
+        }
+        ProjectRun run = new ProjectRun(project, RunKind.RE_QA, requester, clock.instant());
+        Set<QaScope> all = EnumSet.noneOf(QaScope.class);
+        all.addAll(covered);
+        all.addAll(added);
+        run.setScope(values(all));
+        run.setAddedScope(values(added));
+        run = runs.save(run);
         events.publishEvent(new ReQaRequested(run.getId()));
-        return ProjectRunView.of(run);
+        return ProjectRunView.of(run, covered.stream().map(QaScope::value).toList());
     }
 
     @Transactional(readOnly = true)
     public ProjectRunView latest(Long projectId, RunKind kind) {
-        return runs.findFirstByProjectIdAndKindOrderByCreatedAtDescIdDesc(projectId, kind).map(ProjectRunView::of).orElse(null);
+        List<String> covered = kind == RunKind.ANALYSIS ? null : coveredScope(projectId).stream().map(QaScope::value).toList();
+        return runs.findFirstByProjectIdAndKindOrderByCreatedAtDescIdDesc(projectId, kind).map(r -> ProjectRunView.of(r, covered)).orElse(null);
+    }
+
+    /** 지금까지 검사한 범위 — 성공한 첫 QA의 범위 ∪ 성공한 Re-QA가 더한 범위(AC28, 2026-11-10). 정해진 순서(enum 순서) */
+    private Set<QaScope> coveredScope(Long projectId) {
+        Set<QaScope> covered = EnumSet.noneOf(QaScope.class);
+        for (ProjectRun r : runs.findByProjectIdAndKindInAndStatus(projectId, List.of(RunKind.FIRST_QA, RunKind.RE_QA), RunStatus.SUCCEEDED)) {
+            covered.addAll(QaScope.parseCsv(r.getKind() == RunKind.FIRST_QA ? r.getScope() : r.getAddedScope()));
+        }
+        return covered;
+    }
+
+    private static String values(Set<QaScope> scope) {
+        return scope.stream().map(QaScope::value).collect(Collectors.joining(","));
     }
 
     private Project ownedProject(Long projectId, Member requester, String forbidden) {

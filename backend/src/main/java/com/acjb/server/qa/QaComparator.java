@@ -20,6 +20,14 @@ public interface QaComparator {
 
     ReQaResult recheck(ReQaInput input);
 
+    /**
+     * 연결된 브랜치의 최신 커밋 — Re-QA가 판정할 fixed 이슈 없이 새 범위만 비교할 때 그 커밋을 읽는다(AC28, 2026-11-10).
+     * null이면 비교 분석의 커밋을 읽는다(코드를 다시 읽지 않는 가짜 비교기)
+     */
+    default String latestCommit(String repo, String branch) {
+        return null;
+    }
+
     /** 매핑된 노드 하나(최근 성공한 비교 분석의 노드 짝) */
     record Target(String frameId, String frameName, String nodeId, String nodeName, String codePath, String codeSymbol) {
     }

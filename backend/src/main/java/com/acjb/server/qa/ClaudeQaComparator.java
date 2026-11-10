@@ -206,6 +206,16 @@ public class ClaudeQaComparator implements QaComparator {
     // ------------------------------------------------------------------ Re-QA
 
     @Override
+    public String latestCommit(String repo, String branch) {
+        String[] ownerRepo = split(repo);
+        try {
+            return github.commitSha(ownerRepo[0], ownerRepo[1], branch);
+        } catch (GithubApiException e) {
+            throw new QaFailedException("GitHub 브랜치의 최신 커밋을 읽지 못했어요. 연결 상태를 확인해 주세요.");
+        }
+    }
+
+    @Override
     public ReQaResult recheck(ReQaInput input) {
         ready(input.figmaFileKey());
         String[] ownerRepo = split(input.repo());

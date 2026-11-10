@@ -73,6 +73,17 @@ public class ProjectRun {
     private String scope;
 
     /** 개발용 가짜 비교기로 돈 실행(시연용 값, 2026-11-08) */
+    /** re_qa에서 새로 더해 비교한 범위(쉼표 구분, 2026-11-10). 다른 kind는 null */
+    @Column(name = "added_scope", length = 100)
+    private String addedScope;
+
+    /** re_qa가 새로 더한 범위에서 만든 이슈 수·근거가 모자라 버린 수(N17). 다른 kind는 null */
+    @Column(name = "found_count")
+    private Integer foundCount;
+
+    @Column(name = "found_dropped_count")
+    private Integer foundDroppedCount;
+
     @Column(name = "demo", nullable = false)
     private boolean demo;
 
@@ -106,8 +117,19 @@ public class ProjectRun {
 
     /** Re-QA 성공 — pass 수(created)·fail 수·건너뛴 수(dropped, N18) */
     public void succeedReQa(String commitSha, int passed, int failed, int skipped, Instant now) {
+        succeedReQa(commitSha, passed, failed, skipped, 0, 0, now);
+    }
+
+    /** Re-QA 성공 — 새로 더한 범위에서 만든 이슈 수(found)·버린 수(foundDropped)도 함께 */
+    public void succeedReQa(String commitSha, int passed, int failed, int skipped, int found, int foundDropped, Instant now) {
         this.failedCount = failed;
+        this.foundCount = found;
+        this.foundDroppedCount = foundDropped;
         succeed(commitSha, passed, skipped, now);
+    }
+
+    public void setAddedScope(String addedScope) {
+        this.addedScope = addedScope;
     }
 
     public void markDemo() {

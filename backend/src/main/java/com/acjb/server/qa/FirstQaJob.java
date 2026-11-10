@@ -2,13 +2,6 @@ package com.acjb.server.qa;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -21,22 +14,9 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import com.acjb.server.domain.DesignCodeMapping;
-import com.acjb.server.domain.IssueStatus;
-import com.acjb.server.domain.Project;
 import com.acjb.server.domain.ProjectRun;
-import com.acjb.server.domain.QAIssue;
-import com.acjb.server.domain.RunKind;
-import com.acjb.server.domain.RunStatus;
-import com.acjb.server.domain.StatusHistory;
-import com.acjb.server.domain.StyleMismatch;
-import com.acjb.server.domain.StyleProperty;
 import com.acjb.server.recheck.EmbeddingSourcesChanged;
-import com.acjb.server.repository.DesignCodeMappingRepository;
 import com.acjb.server.repository.ProjectRunRepository;
-import com.acjb.server.repository.QAIssueRepository;
-import com.acjb.server.repository.StatusHistoryRepository;
-import com.acjb.server.repository.StyleMismatchRepository;
 
 /**
  * 첫 QA(AC23) 실행. 요청 트랜잭션이 커밋된 뒤 별도 스레드에서 돈다.
@@ -50,23 +30,16 @@ public class FirstQaJob {
     private static final Logger log = LoggerFactory.getLogger(FirstQaJob.class);
 
     private final ProjectRunRepository runs;
-    private final DesignCodeMappingRepository mappings;
-    private final QAIssueRepository issues;
-    private final StyleMismatchRepository mismatches;
-    private final StatusHistoryRepository histories;
+    private final FirstQaSupport support;
     private final QaComparator comparator;
     private final ApplicationEventPublisher events;
     private final TransactionTemplate tx;
     private final Clock clock;
 
-    public FirstQaJob(ProjectRunRepository runs, DesignCodeMappingRepository mappings, QAIssueRepository issues,
-                      StyleMismatchRepository mismatches, StatusHistoryRepository histories, QaComparator comparator,
+    public FirstQaJob(ProjectRunRepository runs, FirstQaSupport support, QaComparator comparator,
                       ApplicationEventPublisher events, PlatformTransactionManager txManager, Clock clock) {
         this.runs = runs;
-        this.mappings = mappings;
-        this.issues = issues;
-        this.mismatches = mismatches;
-        this.histories = histories;
+        this.support = support;
         this.comparator = comparator;
         this.events = events;
         this.tx = new TransactionTemplate(txManager);
@@ -111,65 +84,18 @@ public class FirstQaJob {
     }
 
     private QaComparator.FirstQaInput inputs(ProjectRun run) {
-        Project p = run.getProject();
-        ProjectRun analysis = runs.findFirstByProjectIdAndKindAndStatusOrderByFinishedAtDescIdDesc(p.getId(), RunKind.ANALYSIS,
-            RunStatus.SUCCEEDED).orElseThrow(() -> new QaFailedException("성공한 비교 분석이 없어요. 비교 분석을 먼저 마쳐 주세요."));
-        Set<QaScope> scope = parseScope(run.getScope());
-        // 노드 짝이 있으면 노드 단위로 비교한다. 노드 짝이 하나도 없으면 프레임 짝을 그 프레임 전체로 본다
-        Map<String, String> frameNames = new LinkedHashMap<>();
-        List<QaComparator.Target> nodes = new ArrayList<>();
-        List<QaComparator.Target> frames = new ArrayList<>();
-        for (DesignCodeMapping m : mappings.findOrdered(analysis.getId())) {
-            frameNames.put(m.getFrameId(), m.getFrameName());
-            if (m.getNodeId() == null) {
-                frames.add(new QaComparator.Target(m.getFrameId(), m.getFrameName(), m.getFrameId(), m.getFrameName(), m.getCodePath(), null));
-            } else {
-                nodes.add(new QaComparator.Target(m.getFrameId(), m.getFrameName(), m.getNodeId(), m.getNodeName(), m.getCodePath(),
-                    m.getCodeSymbol()));
-            }
-        }
-        List<QaComparator.Target> targets = nodes.isEmpty() ? frames : nodes;
-        if (targets.isEmpty()) {
-            throw new QaFailedException("비교할 디자인-코드 매핑이 없어요. 연결한 Figma 페이지·섹션과 GitHub 브랜치를 확인해 주세요.");
-        }
-        return new QaComparator.FirstQaInput(p.getGithubRepo(), analysis.getCommitSha(), p.getFigmaFileKey(), scope, QaScope.propertiesOf(scope),
-            targets);
+        return support.input(run.getProject(), parseScope(run.getScope()), null);
     }
 
     private void save(Long runId, QaComparator.FirstQaInput input, QaComparator.FirstQaResult result, boolean demo) {
         ProjectRun run = runs.findById(runId).orElseThrow();
-        Project project = run.getProject();
-        Map<String, QaComparator.Target> byNode = new LinkedHashMap<>();
-        input.targets().forEach(t -> byNode.put(t.nodeId(), t));
-        Set<StyleProperty> allowed = EnumSet.noneOf(StyleProperty.class);
-        allowed.addAll(input.properties());
-        int created = 0;
-        int dropped = result.dropped();
-        for (QaComparator.Finding f : result.findings()) {
-            QaComparator.Target t = byNode.get(f.nodeId());
-            // N17 — 입력에 없는 노드, 고른 범위 밖 property, 값이 하나라도 빈 차이, 같은 값은 버린다
-            if (t == null || f.property() == null || !allowed.contains(f.property()) || isBlank(f.expectedValue())
-                || isBlank(f.actualValue()) || isBlank(f.codePath()) || f.expectedValue().equals(f.actualValue())) {
-                dropped++;
-                continue;
-            }
-            // 비교한 하위 요소가 노드 자신이 아니면 "노드 > 요소"로 적는다 — 어느 요소인지 다시 찾지 않게
-            String elementId = isBlank(f.elementId()) ? t.nodeId() : f.elementId();
-            String where = isBlank(f.elementName()) || elementId.equals(t.nodeId()) ? t.nodeName() : t.nodeName() + " > " + f.elementName();
-            StyleMismatch m = mismatches.save(StyleMismatch.firstQa(project, t.frameId(), t.frameName(), elementId, f.property(),
-                f.expectedValue(), f.actualValue(), f.codePath(), f.codeLine()));
-            QAIssue issue = issues.save(QAIssue.firstQa(project, run,
-                QaText.description(where, f.property(), f.expectedValue(), f.actualValue(), demo), t.frameName(), where,
-                m, run.getRequestedBy()));
-            histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, run.getRequestedBy()));
-            created++;
-        }
+        FirstQaSupport.Saved saved = support.save(run, input, result, demo);
         if (demo) {
             run.markDemo();
         }
-        run.succeed(result.commitSha(), created, dropped, clock.instant());
-        if (created > 0) {
-            events.publishEvent(new EmbeddingSourcesChanged(project.getId()));
+        run.succeed(result.commitSha(), saved.created(), saved.dropped(), clock.instant());
+        if (saved.created() > 0) {
+            events.publishEvent(new EmbeddingSourcesChanged(run.getProject().getId()));
         }
     }
 
@@ -179,14 +105,6 @@ public class FirstQaJob {
     }
 
     static Set<QaScope> parseScope(String csv) {
-        Set<QaScope> scope = EnumSet.noneOf(QaScope.class);
-        if (csv != null && !csv.isBlank()) {
-            Arrays.stream(csv.split(",")).map(QaScope::parse).flatMap(Optional::stream).forEach(scope::add);
-        }
-        return scope;
-    }
-
-    private static boolean isBlank(String s) {
-        return s == null || s.isBlank();
+        return QaScope.parseCsv(csv);
     }
 }

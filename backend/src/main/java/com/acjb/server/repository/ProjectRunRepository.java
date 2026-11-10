@@ -20,4 +20,7 @@ public interface ProjectRunRepository extends JpaRepository<ProjectRun, Long> {
 
     /** 목록 카드의 "마지막 분석" — 마지막으로 성공한 실행(AC15) */
     Optional<ProjectRun> findFirstByProjectIdAndKindAndStatusOrderByFinishedAtDescIdDesc(Long projectId, RunKind kind, RunStatus status);
+
+    /** 성공한 첫 QA·Re-QA — 지금까지 검사한 범위(covered_scope, AC28) */
+    java.util.List<ProjectRun> findByProjectIdAndKindInAndStatus(Long projectId, java.util.Collection<RunKind> kinds, RunStatus status);
 }

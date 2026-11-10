@@ -139,6 +139,43 @@ public class FigmaRestClient implements FigmaClient {
         return result;
     }
 
+    @Override
+    public Map<String, Box> bounds(String fileKey, List<String> ids) {
+        JsonNode nodes = requireObject(get("/v1/files/{key}/nodes?ids={ids}&depth=1", fileKey, String.join(",", ids)), "nodes");
+        Map<String, Box> result = new LinkedHashMap<>();
+        for (String id : ids) {
+            JsonNode entry = nodes.get(id);
+            if (entry == null || entry.isNull()) {
+                continue;
+            }
+            JsonNode box = requireObject(entry, "document").get("absoluteBoundingBox");
+            if (box == null || !box.isObject()) {
+                continue;
+            }
+            JsonNode x = box.get("x");
+            JsonNode y = box.get("y");
+            JsonNode w = box.get("width");
+            JsonNode h = box.get("height");
+            if (x != null && x.isNumber() && y != null && y.isNumber() && w != null && w.isNumber() && h != null && h.isNumber()
+                && w.asDouble() > 0 && h.asDouble() > 0) {
+                result.put(id, new Box(x.asDouble(), y.asDouble(), w.asDouble(), h.asDouble()));
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public Optional<String> renderUrl(String fileKey, String nodeId, double scale) {
+        JsonNode root = get("/v1/images/{key}?ids={ids}&format=png&scale=" + scale, fileKey, nodeId);
+        JsonNode images = root.get("images");
+        if (images == null || !images.isObject()) {
+            throw new FigmaApiException("Figma 응답에 images 객체가 없습니다.");
+        }
+        JsonNode url = images.get(nodeId);
+        // Figma는 렌더링할 수 없는 노드(보이지 않음·크기 0)를 null로 돌려준다
+        return url == null || !url.isString() || url.asString().isBlank() ? Optional.empty() : Optional.of(url.asString());
+    }
+
     private JsonNode get(String path, String fileKey, String ids) {
         if (!configured) {
             throw new FigmaApiException("Figma 토큰(FIGMA_ACCESS_TOKEN)이 설정되지 않았습니다.");

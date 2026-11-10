@@ -59,13 +59,20 @@ spring:
 
 server:
   port: 8080
+  # 배포(2026-11-10): Caddy가 HTTPS를 끝내고 넘긴다 — X-Forwarded-* 를 믿어야 OAuth 콜백 주소({baseUrl})가 https 도메인이 된다
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        # 배포에서는 true(HTTPS만). 로컬 http 개발은 false
+        secure: ${SESSION_COOKIE_SECURE:false}
 
 app:
   # parse(AC8) — 모델은 parse_query.md 실패 모드 점검표를 검증한 모델과 맞춘다(2026-11-04 설만수 결정)
   # 초대 메일(AC17) — 팀 공용 Gmail 계정. 수락 링크는 프론트의 초대 페이지({token}에 원문 토큰)
   invite:
     mail-from: ${MAIL_USERNAME:}
-    accept-url: http://localhost:5173/invitations/{token}
+    accept-url: ${APP_BASE_URL:http://localhost:5173}/invitations/{token}
   # Figma 동기화 — 토큰은 backend/.env의 FIGMA_ACCESS_TOKEN(로그에 남기지 않는다)
   figma:
     access-token: ${FIGMA_ACCESS_TOKEN:}
@@ -118,12 +125,12 @@ app:
     timeout: 30s
   # 프론트(client) 로컬 개발 origin — frontend/ 스캐폴딩 완료로 확정 (Vite 기본 포트 5173)
   cors:
-    allowed-origins:
-      - http://localhost:5173
+    # 쉼표로 여러 개. 배포에서는 프론트와 API가 같은 도메인이라 그 주소 하나
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173}
   oauth2:
     # 구글 로그인 성공 후 리다이렉트할 프론트 주소. 쿠키는 host 기준(포트 무관)이라
     # localhost:8080에서 만든 세션 쿠키가 localhost:5173 요청에도 그대로 붙음.
-    # TODO: 실제 배포 도메인 확정되면 프로필별로 분리
-    login-success-redirect: http://localhost:5173/
+    # 배포에서는 APP_BASE_URL(예: https://qating.example.com)
+    login-success-redirect: ${APP_BASE_URL:http://localhost:5173}/
     # 로그아웃 후 돌아갈 프론트 주소(로그인 화면). openapi의 "'/'로 리다이렉트"는 프론트의 '/'다
-    logout-success-redirect: http://localhost:5173/
+    logout-success-redirect: ${APP_BASE_URL:http://localhost:5173}/

@@ -13,11 +13,17 @@ export function itemId(i: QaIssue): string {
   return i.manual_qa ? manualQaId(i.manual_qa.pin_number) : `#${i.id}`
 }
 
-export function QaItemList({ issues, members, selectedId, onSelect }: {
+export function QaItemList({ issues, members, selectedId, onSelect, onRegister, registerHint, registerActive }: {
   issues: QaIssue[]
   members: ProjectMember[]
   selectedId: string | null
   onSelect: (id: string) => void
+  /** [수동 QA 등록] — 배포 화면 툴바보다 눈에 잘 띄는 목록 머리에 둔다(2026-11-10 설만수 요청) */
+  onRegister: () => void
+  /** 지금 위치를 찍을 수 없을 때 그 이유. null이면 바로 등록 모드로 들어간다 */
+  registerHint: string | null
+  /** 등록 모드·작성 중이면 버튼을 눌린 상태로 보여 준다 */
+  registerActive: boolean
 }) {
   const [tab, setTab] = useState<SourceTab>('all')
   const [status, setStatus] = useState<StatusFilter>('all')
@@ -49,7 +55,18 @@ export function QaItemList({ issues, members, selectedId, onSelect }: {
         <div className="flex items-center gap-2">
           <h2 className="text-base font-bold text-black">QA 항목</h2>
           <span className="text-xs font-medium text-qa-text-sub">{issues.length}개</span>
+          <button type="button" onClick={onRegister} aria-pressed={registerActive}
+            title={registerHint ?? '배포 화면에서 문제 위치를 클릭해 수동 QA를 등록해요'}
+            className={`ml-auto inline-flex h-8 items-center gap-1 rounded-lg px-3 text-xs font-medium ${
+              registerActive ? 'bg-[#7c3aed] text-white' : 'bg-qa-primary text-white hover:bg-qa-primary-hover'}`}>
+            <Icon name={registerActive ? 'map-pin' : 'plus'} className="h-3.5 w-3.5" />
+            {registerActive ? '위치 찍는 중' : '수동 QA 등록'}
+          </button>
         </div>
+        {registerHint && <p className="mt-2 text-xs text-[#a85a00]">{registerHint}</p>}
+        {registerActive && !registerHint && (
+          <p className="mt-2 text-xs text-[#7c3aed]">위쪽 배포 화면에서 문제가 있는 위치를 클릭하세요 · Esc로 취소</p>
+        )}
         <label className="mt-3 flex h-9 items-center gap-2 rounded-lg border border-qa-border px-3">
           <Icon name="search" className="h-4 w-4 text-qa-text-sub" />
           <span className="sr-only">QA 항목 검색</span>
@@ -106,7 +123,14 @@ export function QaItemList({ issues, members, selectedId, onSelect }: {
         })}
         {shown.length === 0 && (
           <li className="px-4 py-10 text-center text-xs text-qa-text-sub">
-            {issues.length === 0 ? '아직 QA 항목이 없어요. 배포 화면에서 [QA 등록]으로 문제 위치를 찍어 등록해 보세요.' : '조건에 맞는 항목이 없어요'}
+            {issues.length === 0 || (tab === 'manual' && manual.length === 0) ? (
+              <>
+                아직 수동 QA가 없어요. 배포 화면에서 발견한 문제를 위치와 함께 등록해 보세요.
+                <button type="button" onClick={onRegister} className="mx-auto mt-3 flex h-9 items-center gap-1 rounded-lg border border-qa-primary px-3 text-xs font-medium text-qa-primary-hover hover:bg-qa-primary/5">
+                  <Icon name="plus" className="h-3.5 w-3.5" />수동 QA 등록
+                </button>
+              </>
+            ) : '조건에 맞는 항목이 없어요'}
           </li>
         )}
       </ul>

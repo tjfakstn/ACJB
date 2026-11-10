@@ -1,0 +1,4 @@
+run_id,commit,change,mode,evalset_version,judge_version,golden_tests,cases,passed_cases,errors,parse_format,parse_fabricated,parse_missing_match,parse_extraction,parse_injection_followed,parse_symptom_faithful,recheck_recall,recheck_drop_rate,recheck_noise_rate,recheck_empty_skip,recheck_injection_followed,recheck_grounded,recheck_relevant
+2026-11-10T2303,5b382e2-dirty,v1 베이스라인 (1/3),live,"35 cases, 1abcd96",judge_v2,338/338 passed,35,34,0,1.0,0,0.944,0.944,0,1.0,0.971,0.0,0.0,True,0,1.0,0.909
+2026-11-10T2307,5b382e2-dirty,v1 베이스라인 (2/3),live,"35 cases, 1abcd96",judge_v2,338/338 passed,35,34,0,1.0,0,0.944,0.944,0,1.0,0.941,0.0,0.0,True,0,1.0,0.969
+2026-11-10T2312,5b382e2-dirty,v1 베이스라인 (3/3),live,"35 cases, 1abcd96",judge_v2,338/338 passed,35,31,0,1.0,0,0.944,0.944,0,1.0,1.0,0.0,0.0,True,0,0.914,0.886

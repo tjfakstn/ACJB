@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.8.0
+  version: 0.8.1
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -459,6 +459,54 @@ paths:
             image/webp: {}
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /projects/{projectId}/figma/frames/{frameId}/preview:
+    get:
+      tags: [Figma]
+      summary: 자동 QA 항목의 Figma 프레임 이미지와 비교한 노드 위치 (SPEC AC32, 2026-11-10)
+      description: >-
+        프로젝트 멤버 누구나. 연결된 Figma 파일에서 프레임을 PNG로 렌더링한 임시 이미지 주소, 프레임 크기, node_id가 있으면 그 노드의 프레임 기준 비율 상자.
+        id 형식 오류 400, Figma 미연결 409 NOT_READY, 토큰 없음 503 FIGMA_UNAVAILABLE, 프레임 없음 404, Figma 실패 502 CONNECTION_FAILED. 결과는 30분 기억한다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: frameId
+          in: path
+          required: true
+          schema: { type: string, example: '607:36654' }
+        - name: node_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      frame_id: { type: string }
+                      node_id: { type: string, nullable: true }
+                      image_url: { type: string, description: Figma가 준 임시 이미지 주소 }
+                      width: { type: integer }
+                      height: { type: integer }
+                      node_box:
+                        type: object
+                        nullable: true
+                        properties:
+                          x_ratio: { type: number }
+                          y_ratio: { type: number }
+                          w_ratio: { type: number }
+                          h_ratio: { type: number }
+                  error: { type: object, nullable: true, example: null }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /projects/{projectId}/manual-qa:
     post:
@@ -1657,6 +1705,7 @@ components:
       properties:
         id: { type: string, readOnly: true }
         frame_id: { type: string, nullable: true, description: 기준이 된 FigmaFrame }
+        node_id: { type: string, nullable: true, description: '비교한 Figma 노드(첫 QA·scan). 응답에만 담긴다(2026-11-10)' }
         screen: { type: string, nullable: true, description: 비교한 Screen(배포 화면) }
         property: { type: string, enum: [color, font_weight, font_family, radius, shadow, spacing, text] }
         expected_value: { type: string, description: Figma 기준값 }

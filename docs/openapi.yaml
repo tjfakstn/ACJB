@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.13.0
+  version: 0.15.0
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -2153,6 +2153,8 @@ components:
           description: 'GET·POST first-qa·re-qa 응답에만 — 이 프로젝트에서 지금까지 검사한 범위(성공한 첫 QA 범위 ∪ 성공한 Re-QA의 added_scope). Re-QA 화면은 이 범위를 잠근다'
         found_count: { type: integer, nullable: true, description: re_qa가 새로 더한 범위에서 만든 이슈 수. 다른 kind는 null }
         found_dropped_count: { type: integer, nullable: true, description: re_qa가 새로 더한 범위에서 근거가 모자라 버린 수(N17). 다른 kind는 null }
+        progress_done: { type: integer, nullable: true, description: '첫 QA·Re-QA(새로 더한 범위) 비교 진행률 — 비교한 Figma 요소 수(2026-11-10). 비교 시작 전·analysis는 null' }
+        progress_total: { type: integer, nullable: true, description: 비교할 Figma 요소 전체 수. 비교 시작 전·analysis는 null }
         demo: { type: boolean, description: 개발용 가짜 비교기로 돈 실행이면 true(시연용 값, 2026-11-08) }
         error_message: { type: string, nullable: true, description: 사용자에게 보여 줄 실패 사유 }
         created_at: { type: string, format: date-time }
@@ -2242,6 +2244,16 @@ components:
             items:
               type: array
               items: { $ref: '#/components/schemas/FrameMapping' }
+            unmapped_frames:
+              type: array
+              description: '코드 파일과 짝을 찾지 못한 프레임(2026-11-10) — 이슈가 아니라 확인해 볼 곳. Figma에서 모은 순서. 이 기록이 없던 이전 분석은 빈 배열'
+              items:
+                type: object
+                required: [frame_id, frame_name]
+                properties:
+                  frame_id: { type: string }
+                  frame_name: { type: string }
+                  section: { type: string, nullable: true, description: 속한 Figma 섹션 이름 }
         error: { type: object, nullable: true, example: null }
 
     ProjectRunResponse:

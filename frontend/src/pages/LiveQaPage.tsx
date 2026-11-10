@@ -45,6 +45,7 @@ export function LiveQaPage() {
   const [toast, setToast] = useState<{ text: string; sub: string } | null>(null)
   const selectedId = params.get('issue')
   const draftRef = useRef<Draft | null>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
   draftRef.current = draft
 
   const load = useCallback(async () => {
@@ -195,6 +196,29 @@ export function LiveQaPage() {
       : { text: `${team}에 배정했어요`, sub: `${notice} · QA Queue에서 수정 진행을 관리해요` })
   }
 
+  // 목록의 [수동 QA 등록] — 위치는 배포 화면에서 찍으므로 등록 모드를 켜고 화면을 배포 화면으로 올린다.
+  // 찍을 화면이 없으면 그 이유에 맞는 다음 단계로 보낸다(삽입 제한이면 스크린샷 첨부, 주소가 없으면 소유자에게 주소 입력)
+  const blocked = target?.embeddable === false
+  const canPick = surface.kind === 'image' ? !!surface.attachment : !!target?.url && !blocked
+  const registerHint = !target ? null
+    : canPick ? null
+      : blocked ? '이 사이트는 화면 삽입이 막혀 있어요 — 위에서 스크린샷을 첨부하면 그 이미지 위에서 등록할 수 있어요.'
+        : isOwner ? '배포 주소를 먼저 입력해 주세요.' : '소유자가 배포 주소를 입력하면 등록할 수 있어요.'
+  const startRegister = () => {
+    if (draft) {
+      previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+    if (canPick) {
+      setRegisterMode(true)
+      select(null)
+    } else if (!target?.url && isOwner) {
+      setEditingUrl(true)
+      return
+    }
+    previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const failMessage = error ?? loadError
   const ready = detail && issues && target
   const runLabel = run?.status === 'succeeded'
@@ -244,7 +268,7 @@ export function LiveQaPage() {
       {failMessage ? <ErrorCard message={failMessage} projectId={projectId} /> : !ready ? <Loading /> : (
         <>
           <WorkflowStepper current={currentStep(detail)} />
-          <div className="mt-6">
+          <div className="mt-6 scroll-mt-4" ref={previewRef}>
             <LivePreview
               projectId={projectId} target={target} path={path}
               onPathChange={(p) => { setPath(p); setSurface({ kind: 'live', attachment: null }) }}
@@ -283,7 +307,8 @@ export function LiveQaPage() {
           </div>
 
           <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(320px,440px)_minmax(0,1fr)]">
-            <QaItemList issues={issues} members={members} selectedId={draft ? null : selectedId} onSelect={(id) => { if (!draft) select(id) }} />
+            <QaItemList issues={issues} members={members} selectedId={draft ? null : selectedId} onSelect={(id) => { if (!draft) select(id) }}
+              onRegister={startRegister} registerHint={registerHint} registerActive={registerMode || !!draft} />
             {draft?.expanded ? (
               <section className="rounded-xl border border-[#7c3aed]/50 bg-white p-5" aria-label="수동 QA 작성">
                 <div className="flex items-center justify-between gap-2">

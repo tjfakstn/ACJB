@@ -1,0 +1,17 @@
+# DOMAIN이 실제 도메인이면 Let's Encrypt 인증서를 자동으로 받는다(80·443 포트가 열려 있어야 한다).
+# 로컬에서 시험할 때는 DOMAIN=:80 (HTTP만)
+{$DOMAIN} {
+	encode zstd gzip
+
+	# API·구글 로그인 콜백은 백엔드로 — 프론트와 같은 도메인이라 세션 쿠키·CSRF 쿠키가 그대로 붙는다
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+
+	# 그 밖은 SPA — 없는 경로는 index.html(React Router가 처리)
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

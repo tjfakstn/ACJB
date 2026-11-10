@@ -97,7 +97,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 | DB | MySQL | 개발 단계부터 MySQL 사용(2026-10-28 결정 — 배포 때 DB를 바꾸지 않는다). 접속 정보는 `.env`, 키는 `.env.example`에 추가 |
 | 인증 | Google OAuth2 (구현됨) | |
 | 외부 연동 | Figma API, GitHub API(공개 저장소 코드·커밋·PR 읽기 — 첫 QA 2026-11-07, 코드 추적 2026-11-10), Claude API(parse·비교 분석·첫 QA·이력 기반 점검 후보), Gmail SMTP(초대 메일), Voyage AI(임베딩 — 이력 기반 점검 후보 검색, 2026-11-05) | GitHub 이슈·PR 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
-| 인프라 / 배포 | TODO | |
+| 인프라 / 배포 | AWS Lightsail(서울, Ubuntu 24.04) 1대 + docker compose — Caddy(HTTPS·프론트 정적 파일)·백엔드·MySQL (2026-11-10) | 구성·절차는 `deploy/README.md`, 값은 서버의 `deploy/.env` |
 
 결정 배경: [docs/decision_log.md](docs/decision_log.md)
 
@@ -113,6 +113,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 ├── frontend/           # React + Vite 프로젝트
 ├── config/
 ├── data/
+├── deploy/             # 운영 배포(docker compose·Caddy·Dockerfile) — 절차는 deploy/README.md
 ├── docs/               # PROBLEM/SPEC/ontology/openapi/decision_log/ssot/research/spikes
 ├── evals/
 ├── src/qating/         # 데이터 모델 스키마(JSON Schema), 프롬프트

@@ -437,3 +437,11 @@
 - **왜**: QAting 저장소(`dev`)의 `frontend/src`가 실시간 QA·코드 추적·Re-QA 범위를 병합하며 약 42만 자(파일 45개)가 되어, 같은 저장소의 비교 분석이 "UI 코드가 너무 커요"로 실패했다. 분석 모델(`claude-sonnet-5-5`)의 입력 한도는 100만 토큰이라 100만 자(대략 수십만 토큰)도 들어가고, 코드 부분은 프롬프트 캐시로 다시 읽어 호출 비용 증가가 작다. 파일을 골라 줄이는 방식은 매핑 근거가 빠질 수 있어 이번에는 하지 않는다
 - **영향**: SPEC AC22, 서버 설정. 큰 저장소의 파일 고르기는 계속 다음 과제다
 - **결정자**: 설만수. 한도 변경이라 오단비 확인 필요
+
+## 2026-11-10 운영 배포 — AWS Lightsail 1대 + docker compose
+
+- **결정**: AWS Lightsail(서울, Ubuntu 24.04, 8GB) 한 대에 docker compose로 Caddy(HTTPS 자동 발급·프론트 정적 파일·`/api` 전달)·백엔드(Spring + 헤드리스 크로미움)·MySQL을 띄운다. 프론트와 API는 같은 도메인이다. 배포는 `main`에서 한다(구성·절차 `deploy/README.md`)
+- **왜**: 시연·사용자 확인을 위해 실제 주소가 필요했다(설만수). 한 서버·한 도메인이면 세션 쿠키·CSRF 쿠키·구글 로그인 콜백을 지금 구조 그대로 쓸 수 있고, scan의 크로미움도 서버 안에서 돈다. Lightsail은 EC2보다 설정·요금이 단순하다(디스크·트래픽·고정 IP 포함 월정액). 개발과 같은 MySQL을 쓴다(2026-10-28 결정 유지)
+- **세부**: 백엔드의 프론트 주소(로그인 후 이동·초대 링크)·CORS·세션 쿠키 secure를 환경 변수(`APP_BASE_URL`·`APP_CORS_ORIGINS`·`SESSION_COOKIE_SECURE`)로 받고, Caddy가 넘긴 `X-Forwarded-*`를 믿어 OAuth 콜백 주소가 https 도메인이 되게 한다. 운영에서는 가짜 비교기·localhost scan을 끈다
+- **영향**: AGENTS.md 7.2·7.3, `deploy/`, 서버 설정(application.yml). Google OAuth 리디렉션 URI 추가 필요
+- **결정자**: 설만수

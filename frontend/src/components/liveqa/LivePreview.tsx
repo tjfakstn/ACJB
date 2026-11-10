@@ -1,22 +1,29 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { captureImageUrl, type DeployTarget, type QaCapture, type QaIssue, manualQaId } from '../../lib/api'
+import { captureImageUrl, type DeployTarget, type FramePreview, type QaCapture, type QaIssue, manualQaId } from '../../lib/api'
 import { Icon } from '../common/Icon'
 import { LIVE_VIEWPORT } from './draft'
 
 // 위쪽 배포 화면(시안 W-01 Live Preview, M-01~M-03·M-09B·C).
 //  - 사이트는 1280×720 기준 iframe으로 띄우고 패널 너비에 맞춰 축소한다. 좌표는 언제나 1280×720 기준 픽셀이다
-//  - [QA 등록]을 누르면 투명한 레이어가 클릭을 받는다 — 그동안 사이트의 버튼은 눌리지 않는다(M-02)
+//  - QA 항목 목록의 [수동 QA 등록]을 누르면 투명한 레이어가 클릭을 받는다(툴바 버튼은 잘 보이지 않아 2026-11-10 뺐다) — 그동안 사이트의 버튼은 눌리지 않는다(M-02)
 //  - 교차 출처 iframe은 경로·스크롤을 읽을 수 없다. 경로는 주소창에서 사람이 바꾼 값이고, 핀은 그 경로·첫 화면 기준이다
 //  - 서버가 화면 삽입이 막혔다고 알려 주면(embeddable false) 사이트 대신 제한 안내와 [스크린샷 첨부]를 보여 준다(M-09B)
+/** 자동 QA 항목을 고르면 보여 주는 Figma 프레임(AC32) — 첫 QA 이슈에는 배포 경로가 없어 배포 화면으로 옮길 수 없다 */
+export type FigmaView =
+  | { state: 'loading'; title: string }
+  | { state: 'ok'; title: string; preview: FramePreview }
+  | { state: 'error'; title: string; message: string }
+
 export interface PreviewSurface {
-  /** live: 배포 화면 iframe, image: 첨부 이미지 위에서 위치 지정(M-09C) */
-  kind: 'live' | 'image'
+  /** live: 배포 화면 iframe, image: 첨부 이미지 위에서 위치 지정(M-09C), figma: 자동 QA 항목의 Figma 기준 디자인 */
+  kind: 'live' | 'image' | 'figma'
   attachment: QaCapture | null
+  figma?: FigmaView
 }
 
 export function LivePreview({
-  projectId, target, path, onPathChange, reloadKey, onReload, surface, registerMode, onToggleRegister, onPick, pins, draftPin,
-  selectedId, onSelectPin, onAttachForImage, attachBusy, attachError, isOwner, onEditUrl, runLabel, children,
+  projectId, target, path, onPathChange, reloadKey, onReload, surface, registerMode, onPick, pins, draftPin,
+  selectedId, onSelectPin, onAttachForImage, attachBusy, attachError, isOwner, onEditUrl, runLabel, onBackToLive, children,
 }: {
   projectId: string
   target: DeployTarget
@@ -26,7 +33,6 @@ export function LivePreview({
   onReload: () => void
   surface: PreviewSurface
   registerMode: boolean
-  onToggleRegister: () => void
   onPick: (x: number, y: number, viewport: { width: number; height: number }) => void
   pins: QaIssue[]
   draftPin: { x: number; y: number; viewport: { width: number; height: number }; number: number } | null
@@ -38,6 +44,8 @@ export function LivePreview({
   isOwner: boolean
   onEditUrl: () => void
   runLabel: ReactNode
+  /** Figma 프레임을 보다가 배포 화면으로 돌아간다 */
+  onBackToLive: () => void
   /** 작성 Popover — 캔버스 위에 겹친다 */
   children?: ReactNode
 }) {
@@ -60,13 +68,15 @@ export function LivePreview({
 
   const blocked = target.embeddable === false
   const image = surface.kind === 'image' ? surface.attachment : null
-  const base = { width: image?.width ?? LIVE_VIEWPORT.width, height: image?.height ?? LIVE_VIEWPORT.height }
+  const figma = surface.kind === 'figma' ? surface.figma ?? null : null
+  const figmaOk = figma?.state === 'ok' ? figma.preview : null
+  const base = figmaOk ? { width: figmaOk.width, height: figmaOk.height }
+    : { width: image?.width ?? LIVE_VIEWPORT.width, height: image?.height ?? LIVE_VIEWPORT.height }
   const scale = width > 0 ? width / base.width : 0
   // 첨부 이미지가 아주 길면(전체 페이지 스크린샷) 캔버스 높이를 기준 화면의 1.6배까지만 두고 안에서 스크롤한다
   const maxHeight = (LIVE_VIEWPORT.height / LIVE_VIEWPORT.width) * width * 1.6
   const canvasHeight = Math.min(base.height * scale, maxHeight)
   const pageUrl = target.url ? joinUrl(target.url, path) : null
-  const canPick = surface.kind === 'image' ? !!image : !blocked && !!target.url
 
   // 레이어는 축소된 캔버스와 같은 크기라 화면 좌표를 축척으로 나누면 기준 크기 좌표가 된다(스크롤해도 rect가 함께 움직인다)
   const toLocal = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -76,7 +86,11 @@ export function LivePreview({
     return { x: Math.max(0, Math.min(base.width - 1, x)), y: Math.max(0, Math.min(base.height - 1, y)) }
   }
 
-  const status = blocked
+  const status = surface.kind === 'figma'
+    ? { tone: 'bg-qa-primary/10 text-qa-primary-hover', dot: 'bg-qa-primary', text: 'Figma 기준 디자인 · 배포 화면 아님' }
+    : surface.kind === 'image' && image
+      ? { tone: 'bg-[#7c3aed]/10 text-[#7c3aed]', dot: 'bg-[#7c3aed]', text: '첨부 이미지 · 실시간 화면 아님' }
+      : blocked
     ? { tone: 'bg-qa-warning/10 text-[#c8161a]', dot: 'bg-qa-warning', text: '화면 삽입 제한 · 실시간 표시 불가' }
     : !target.url
       ? { tone: 'bg-qa-surface text-qa-text-sub', dot: 'bg-qa-sub', text: '배포 주소 없음' }
@@ -130,14 +144,15 @@ export function LivePreview({
         )}
         <span className="flex flex-none items-center gap-1.5 text-xs text-qa-text-sub">QA 실행 상태 {runLabel}</span>
         <span className="flex flex-none items-center gap-1 text-xs text-qa-text-sub"><Icon name="monitor" className="h-4 w-4" />{base.width} × {base.height}</span>
-        <button type="button" onClick={onToggleRegister} disabled={!canPick} aria-pressed={registerMode}
-          title={canPick ? '배포 화면에서 문제 위치를 찍어 QA를 등록해요' : '배포 화면이나 첨부 이미지가 있어야 위치를 찍을 수 있어요'}
-          className={`inline-flex h-8 flex-none items-center gap-1 rounded-lg border px-3 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
-            registerMode ? 'border-[#7c3aed] bg-[#7c3aed] text-white' : 'border-qa-primary bg-white text-qa-primary-hover hover:bg-qa-primary/5'}`}>
-          <Icon name="map-pin" className="h-3.5 w-3.5" />{registerMode ? '등록 모드 종료' : 'QA 등록'}
-        </button>
       </div>
 
+      {surface.kind === 'figma' && figma && (
+        <div className="flex flex-wrap items-center gap-2 bg-qa-primary/10 px-4 py-1.5 text-xs text-qa-primary-hover" role="status">
+          <Icon name="figma" className="h-3.5 w-3.5" />
+          <span className="min-w-0 flex-1">자동 QA 항목 · {figma.title} — 배포 경로가 없는 항목이라 Figma 기준 디자인을 보여 줘요{figmaOk?.node_box ? ' · 표시한 곳이 비교한 요소예요' : ''}</span>
+          <button type="button" onClick={onBackToLive} className="flex-none font-medium underline-offset-2 hover:underline">배포 화면으로 돌아가기</button>
+        </div>
+      )}
       {target.url && target.embeddable === null && surface.kind === 'live' && (
         <div className="flex items-center gap-2 bg-[#fff4e5] px-4 py-1.5 text-xs text-[#a85a00]" role="status">
           <Icon name="alert-triangle" className="h-3.5 w-3.5" />
@@ -152,8 +167,32 @@ export function LivePreview({
       )}
 
       {/* 캔버스 */}
-      <div ref={wrapRef} className="relative w-full overflow-auto bg-qa-surface" style={{ height: (surface.kind === 'image' ? image : target.url && !blocked) && canvasHeight > 0 ? canvasHeight : 'auto' }}>
-        {surface.kind === 'image' && image ? (
+      <div ref={wrapRef} className="relative w-full overflow-auto bg-qa-surface" style={{ height: (surface.kind === 'figma' ? figmaOk : surface.kind === 'image' ? image : target.url && !blocked) && canvasHeight > 0 ? canvasHeight : 'auto' }}>
+        {surface.kind === 'figma' ? (
+          figmaOk ? (
+            <div className="relative" style={{ width: base.width * scale, height: base.height * scale }}>
+              <img src={figmaOk.image_url} alt={`${figma!.title} Figma 디자인`} className="block h-full w-full select-none bg-white" draggable={false} />
+              {figmaOk.node_box && (
+                <span className="pointer-events-none absolute rounded-sm border-2 border-qa-warning bg-qa-warning/10 shadow-[0_0_0_4px_rgba(239,68,68,0.15)]"
+                  style={{
+                    left: `${figmaOk.node_box.x_ratio * 100}%`, top: `${figmaOk.node_box.y_ratio * 100}%`,
+                    width: `${figmaOk.node_box.w_ratio * 100}%`, height: `${figmaOk.node_box.h_ratio * 100}%`,
+                  }} />
+              )}
+            </div>
+          ) : figma?.state === 'loading' ? (
+            <div className="flex items-center justify-center gap-2 py-24 text-sm text-qa-text-sub" role="status">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-qa-primary border-t-transparent" />Figma 디자인을 불러오는 중이에요
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+              <Icon name="figma" className="h-7 w-7 text-gray-900" />
+              <div className="mt-3 text-sm font-bold text-black">Figma 디자인을 불러오지 못했어요</div>
+              <p className="mt-1 max-w-[520px] text-xs text-qa-text-sub">{figma?.state === 'error' ? figma.message : ''}</p>
+              <button type="button" onClick={onBackToLive} className="mt-4 inline-flex h-9 items-center rounded-lg border border-qa-primary px-3 text-xs font-medium text-qa-primary-hover hover:bg-qa-primary/5">배포 화면으로 돌아가기</button>
+            </div>
+          )
+        ) : surface.kind === 'image' && image ? (
           <div className="relative" style={{ width: base.width * scale, height: base.height * scale }}>
             <img src={captureImageUrl(projectId, image.id)} alt="첨부한 화면 이미지" className="block h-full w-full select-none" draggable={false} />
             <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-gray-900/80 px-2.5 py-1 text-xs text-white">첨부 이미지 기준 · 실시간 화면과 동기화되지 않아요</div>

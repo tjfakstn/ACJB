@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
-  ApiError, captureScreen, createManualQa, formatDateTime, getDeployTarget, getFirstQa, getFramePreview, listIssues, listMembers, manualQaId,
+  ApiError, captureScreen, createManualQa, formatDateTime, getDeployTarget, getFirstQa, getFramePreview, getMappings, linksForPath, listIssues, listMembers,
+  listScreenLinks, manualQaId,
   TEAM_LABELS, updateDeployUrl, uploadCapture, type DeployTarget, type ManualQaInput, type ProjectMember, type ProjectRun,
-  type QaCapture, type QaIssue, type Team, type Viewport,
+  type QaCapture, type QaIssue, type ScreenFrameLink, type Team, type Viewport,
 } from '../lib/api'
 import { Icon } from '../components/common/Icon'
 import { WorkflowStepper } from '../components/workspace/WorkspaceCards'
@@ -13,13 +14,14 @@ import { ErrorCard, Loading, OUTLINE_BTN, PageTitle, PRIMARY_BTN, QaShell, issue
 import { LivePreview, type PreviewSurface } from '../components/liveqa/LivePreview'
 import { QaItemList } from '../components/liveqa/QaItemList'
 import { ManualQaDetail } from '../components/liveqa/ManualQaDetail'
-import { CaptureStatusBox, OptionalFields, RequiredFields } from '../components/liveqa/DraftFields'
+import { CaptureStatusBox, FrameField, OptionalFields, RequiredFields } from '../components/liveqa/DraftFields'
 import { hasContent, newRequestId, type Draft } from '../components/liveqa/draft'
 
 // 실시간 QA 워크스페이스(시안 W-01~05, M-01~M-10C · SPEC AC29~AC31). 지금까지의 목록형 QA 결과 화면을 대신한다.
 //  위: 배포 화면(Live Preview) — 배포 주소는 소유자가 입력한 값, 없으면 GitHub 최근 성공 배포 주소(AC29)
 //  아래 왼쪽: QA 항목 — 자동 QA(첫 QA 불일치)와 수동 QA(배포 화면 위에서 찍어 등록)
 //  아래 오른쪽: 상세 — 자동 QA는 불일치 근거, 수동 QA는 캡처·위치·설명. 담당 팀은 둘 다 사람이 직접 배정한다
+//  수동 QA 작성 폼은 찍은 경로에 연결된 Figma 프레임(AC33)을 미리 골라 두고 사람이 확인한다
 // 시안과 다른 점:
 //  - 시안 W의 "클릭 동작 자동 검사"(로그인 버튼 → /login 확인)는 E2E 자동화라 v1에 없다(N13) — 자동 QA 자리에는 첫 QA 결과가 온다
 //  - "검사 오류"·"대기" 상태, 항목별 실행 진행, 유사 항목 안내, 겹친 핀 묶음·화면 밖 핀 칩(M-07)은 v1에서 뺐다(decision_log 2026-11-10)
@@ -43,6 +45,9 @@ export function LiveQaPage() {
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [editingUrl, setEditingUrl] = useState(false)
   const [toast, setToast] = useState<{ text: string; sub: string } | null>(null)
+  /** 기준 프레임 고르기용(AC33) — 못 불러와도 등록은 막지 않는다 */
+  const [frames, setFrames] = useState<{ frame_id: string; frame_name: string }[]>([])
+  const [links, setLinks] = useState<ScreenFrameLink[]>([])
   const selectedId = params.get('issue')
   const draftRef = useRef<Draft | null>(null)
   const issuesRef = useRef<QaIssue[] | null>(null)
@@ -60,6 +65,9 @@ export function LiveQaPage() {
     } catch (e) {
       setLoadError(loadErrorMessage(e))
     }
+    Promise.all([getMappings(projectId), listScreenLinks(projectId)])
+      .then(([m, l]) => { setFrames(m.items.map((i) => ({ frame_id: i.frame_id, frame_name: i.frame_name }))); setLinks(l) })
+      .catch(() => { setFrames([]); setLinks([]) })
   }, [projectId])
 
   useEffect(() => {
@@ -157,8 +165,11 @@ export function LiveQaPage() {
     const basis = surface.kind === 'image' ? 'capture_image' as const : 'live_overlay' as const
     const requestId = newRequestId()
     const attachment = surface.kind === 'image' ? surface.attachment : null
+    // 연결된 프레임이 하나뿐이고 지금 분석 매핑에 있을 때만 미리 고른다 — 여럿이면(상태별 시안) 사람이 고른다
+    const linked = linksForPath(links, path).filter((l) => frames.some((f) => f.frame_id === l.frame_id))
     setDraft({
       requestId, basis, x, y, viewport, pagePath: path, title: '', description: '', severity: null, expected: '', actual: '',
+      frameId: linked.length === 1 ? linked[0].frame_id : null,
       capture: attachment ? { state: 'ok', capture: attachment } : { state: 'loading' },
       expanded: false, saving: false, errors: {}, saveError: null,
     })
@@ -217,6 +228,7 @@ export function LiveQaPage() {
       ...(d.severity ? { severity: d.severity } : {}),
       ...(d.expected.trim() ? { expected_result: d.expected.trim() } : {}),
       ...(d.actual.trim() ? { actual_result: d.actual.trim() } : {}),
+      ...(d.frameId ? { figma_frame_id: d.frameId } : {}),
     }
     try {
       const created = await createManualQa(projectId, input)
@@ -291,6 +303,8 @@ export function LiveQaPage() {
       )}
     </>
   )
+  const suggestedFrames = draft ? linksForPath(links, draft.pagePath).filter((l) => frames.some((f) => f.frame_id === l.frame_id)) : []
+  const frameField = draft && <FrameField draft={draft} frames={frames} suggested={suggestedFrames} onChange={patchDraft} />
   const submitLabel = draft?.saving ? '등록 중…' : draft?.capture.state === 'loading' ? '캡처 기다리는 중…'
     : draft?.capture.state === 'failed' || draft?.capture.state === 'none' ? '캡처 없이 QA 등록하기' : 'QA 등록하기'
   const draftButtons = draft && (
@@ -340,6 +354,7 @@ export function LiveQaPage() {
                   </div>
                   {draftPanel}
                   <div className="mt-3"><RequiredFields draft={draft} onChange={patchDraft} autoFocus /></div>
+                  {frameField}
                   <div className="mt-3"><CaptureStatusBox draft={draft} projectId={projectId} onAttach={(f) => void attachToDraft(f)}
                     onRetry={() => startCapture(draft.requestId, draft.pagePath, draft.viewport)} /></div>
                   <div className="mt-3 flex items-center justify-between gap-2">
@@ -375,6 +390,7 @@ export function LiveQaPage() {
                   </div>
                   <div>
                     <RequiredFields draft={draft} onChange={patchDraft} autoFocus />
+                    {frameField}
                     <OptionalFields draft={draft} onChange={patchDraft} />
                   </div>
                 </div>

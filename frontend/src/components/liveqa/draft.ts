@@ -22,6 +22,8 @@ export interface Draft {
   severity: Severity | null
   expected: string
   actual: string
+  /** 기준 Figma 프레임(AC33) — 찍은 경로에 연결된 프레임이 하나면 미리 고른다. 사람이 바꾸거나 비울 수 있다 */
+  frameId: string | null
   capture: DraftCapture
   expanded: boolean
   saving: boolean

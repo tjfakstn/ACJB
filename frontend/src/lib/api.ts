@@ -359,15 +359,17 @@ export function formatDateTime(iso: string): string {
 
 // --- 첫 QA(AC23)·QA 이슈·담당 팀(AC3·AC13)·자동 Re-QA(AC28) — 2026-11-08 ---
 
-/** 첫 QA 검증 범위(시안 QA-01) — 1개 이상 */
-export type QaScope = 'size_spacing' | 'color_typography' | 'border_radius' | 'layout' | 'presence'
+/**
+ * 첫 QA 검증 범위(시안 QA-01) — 1개 이상, 고른 범위만 비교한다. 측정할 수 있는 것만 둔다(2026-11-10 스파이크):
+ * 레이아웃·UI 요소 존재 여부는 코드 값으로 비교할 수 없어 뺐다
+ */
+export type QaScope = 'size_spacing' | 'color_typography' | 'border_radius' | 'text'
 
-export const QA_SCOPES: { value: QaScope; label: string }[] = [
-  { value: 'size_spacing', label: '크기·간격·위치' },
-  { value: 'color_typography', label: '색상·타이포그래피' },
-  { value: 'border_radius', label: '테두리·모서리' },
-  { value: 'layout', label: '레이아웃' },
-  { value: 'presence', label: 'UI 요소 존재 여부' },
+export const QA_SCOPES: { value: QaScope; label: string; detail: string }[] = [
+  { value: 'size_spacing', label: '간격·여백', detail: '안쪽 여백(padding)·요소 사이 간격(gap)' },
+  { value: 'color_typography', label: '색상·타이포그래피', detail: '글자·배경·테두리 색, 글자 굵기·크기' },
+  { value: 'border_radius', label: '모서리', detail: '모서리 둥글기(radius)' },
+  { value: 'text', label: '고정 문구', detail: '코드에 적힌 문구 — 데이터로 그리는 문구는 제외' },
 ]
 
 /** 담당 팀은 프로젝트 역할과 같은 값 — 그 역할 멤버들이 팀이다(2026-11-08) */
@@ -380,16 +382,17 @@ export const TEAM_LABELS: Record<Team, string> = {
   backend: '백엔드팀',
 }
 
-export type StyleProperty = 'color' | 'font_weight' | 'font_family' | 'radius' | 'shadow' | 'spacing' | 'text'
+export type StyleProperty = 'color' | 'font_weight' | 'font_size' | 'font_family' | 'radius' | 'shadow' | 'spacing' | 'text'
 
 export const PROPERTY_LABELS: Record<StyleProperty, string> = {
   color: '색상',
   font_weight: '글자 굵기',
+  font_size: '글자 크기',
   font_family: '글꼴',
   radius: '모서리',
   shadow: '그림자',
   spacing: '간격',
-  text: '텍스트',
+  text: '문구',
 }
 
 export interface StyleMismatch {
@@ -455,6 +458,8 @@ export interface ManualQa {
   severity: Severity | null
   expected_result: string | null
   actual_result: string | null
+  /** 등록할 때 고른 기준 Figma 프레임(AC33) — 이름은 등록 때 값 */
+  figma_frame: { frame_id: string; frame_name: string } | null
 }
 
 export interface DeployTarget {
@@ -489,6 +494,7 @@ export interface ManualQaInput {
   severity?: Severity
   expected_result?: string
   actual_result?: string
+  figma_frame_id?: string
 }
 
 export function getDeployTarget(projectId: string): Promise<DeployTarget> {
@@ -544,6 +550,40 @@ export interface FramePreview {
 export function getFramePreview(projectId: string, frameId: string, nodeId: string | null): Promise<FramePreview> {
   const q = nodeId ? `?node_id=${encodeURIComponent(nodeId)}` : ''
   return request<FramePreview>('GET', `/api/v1/projects/${projectId}/figma/frames/${encodeURIComponent(frameId)}/preview${q}`)
+}
+
+/** 배포 화면 경로 ↔ Figma 프레임 연결(AC33) — "이 경로의 화면은 이 프레임을 보고 구현했다" */
+export interface ScreenFrameLink { frame_id: string; frame_name: string; page_path: string; updated_at: string }
+
+export async function listScreenLinks(projectId: string): Promise<ScreenFrameLink[]> {
+  return (await request<{ items: ScreenFrameLink[] }>('GET', `/api/v1/projects/${projectId}/screen-links`)).items
+}
+
+/** 소유자만. 끝의 /는 서버가 뗀다 */
+export function putScreenLink(projectId: string, frameId: string, pagePath: string): Promise<ScreenFrameLink> {
+  return request<ScreenFrameLink>('PUT', `/api/v1/projects/${projectId}/screen-links/${encodeURIComponent(frameId)}`, { page_path: pagePath })
+}
+
+export async function deleteScreenLink(projectId: string, frameId: string): Promise<void> {
+  await request<unknown>('DELETE', `/api/v1/projects/${projectId}/screen-links/${encodeURIComponent(frameId)}`)
+}
+
+function pathSegments(path: string): string[] {
+  const clean = path.split(/[?#]/)[0].replace(/\/+$/, '')
+  return clean === '' ? [] : clean.slice(1).split('/')
+}
+
+/** 연결 경로가 실제 경로와 맞는지 — :이름 조각은 비지 않은 아무 한 조각과 맞는다 */
+export function screenPathMatches(pattern: string, path: string): boolean {
+  const p = pathSegments(pattern)
+  const a = pathSegments(path)
+  return p.length === a.length && p.every((seg, i) => (seg.startsWith(':') ? a[i] !== '' : seg === a[i]))
+}
+
+/** 그 경로에 연결된 프레임들 — 고정 경로로 맞은 것을 먼저 */
+export function linksForPath(links: ScreenFrameLink[], path: string): ScreenFrameLink[] {
+  const dynamic = (l: ScreenFrameLink) => (l.page_path.includes('/:') ? 1 : 0)
+  return links.filter((l) => screenPathMatches(l.page_path, path)).sort((a, b) => dynamic(a) - dynamic(b))
 }
 
 /** 수동 QA 화면 표시 ID — 시안 QA-M### */

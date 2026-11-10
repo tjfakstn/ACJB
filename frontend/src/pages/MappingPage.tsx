@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
-  ApiError, fetchMe, formatDateTime, getMappings, getProjectDetail, type FrameMapping, type MappingList, type Me, type ProjectDetail,
+  ApiError, deleteScreenLink, fetchMe, formatDateTime, getMappings, getProjectDetail, listScreenLinks, putScreenLink,
+  type FrameMapping, type MappingList, type Me, type ProjectDetail, type ScreenFrameLink,
 } from '../lib/api'
 import { AppHeader } from '../components/projects/AppHeader'
 import { WorkspaceSidebar } from '../components/members/WorkspaceSidebar'
@@ -13,6 +14,7 @@ import { CARD } from '../components/workspace/WorkspaceCards'
 //  - 매핑 완료율·부분 매핑·평균 신뢰도, 디자인 속성(너비·색 등), 매핑 근거 문장, 커밋·PR 추적(N13)은 없다
 //  - 대신 매핑된 화면·요소 수, 근거가 없어 버린 짝 수, 분석한 커밋, 화면 안 요소별 컴포넌트를 보여 준다
 //  - 왼쪽 목록은 시안의 "Figma 요소"를 화면(프레임) 단위로 보여 준다
+//  - 화면마다 "이 프레임을 보고 구현한 배포 화면 경로"를 소유자가 지정한다(AC33) — 수동 QA가 기준 프레임을 고를 때 쓴다
 export function MappingPage() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
@@ -22,6 +24,7 @@ export function MappingPage() {
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
+  const [links, setLinks] = useState<ScreenFrameLink[]>([])
 
   useEffect(() => {
     fetchMe().then((result) => {
@@ -30,20 +33,27 @@ export function MappingPage() {
         return
       }
       setMe(result)
-      Promise.all([getProjectDetail(projectId), getMappings(projectId)])
-        .then(([d, m]) => { setDetail(d); setData(m); setSelected(m.items[0]?.frame_id ?? null) })
+      Promise.all([getProjectDetail(projectId), getMappings(projectId), listScreenLinks(projectId)])
+        .then(([d, m, l]) => { setDetail(d); setData(m); setLinks(l); setSelected(m.items[0]?.frame_id ?? null) })
         .catch((e) => setError(e instanceof ApiError && e.status === 403 ? '이 프로젝트의 멤버가 아니에요.' : '매핑 정보를 불러오지 못했어요.'))
     })
   }, [navigate, projectId])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (data?.items ?? []).filter((f) => !q || f.frame_name.toLowerCase().includes(q) || f.code_path.toLowerCase().includes(q))
-  }, [data, query])
+    const pathOf = (id: string) => links.find((l) => l.frame_id === id)?.page_path ?? ''
+    return (data?.items ?? []).filter((f) => !q || f.frame_name.toLowerCase().includes(q) || f.code_path.toLowerCase().includes(q)
+      || pathOf(f.frame_id).toLowerCase().includes(q))
+  }, [data, query, links])
   const current = data?.items.find((f) => f.frame_id === selected) ?? null
 
   if (!me) return null
 
+  const isOwner = !!detail && detail.owner_id === me.id
+  const linkOf = (frameId: string) => links.find((l) => l.frame_id === frameId) ?? null
+  const onLinkChange = (frameId: string, next: ScreenFrameLink | null) =>
+    setLinks((cur) => [...cur.filter((l) => l.frame_id !== frameId), ...(next ? [next] : [])])
+  const linkedCount = (data?.items ?? []).filter((f) => linkOf(f.frame_id)).length
   const nodes = data?.items.reduce((n, f) => n + f.nodes.length, 0) ?? 0
   const finished = data?.run?.finished_at
 
@@ -87,6 +97,7 @@ export function MappingPage() {
                 <span className="hidden h-[76px] w-px bg-qa-border md:block" />
                 <Metric label="매핑된 요소" value={`${nodes}개`} helper="화면 안 블록 ↔ 컴포넌트" />
                 <Metric label="버린 짝" value={`${data.run?.dropped_count ?? 0}개`} helper="코드에 없는 경로·요소를 가리킨 답" />
+                <Metric label="경로 연결" value={`${linkedCount}개`} helper="배포 화면 경로를 지정한 화면" />
                 <div className="ml-auto text-right">
                   <div className="text-xs font-medium text-qa-text-sub">분석한 커밋</div>
                   <div className="mt-1 font-mono text-base font-bold text-black">{data.commit_sha?.slice(0, 7) ?? '-'}</div>
@@ -103,7 +114,7 @@ export function MappingPage() {
                   <label className="relative mt-3 block">
                     <span className="sr-only">화면 검색</span>
                     <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-qa-text-sub" />
-                    <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="화면·파일 검색"
+                    <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="화면·파일·경로 검색"
                       className="h-10 w-full rounded-lg border border-qa-sub bg-white pl-9 pr-3 text-sm outline-none placeholder:text-qa-sub focus:border-qa-primary" />
                   </label>
                   <ul className="mt-3 flex max-h-[640px] flex-col gap-1 overflow-y-auto pr-1">
@@ -111,7 +122,10 @@ export function MappingPage() {
                       <li key={f.frame_id}>
                         <button type="button" onClick={() => setSelected(f.frame_id)} aria-current={f.frame_id === selected}
                           className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-4 py-2 text-left text-sm ${f.frame_id === selected ? 'bg-qa-primary/10 font-medium text-black' : 'text-black hover:bg-white'}`}>
-                          <span className="min-w-0 flex-1 truncate">{f.frame_name}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{f.frame_name}</span>
+                            {linkOf(f.frame_id) && <span className="block truncate font-mono text-xs font-normal text-qa-text-sub">{linkOf(f.frame_id)!.page_path}</span>}
+                          </span>
                           <MappedBadge />
                         </button>
                       </li>
@@ -119,7 +133,11 @@ export function MappingPage() {
                     {filtered.length === 0 && <li className="px-4 py-6 text-center text-xs text-qa-text-sub">검색 결과가 없어요</li>}
                   </ul>
                 </section>
-                {current && <Detail frame={current} repo={detail?.github?.repo ?? null} sha={data.commit_sha} />}
+                {current && (
+                  <Detail frame={current} repo={detail?.github?.repo ?? null} sha={data.commit_sha}
+                    screenLink={<ScreenPathField key={current.frame_id} projectId={projectId} frameId={current.frame_id}
+                      link={linkOf(current.frame_id)} canEdit={isOwner} onChange={(l) => onLinkChange(current.frame_id, l)} />} />
+                )}
               </div>
             </>
           )}
@@ -152,7 +170,7 @@ function fileUrl(repo: string | null, sha: string | null, path: string) {
   return repo && sha ? `https://github.com/${repo}/blob/${sha}/${path}` : null
 }
 
-function Detail({ frame, repo, sha }: { frame: FrameMapping; repo: string | null; sha: string | null }) {
+function Detail({ frame, repo, sha, screenLink }: { frame: FrameMapping; repo: string | null; sha: string | null; screenLink: ReactNode }) {
   const href = fileUrl(repo, sha, frame.code_path)
   const fileName = frame.code_path.slice(frame.code_path.lastIndexOf('/') + 1)
   return (
@@ -162,6 +180,8 @@ function Detail({ frame, repo, sha }: { frame: FrameMapping; repo: string | null
         <MappedBadge />
       </div>
       <div className="mt-4 text-xl font-bold leading-7 text-black">{frame.frame_name}</div>
+
+      {screenLink}
 
       <div className="mt-6 text-xs font-medium text-qa-text-sub">연결된 구현 파일</div>
       <div className="mt-3 flex items-center gap-3 rounded-lg bg-qa-surface px-4 py-3">
@@ -200,5 +220,86 @@ function Detail({ frame, repo, sha }: { frame: FrameMapping; repo: string | null
         </ul>
       )}
     </section>
+  )
+}
+
+/**
+ * 이 화면(프레임)을 보고 구현한 배포 화면 경로(AC33) — 소유자만 바꾼다. :이름은 아무 한 조각과 맞는다(/app/projects/:id).
+ * 수동 QA를 등록할 때 찍은 경로에 연결된 프레임을 폼이 미리 골라 둔다
+ */
+function ScreenPathField({ projectId, frameId, link, canEdit, onChange }: {
+  projectId: string
+  frameId: string
+  link: ScreenFrameLink | null
+  canEdit: boolean
+  onChange: (link: ScreenFrameLink | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(link?.page_path ?? '')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault()
+    const path = value.trim()
+    setSaving(true)
+    setErr(null)
+    try {
+      if (path === '') {
+        await deleteScreenLink(projectId, frameId)
+        onChange(null)
+      } else {
+        const saved = await putScreenLink(projectId, frameId, path)
+        onChange(saved)
+        setValue(saved.page_path)
+      }
+      setEditing(false)
+    } catch (ex) {
+      setErr(ex instanceof ApiError ? ex.message : '경로를 저장하지 못했어요.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-qa-text-sub">
+        <Icon name="map-pin" className="h-3.5 w-3.5" />배포 화면 경로
+        <span className="font-normal">· 이 프레임을 보고 구현한 화면</span>
+      </div>
+      {editing ? (
+        <form onSubmit={(e) => void save(e)} className="mt-3">
+          <div className="flex gap-2">
+            <input value={value} onChange={(e) => setValue(e.target.value)} autoFocus disabled={saving} aria-label="배포 화면 경로"
+              placeholder="/login · /app/projects/:id"
+              className="h-10 min-w-0 flex-1 rounded-lg border border-qa-border bg-white px-3 font-mono text-sm outline-none focus:border-qa-primary" />
+            <button type="submit" disabled={saving}
+              className="h-10 flex-none rounded-lg bg-qa-primary px-4 text-sm font-medium text-white hover:bg-qa-primary-hover disabled:opacity-60">
+              {saving ? '저장 중…' : '저장'}
+            </button>
+            <button type="button" disabled={saving} onClick={() => { setEditing(false); setErr(null); setValue(link?.page_path ?? '') }}
+              className="h-10 flex-none rounded-lg border border-qa-border bg-white px-3 text-sm text-black hover:bg-qa-surface">취소</button>
+          </div>
+          <p className="mt-1.5 text-xs text-qa-text-sub">/로 시작하는 경로만 적어 주세요. 바뀌는 조각은 :이름으로(예: /app/projects/:id). 비우고 저장하면 연결을 지워요.</p>
+          {err && <p role="alert" className="mt-1 text-xs text-qa-warning">{err}</p>}
+        </form>
+      ) : (
+        <div className="mt-3 flex items-center gap-3 rounded-lg bg-qa-surface px-4 py-3">
+          {link ? (
+            <span className="min-w-0 flex-1 truncate font-mono text-sm font-medium text-black">{link.page_path}</span>
+          ) : (
+            <span className="min-w-0 flex-1 text-sm text-qa-text-sub">
+              아직 연결한 경로가 없어요{canEdit ? '' : ' · 소유자가 지정할 수 있어요'}
+            </span>
+          )}
+          {canEdit && (
+            <button type="button" onClick={() => { setValue(link?.page_path ?? ''); setEditing(true) }}
+              className="flex flex-none items-center gap-1 text-xs font-medium text-qa-primary-hover hover:underline">
+              <Icon name="pencil" className="h-3.5 w-3.5" />{link ? '변경' : '경로 지정'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

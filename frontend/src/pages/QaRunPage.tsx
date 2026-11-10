@@ -148,7 +148,9 @@ export function QaRunPage() {
           <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <div className="flex min-w-0 flex-col gap-6">
               <TargetSummary detail={detail} analysis={analysis} firstQa={firstQa} reQaMode={reQaMode} />
-              <ScopeCard scope={scope} onChange={setScope} locked={reQaMode || firstRunning || justFinished || !isOwner} />
+              <ScopeCard scope={scope} onChange={setScope} locked={reQaMode || firstRunning || justFinished || !isOwner}
+                lockReason={reQaMode || justFinished ? '첫 QA 때 고른 범위예요. 첫 QA는 프로젝트당 한 번이고, Re-QA는 그때 만든 이슈만 다시 확인해요.'
+                  : firstRunning ? '실행 중에는 바꿀 수 없어요.' : !isOwner ? '검증 범위는 소유자만 고를 수 있어요.' : null} />
               {reQaMode ? <ReQaTargets targets={targets} projectId={projectId} /> : <CompareTargets detail={detail} mapping={mapping} scope={scope} />}
               {reQaMode ? (
                 <ActionBar
@@ -278,21 +280,33 @@ function SourceRow({ icon, title, sub, ok }: { icon: string; title: string; sub:
   )
 }
 
-function ScopeCard({ scope, onChange, locked }: { scope: QaScope[]; onChange: (s: QaScope[]) => void; locked: boolean }) {
+function ScopeCard({ scope, onChange, locked, lockReason }: {
+  scope: QaScope[]
+  onChange: (s: QaScope[]) => void
+  locked: boolean
+  lockReason: string | null
+}) {
   const toggle = (v: QaScope) => onChange(scope.includes(v) ? scope.filter((s) => s !== v) : QA_SCOPES.map((s) => s.value).filter((s) => s === v || scope.includes(s)))
   return (
     <section className={`${CARD} p-5`}>
       <SectionTitle n={2} aside={<span className="text-xs text-qa-text-sub">{scope.length}개 선택</span>}>QA 검증 범위</SectionTitle>
+      <p className="mt-1 text-xs text-qa-text-sub">고른 범위만 Figma 값과 코드 값을 비교해요.</p>
       <fieldset disabled={locked} className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
         <legend className="sr-only">QA 검증 범위</legend>
         {QA_SCOPES.map((s) => (
-          <label key={s.value} className={`flex items-center gap-2 text-sm text-black ${locked ? 'cursor-default' : 'cursor-pointer'}`}>
+          <label key={s.value} className={`flex items-start gap-2 text-sm text-black ${locked ? 'cursor-default' : 'cursor-pointer'}`}>
             <input type="checkbox" checked={scope.includes(s.value)} onChange={() => toggle(s.value)}
-              className="h-4 w-4 accent-qa-primary-hover disabled:opacity-70" />
-            {s.label}
+              className="mt-0.5 h-4 w-4 flex-none accent-qa-primary-hover disabled:opacity-70" />
+            <span>
+              <span className="block">{s.label}</span>
+              <span className="block text-xs text-qa-text-sub">{s.detail}</span>
+            </span>
           </label>
         ))}
       </fieldset>
+      {locked && lockReason && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-qa-text-sub"><Icon name="lock" className="h-3.5 w-3.5 flex-none" />{lockReason}</p>
+      )}
       {!locked && scope.length === 0 && <p role="alert" className="mt-3 text-xs text-qa-warning">검증 범위를 하나 이상 골라 주세요.</p>}
     </section>
   )

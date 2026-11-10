@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  ApiError, changeIssueStatus, figmaFrameUrl, formatDate, formatDateTime, getIssue, listVerifications, PROPERTY_LABELS, roleLabel,
+  ApiError, changeIssueStatus, formatDate, formatDateTime, getIssue, listVerifications, PROPERTY_LABELS, roleLabel,
   TEAM_LABELS, type IssueStatus, type QaIssue, type Verification,
 } from '../lib/api'
 import { Icon } from '../components/common/Icon'
 import { CARD, WorkflowStepper } from '../components/workspace/WorkspaceCards'
 import {
-  ErrorCard, KeyValue, Loading, OUTLINE_BTN, PRIMARY_BTN, PROGRESS, ProgressChip, QaShell, TeamTag, Verdict, issueParts, issueTitle,
+  ErrorCard, KeyValue, Loading, OUTLINE_BTN, PRIMARY_BTN, PROGRESS, ProgressChip, QaShell, TeamTag, Verdict, issueFrame, issueParts, issueTitle,
   loadErrorMessage, useProject,
 } from '../components/qa/QaParts'
 
@@ -91,7 +91,7 @@ export function IssueDetailPage() {
 
           <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
             <div className="flex min-w-0 flex-col gap-6">
-              <Evidence issue={issue} latestReQa={latestReQa} projectId={projectId} />
+              <Evidence issue={issue} latestReQa={latestReQa} projectId={projectId} fileKey={detail.figma?.file_key ?? null} />
               <History issue={issue} verifications={verifications} />
             </div>
 
@@ -174,9 +174,12 @@ function StatusActions({ issue, canChange, saving, isOwner, projectId, onChange 
   return <div className="mt-3 rounded-lg bg-qa-success/10 px-3 py-2.5 text-xs text-black">재검증을 통과해 해결된 문제예요.</div>
 }
 
-function Evidence({ issue, latestReQa, projectId }: { issue: QaIssue; latestReQa: Verification | null; projectId: string }) {
+function Evidence({ issue, latestReQa, projectId, fileKey }: {
+  issue: QaIssue; latestReQa: Verification | null; projectId: string; fileKey: string | null
+}) {
   const m = issue.style_mismatch
   const parts = issueParts(issue)
+  const frame = issueFrame(issue, fileKey)
   return (
     <>
       <section className={`${CARD} p-5`}>
@@ -224,7 +227,13 @@ function Evidence({ issue, latestReQa, projectId }: { issue: QaIssue; latestReQa
         <p className="mt-2 text-sm text-black">{issue.description}</p>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Fact label="대상 요소" value={parts.element} />
-          <Fact label="Figma 프레임" value={parts.screen} />
+          <Fact label="Figma 프레임" value={frame ? (
+            frame.href ? (
+              <a href={frame.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
+                {frame.name}<Icon name="external-link" className="h-3.5 w-3.5 flex-none" />
+              </a>
+            ) : frame.name
+          ) : <span className="font-normal text-qa-text-sub">연결된 프레임 없음</span>} />
           <Fact label="재현 절차" value={issue.repro_steps.join(' → ')} />
         </div>
       </section>
@@ -232,7 +241,7 @@ function Evidence({ issue, latestReQa, projectId }: { issue: QaIssue; latestReQa
   )
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
       <div className="text-xs text-qa-text-sub">{label}</div>
@@ -285,15 +294,16 @@ function History({ issue, verifications }: { issue: QaIssue; verifications: Veri
 function FigmaElement({ issue, fileKey }: { issue: QaIssue; fileKey: string | null }) {
   const m = issue.style_mismatch
   const parts = issueParts(issue)
-  const href = fileKey && m?.frame_id ? figmaFrameUrl(fileKey, m.frame_id) : issue.figma_link
+  const frame = issueFrame(issue, fileKey)
+  const href = frame?.href ?? null
   return (
     <section className={`${CARD} p-5`}>
       <h2 className="text-base font-bold text-black">Figma 디자인 요소</h2>
       <div className="mt-3">
         <KeyValue rows={[
-          { label: 'Frame', value: parts.screen },
+          { label: 'Frame', value: frame?.name ?? '-' },
           { label: '요소', value: parts.element },
-          { label: '프레임 ID', value: m?.frame_id ?? '-' },
+          { label: '프레임 ID', value: m?.frame_id ?? issue.manual_qa?.figma_frame?.frame_id ?? '-' },
           { label: '등록일', value: formatDate(issue.created_at) },
         ]} />
       </div>

@@ -44,7 +44,11 @@ import com.acjb.server.domain.Member;
 import com.acjb.server.domain.MemberRole;
 import com.acjb.server.domain.Project;
 import com.acjb.server.domain.ProjectMember;
+import com.acjb.server.domain.ProjectRun;
 import com.acjb.server.domain.QaCapture;
+import com.acjb.server.domain.DesignCodeMapping;
+import com.acjb.server.domain.RunKind;
+import com.acjb.server.domain.RunStatus;
 import com.acjb.server.figma.FigmaApiException;
 import com.acjb.server.figma.FigmaClient;
 import com.acjb.server.github.GithubApiException;
@@ -52,19 +56,22 @@ import com.acjb.server.github.GithubClient;
 import com.acjb.server.liveqa.CaptureFailedException;
 import com.acjb.server.liveqa.EmbedChecker;
 import com.acjb.server.liveqa.PageCapturer;
+import com.acjb.server.repository.DesignCodeMappingRepository;
 import com.acjb.server.repository.ManualQaPinRepository;
 import com.acjb.server.repository.MemberRepository;
 import com.acjb.server.repository.NotificationRepository;
 import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRepository;
 import com.acjb.server.repository.QAIssueRepository;
+import com.acjb.server.repository.ProjectRunRepository;
 import com.acjb.server.repository.QaCaptureRepository;
+import com.acjb.server.repository.ScreenFrameLinkRepository;
 
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
 
 /**
- * 실시간 QA 워크스페이스 AC29(배포 대상)·AC30(캡처·첨부)·AC31(수동 QA 등록)·N19.
+ * 실시간 QA 워크스페이스 AC29(배포 대상)·AC30(캡처·첨부)·AC31(수동 QA 등록)·AC32(프레임 미리보기)·AC33(화면 경로 ↔ 프레임)·N19.
  * 서버 브라우저(PageCapturer)·GitHub·헤더 확인(EmbedChecker)은 가짜로 바꿔 끼운다 — 외부 네트워크를 쓰지 않는다
  */
 @SpringBootTest
@@ -83,6 +90,9 @@ class LiveQaApiTest {
     @Autowired ManualQaPinRepository pins;
     @Autowired QaCaptureRepository captures;
     @Autowired NotificationRepository notifications;
+    @Autowired ProjectRunRepository runs;
+    @Autowired DesignCodeMappingRepository mappings;
+    @Autowired ScreenFrameLinkRepository links;
     @MockitoBean PageCapturer capturer;
     @MockitoBean GithubClient github;
     @MockitoBean EmbedChecker embedChecker;
@@ -505,5 +515,121 @@ class LiveQaApiTest {
             .andExpect(jsonPath("$.error.code").value("CONNECTION_FAILED"))
             .andExpect(jsonPath("$.error.message").value("Figma 요청 한도를 넘었어요. 30초 뒤 다시 시도해 주세요."));
         mvc.perform(as(get(base() + "/figma/frames/10:1/preview"), outsider)).andExpect(status().isForbidden());
+    }
+
+    // ---------------------------------------------------------------- AC33 화면 경로 ↔ Figma 프레임
+
+    /** 비교 분석을 성공시키고 프레임 짝을 남긴다. 실패한 더 최근 분석은 기준이 아니다 */
+    private void analyzed(String... frames) {
+        Instant now = Instant.now();
+        ProjectRun ok = runs.save(new ProjectRun(project, RunKind.ANALYSIS, owner, now.minusSeconds(60)));
+        ok.start();
+        ok.succeed("abc123", frames.length / 2, 0, now.minusSeconds(30));
+        for (int i = 0; i < frames.length; i += 2) {
+            mappings.save(DesignCodeMapping.frame(project, ok, frames[i], frames[i + 1], "src/pages/X.tsx", now));
+        }
+        mappings.save(DesignCodeMapping.frame(project, runs.save(failedRun(now)), "99:1", "실패한 분석의 프레임", "src/X.tsx", now));
+        em.flush();
+    }
+
+    private ProjectRun failedRun(Instant now) {
+        ProjectRun r = new ProjectRun(project, RunKind.ANALYSIS, owner, now);
+        r.start();
+        r.fail("실패", now);
+        return r;
+    }
+
+    private String linkBody(String path) {
+        return "{\"page_path\":\"" + path + "\"}";
+    }
+
+    @Test
+    void 소유자가_프레임에_경로를_연결하면_끝의_슬래시를_떼고_저장하고_다시_넣으면_바꾼다() throws Exception {
+        analyzed("10:1", "LOGIN-01 로그인", "10:2", "LOGIN-02 로그인 실패", "10:3", "WS-01 작업공간");
+        mvc.perform(as(put(base() + "/screen-links/10:1"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/login/")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.frame_id").value("10:1"))
+            .andExpect(jsonPath("$.data.frame_name").value("LOGIN-01 로그인"))
+            .andExpect(jsonPath("$.data.page_path").value("/login"));
+        mvc.perform(as(put(base() + "/screen-links/10:2"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/login")))
+            .andExpect(status().isOk());
+        mvc.perform(as(put(base() + "/screen-links/10:3"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/app/projects/:id")))
+            .andExpect(status().isOk());
+        mvc.perform(as(put(base() + "/screen-links/10:3"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/")))
+            .andExpect(jsonPath("$.data.page_path").value("/"));
+        // 멤버 누구나 본다 — 경로, 프레임 이름, 프레임 id 순
+        mvc.perform(as(get(base() + "/screen-links"), front))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.items.length()").value(3))
+            .andExpect(jsonPath("$.data.items[0].frame_id").value("10:3"))
+            .andExpect(jsonPath("$.data.items[1].frame_id").value("10:1"))
+            .andExpect(jsonPath("$.data.items[2].frame_id").value("10:2"));
+        assertThat(links.count()).isEqualTo(3);
+    }
+
+    @Test
+    void 소유자가_아니거나_매핑에_없는_프레임이거나_경로가_잘못되면_거부하고_바꾸지_않는다() throws Exception {
+        analyzed("10:1", "LOGIN-01 로그인");
+        mvc.perform(as(put(base() + "/screen-links/10:1"), front).contentType(MediaType.APPLICATION_JSON).content(linkBody("/login")))
+            .andExpect(status().isForbidden());
+        mvc.perform(as(put(base() + "/screen-links/99:1"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/login")))
+            .andExpect(status().isBadRequest());
+        mvc.perform(as(put(base() + "/screen-links/abc"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/login")))
+            .andExpect(status().isBadRequest());
+        for (String bad : List.of("login", "", "/login?x=1", "/a#b", "//evil.com", "/" + "a".repeat(500))) {
+            mvc.perform(as(put(base() + "/screen-links/10:1"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody(bad)))
+                .andExpect(status().isBadRequest());
+        }
+        mvc.perform(as(get(base() + "/screen-links"), outsider)).andExpect(status().isForbidden());
+        mvc.perform(as(delete(base() + "/screen-links/10:1"), front)).andExpect(status().isForbidden());
+        assertThat(links.count()).isZero();
+    }
+
+    @Test
+    void 연결을_지우면_204이고_없어도_204다() throws Exception {
+        analyzed("10:1", "LOGIN-01 로그인");
+        mvc.perform(as(put(base() + "/screen-links/10:1"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/login")))
+            .andExpect(status().isOk());
+        mvc.perform(as(delete(base() + "/screen-links/10:1"), owner)).andExpect(status().isNoContent());
+        mvc.perform(as(delete(base() + "/screen-links/10:1"), owner)).andExpect(status().isNoContent());
+        assertThat(links.count()).isZero();
+    }
+
+    @Test
+    void 수동_QA에_기준_프레임을_보내면_핀과_figma_link에_남기고_없으면_고르지_않는다() throws Exception {
+        deployed();
+        figmaConnected();
+        analyzed("10:1", "LOGIN-01 로그인");
+        mvc.perform(as(put(base() + "/screen-links/10:1"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/")))
+            .andExpect(status().isOk());
+        mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON)
+                .content(manualBody("f1", ",\"figma_frame_id\":\"10:1\"")))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.figma_link").value("https://www.figma.com/design/KEY/?node-id=10-1"))
+            .andExpect(jsonPath("$.data.manual_qa.figma_frame.frame_id").value("10:1"))
+            .andExpect(jsonPath("$.data.manual_qa.figma_frame.frame_name").value("LOGIN-01 로그인"));
+        // 같은 경로에 연결이 있어도 보내지 않았으면 서버가 골라 넣지 않는다(사람이 확인한 값만)
+        mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON).content(manualBody("f2", "")))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.figma_link").doesNotExist())
+            .andExpect(jsonPath("$.data.manual_qa.figma_frame").doesNotExist());
+        // 최근 성공한 분석에 없는 프레임(실패한 분석에만 있는 것 포함)은 400이고 저장하지 않는다
+        long before = pins.count();
+        for (String bad : List.of("99:1", "12:34", "abc")) {
+            mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON)
+                    .content(manualBody("bad-" + bad, ",\"figma_frame_id\":\"" + bad + "\"")))
+                .andExpect(status().isBadRequest());
+        }
+        assertThat(pins.count()).isEqualTo(before);
+    }
+
+    @Test
+    void 프로젝트를_지우면_화면_경로_연결도_지운다() throws Exception {
+        analyzed("10:1", "LOGIN-01 로그인");
+        mvc.perform(as(put(base() + "/screen-links/10:1"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/login")))
+            .andExpect(status().isOk());
+        mvc.perform(as(delete(base()), owner)).andExpect(status().isNoContent());
+        em.clear();
+        assertThat(links.count()).isZero();
     }
 }

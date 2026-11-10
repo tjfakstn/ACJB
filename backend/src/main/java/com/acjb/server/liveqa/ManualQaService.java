@@ -54,12 +54,14 @@ public class ManualQaService {
     private final QaCaptureRepository captures;
     private final StatusHistoryRepository histories;
     private final DeployTargetService deployTargets;
+    private final ScreenLinkService screenLinks;
     private final ApplicationEventPublisher events;
     private final TransactionTemplate tx;
     private final Clock clock;
 
     public ManualQaService(ProjectRepository projects, QAIssueRepository issues, ManualQaPinRepository pins, QaCaptureRepository captures,
-                           StatusHistoryRepository histories, DeployTargetService deployTargets, ApplicationEventPublisher events,
+                           StatusHistoryRepository histories, DeployTargetService deployTargets, ScreenLinkService screenLinks,
+                           ApplicationEventPublisher events,
                            TransactionTemplate tx, Clock clock) {
         this.projects = projects;
         this.issues = issues;
@@ -67,6 +69,7 @@ public class ManualQaService {
         this.captures = captures;
         this.histories = histories;
         this.deployTargets = deployTargets;
+        this.screenLinks = screenLinks;
         this.events = events;
         this.tx = tx;
         this.clock = clock;
@@ -118,6 +121,13 @@ public class ManualQaService {
             : LiveQaValidation.parseEnum(Severity.class, req.severity(), "severity");
         String expected = LiveQaValidation.optional(req.expectedResult(), "expected_result", RESULT_MAX);
         String actual = LiveQaValidation.optional(req.actualResult(), "actual_result", RESULT_MAX);
+        // 기준 프레임(AC33)은 사람이 확인해 보낸 값만 — 없으면 경로로 골라 넣지 않는다. 보냈다면 근거 있는(최근 분석이 짝지은) 프레임이어야 한다
+        ScreenLinkService.AnalyzedFrame frame = null;
+        if (req.figmaFrameId() != null && !req.figmaFrameId().isBlank()) {
+            String frameId = req.figmaFrameId().trim();
+            frame = screenLinks.analyzedFrame(projectId, frameId)
+                .orElseThrow(() -> ApiException.badRequest("figma_frame_id가 최근 비교 분석의 매핑에 없는 프레임입니다: " + frameId));
+        }
 
         // 2) 재시도면 처음 것을 돌려준다(검사를 통과한 같은 요청만 여기까지 온다)
         Optional<Created> replay = replay(projectId, requestId);
@@ -137,6 +147,7 @@ public class ManualQaService {
         final Long finalCaptureId = captureId;
         final CaptureStatus fallbackStatus = requestedStatus;
         final String finalPageUrl = pageUrl;
+        final ScreenLinkService.AnalyzedFrame finalFrame = frame;
 
         return tx.execute(status -> {
             // 프로젝트 행을 잠가 핀 번호 발급과 요청 id 중복 확인을 줄 세운다
@@ -161,12 +172,14 @@ public class ManualQaService {
                     "(x " + x + ", y " + y + ") 위치를 확인한다")
                 : List.of("첨부 이미지(캡처 " + finalCaptureId + ")를 연다", "(x " + x + ", y " + y + ") 위치를 확인한다");
 
+            String figmaLink = finalFrame == null ? null : figmaFrameUrl(project.getFigmaFileKey(), finalFrame.frameId());
             QAIssue issue = issues.save(new QAIssue(project, description, screenLocation, steps, PlatformScope.COMMON,
-                new Environment(EnvPlatform.WEB, null, null, null), List.of(), null, null, null, reporter));
+                new Environment(EnvPlatform.WEB, null, null, null), List.of(), figmaLink, null, null, reporter));
             StatusHistory first = histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
             int pinNumber = pins.maxPinNumber(projectId) + 1;
             ManualQaPin pin = pins.save(new ManualQaPin(project, issue, pinNumber, requestId, title, path, finalPageUrl, x, y,
-                viewport.width(), viewport.height(), basis, captureStatus, capture, severity, expected, actual, clock.instant()));
+                viewport.width(), viewport.height(), basis, captureStatus, capture, severity, expected, actual,
+                finalFrame == null ? null : finalFrame.frameId(), finalFrame == null ? null : finalFrame.frameName(), clock.instant()));
             issues.flush();
             // 이슈는 재검증 범위 제안(AC20)의 검색 문서가 된다 — 일반 등록과 같다
             events.publishEvent(new EmbeddingSourcesChanged(projectId));
@@ -182,6 +195,11 @@ public class ManualQaService {
     private QaIssueResponse response(ManualQaPin pin) {
         QAIssue issue = pin.getIssue();
         return QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()), pin);
+    }
+
+    /** 연결된 Figma 파일에서 그 프레임을 여는 주소 — 화면의 figmaFrameUrl과 같은 모양. 파일 연결이 없으면 남기지 않는다 */
+    static String figmaFrameUrl(String fileKey, String frameId) {
+        return fileKey == null ? null : "https://www.figma.com/design/" + fileKey + "/?node-id=" + frameId.replace(':', '-');
     }
 
     private static String truncate(String s, int max) {

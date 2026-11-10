@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,9 +27,10 @@ import com.acjb.server.liveqa.DeployTargetService;
 import com.acjb.server.liveqa.FramePreviewService;
 import com.acjb.server.liveqa.LiveQaRequests;
 import com.acjb.server.liveqa.ManualQaService;
+import com.acjb.server.liveqa.ScreenLinkService;
 
 /**
- * 실시간 QA 워크스페이스(SPEC AC29~AC31) — 배포 주소, 화면 캡처·첨부, 수동 QA 등록.
+ * 실시간 QA 워크스페이스(SPEC AC29~AC33) — 배포 주소, 화면 캡처·첨부, 수동 QA 등록, 화면 경로 ↔ Figma 프레임 연결.
  * 이 경로는 Security 단계에서 프로젝트 멤버만 통과한다(AC12)
  */
 @RestController
@@ -39,10 +41,12 @@ public class LiveQaController {
     private final CaptureService captures;
     private final ManualQaService manualQa;
     private final FramePreviewService framePreviews;
+    private final ScreenLinkService screenLinks;
     private final CurrentMember currentMember;
 
     public LiveQaController(DeployTargetService deployTargets, CaptureService captures, ManualQaService manualQa,
-                            FramePreviewService framePreviews, CurrentMember currentMember) {
+                            FramePreviewService framePreviews, ScreenLinkService screenLinks, CurrentMember currentMember) {
+        this.screenLinks = screenLinks;
         this.framePreviews = framePreviews;
         this.deployTargets = deployTargets;
         this.captures = captures;
@@ -91,6 +95,24 @@ public class LiveQaController {
     public Map<String, Object> framePreview(@PathVariable Long projectId, @PathVariable String frameId,
                                             @RequestParam(name = "node_id", required = false) String nodeId) {
         return ApiResponses.ok(framePreviews.preview(projectId, frameId, nodeId));
+    }
+
+    @GetMapping("/screen-links")
+    public Map<String, Object> screenLinks(@PathVariable Long projectId) {
+        return ApiResponses.ok(screenLinks.list(projectId));
+    }
+
+    @PutMapping("/screen-links/{frameId}")
+    public Map<String, Object> putScreenLink(@PathVariable Long projectId, @PathVariable String frameId,
+                                             @RequestBody LiveQaRequests.ScreenLinkRequest request,
+                                             @AuthenticationPrincipal OAuth2User principal) {
+        return ApiResponses.ok(screenLinks.put(projectId, frameId, request == null ? null : request.pagePath(), currentMember.require(principal)));
+    }
+
+    @DeleteMapping("/screen-links/{frameId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteScreenLink(@PathVariable Long projectId, @PathVariable String frameId, @AuthenticationPrincipal OAuth2User principal) {
+        screenLinks.delete(projectId, frameId, currentMember.require(principal));
     }
 
     @PostMapping("/manual-qa")

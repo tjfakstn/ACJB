@@ -99,11 +99,18 @@ public class ManualQaPin {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** 등록할 때 사람이 확인한 기준 Figma 프레임(AC33). 이름은 그때 값 */
+    @Column(name = "figma_frame_id", length = 50, updatable = false)
+    private String figmaFrameId;
+
+    @Column(name = "figma_frame_name", length = 255, updatable = false)
+    private String figmaFrameName;
+
     @SuppressWarnings("java:S107") // 위치·캡처·선택 입력을 한 번에 받는 등록 전용 생성자
     public ManualQaPin(Project project, QAIssue issue, int pinNumber, String clientRequestId, String title, String pagePath,
                        String pageUrl, int xPx, int yPx, int viewportWidth, int viewportHeight, LocationBasis locationBasis,
                        CaptureStatus captureStatus, QaCapture capture, Severity severity, String expectedResult,
-                       String actualResult, Instant createdAt) {
+                       String actualResult, String figmaFrameId, String figmaFrameName, Instant createdAt) {
         this.project = project;
         this.issue = issue;
         this.pinNumber = pinNumber;
@@ -121,6 +128,8 @@ public class ManualQaPin {
         this.severity = severity;
         this.expectedResult = expectedResult;
         this.actualResult = actualResult;
+        this.figmaFrameId = figmaFrameId;
+        this.figmaFrameName = figmaFrameName;
         this.createdAt = createdAt;
     }
 }

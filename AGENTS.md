@@ -28,7 +28,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 - **ManualQaPin**: 실시간 QA 워크스페이스에서 배포 화면(또는 첨부 이미지) 위에 찍은 수동 QA 위치 — `pin_number`(화면 ID `QA-M###`), `title`, `page_path`, `anchor`(px·비율), `viewport`, `location_basis`(live_overlay/capture_image), `capture_status`(captured/failed/user_attached/none), 선택 `severity`·`expected_result`·`actual_result`. QAIssue(`source: manual`)에 1:1로 붙는다. 배포 주소는 `Project.deploy_url`, 없으면 GitHub 최근 성공 배포 주소(AC29~AC31, 2026-11-10)
 - **Invitation**: 멤버가 구글 이메일로 보낸 초대 — `status`(pending/accepted/canceled/expired), 7일 만료(재전송하면 그 초대를 7일 연장). 같은 구글 계정으로 로그인해 수락해야 멤버가 된다. 시드 데이터로 멤버를 넣던 방식은 폐기(2026-11-04)
 
-혼동 주의: `QAIssue.platform_scope`(이슈 분류용, common 포함)와 `Environment.platform`(실제 발생 환경, aos/ios/web만)은 다른 값 집합이다 — 혼용하지 말 것. `IssueReportContext.screen`(파싱 결과, 화면 이름만)과 `QAIssue.screen_location`(자유 텍스트, screen+element가 합쳐진 값)도 다른 필드다 — 파싱 응답을 그대로 DB 컬럼에 넣지 않는다(`src/qating/prompts/parse_query.md` 필드 매핑 표 참고). GitHub **이슈·PR** 연동(`github_issue_url` 등)은 v1 비포함(`docs/openapi.yaml`에 `deprecated: true`로 설계만 남음) — 새로 만들지 말 것. GitHub는 연결된 공개 저장소의 코드를 읽기만 한다(첫 QA, 2026-11-07).
+혼동 주의: `QAIssue.platform_scope`(이슈 분류용, common 포함)와 `Environment.platform`(실제 발생 환경, aos/ios/web만)은 다른 값 집합이다 — 혼용하지 말 것. `IssueReportContext.screen`(파싱 결과, 화면 이름만)과 `QAIssue.screen_location`(자유 텍스트, screen+element가 합쳐진 값)도 다른 필드다 — 파싱 응답을 그대로 DB 컬럼에 넣지 않는다(`src/qating/prompts/parse_query.md` 필드 매핑 표 참고). GitHub **이슈·PR** 연동(`github_issue_url` 등)은 v1 비포함(`docs/openapi.yaml`에 `deprecated: true`로 설계만 남음) — 새로 만들지 말 것. GitHub는 연결된 공개 저장소의 코드·커밋·PR을 읽기만 한다(첫 QA 2026-11-07, 이슈 상세 코드 추적 AC34 2026-11-10) — 이슈·PR을 만들거나 바꾸지 않는다.
 
 ## 3. 절대 규칙 (위반한 결과물은 수용하지 않는다)
 
@@ -96,7 +96,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 | Backend | Spring Boot(Java 21) | |
 | DB | MySQL | 개발 단계부터 MySQL 사용(2026-10-28 결정 — 배포 때 DB를 바꾸지 않는다). 접속 정보는 `.env`, 키는 `.env.example`에 추가 |
 | 인증 | Google OAuth2 (구현됨) | |
-| 외부 연동 | Figma API, GitHub API(공개 저장소 코드 읽기 — 첫 QA, 2026-11-07), Claude API(parse·비교 분석·첫 QA·이력 기반 점검 후보), Gmail SMTP(초대 메일), Voyage AI(임베딩 — 이력 기반 점검 후보 검색, 2026-11-05) | GitHub 이슈·PR 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
+| 외부 연동 | Figma API, GitHub API(공개 저장소 코드·커밋·PR 읽기 — 첫 QA 2026-11-07, 코드 추적 2026-11-10), Claude API(parse·비교 분석·첫 QA·이력 기반 점검 후보), Gmail SMTP(초대 메일), Voyage AI(임베딩 — 이력 기반 점검 후보 검색, 2026-11-05) | GitHub 이슈·PR 연동은 v1 비포함(v2 후보, `docs/openapi.yaml` `deprecated: true`) |
 | 인프라 / 배포 | TODO | |
 
 결정 배경: [docs/decision_log.md](docs/decision_log.md)

@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.10.0
+  version: 0.11.0
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -1454,6 +1454,74 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /projects/{projectId}/qa-issues/{issueId}/code-trace:
+    get:
+      tags: [QAIssue]
+      summary: 코드 추적 — 코드 위치, 문제 코드가 들어온 커밋·PR, 고친 커밋·PR (SPEC AC34, 2026-11-10)
+      description: >-
+        프로젝트 멤버 누구나. GitHub는 읽기만 한다. GitHub가 연결되지 않았거나 읽지 못해도 200 — github 필드로 알린다.
+        fixes는 이슈 키(QA-{id})가 정확히 들어간 커밋·PR, 담당 팀이 붙인 링크, Re-QA 커밋이고 시각 내림차순이다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IssueId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/CodeTrace' }
+                  error: { type: object, nullable: true, example: null }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{projectId}/qa-issues/{issueId}/fix-link:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/IssueId'
+    put:
+      tags: [QAIssue]
+      summary: 수정 PR·커밋 링크 붙이기 (SPEC AC34)
+      description: >-
+        그 이슈 담당 팀 역할 멤버만(403). 연결된 저장소의 https://github.com/{owner}/{repo}/pull/{번호} 또는 /commit/{sha}만(400).
+        이슈에 하나만 저장하고 상태·알림·이력은 바꾸지 않는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, maxLength: 500, example: 'https://github.com/tjfakstn/ACJB/pull/42' }
+      responses:
+        '200':
+          description: 저장됨 — 갱신된 코드 추적
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/CodeTrace' }
+                  error: { type: object, nullable: true, example: null }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [QAIssue]
+      summary: 수정 링크 지우기 (SPEC AC34)
+      description: 담당 팀 역할 멤버만(403). 없어도 204
+      responses:
+        '204':
+          description: 지움
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /projects/{projectId}/qa-issues/{issueId}/verifications:
     post:
       tags: [Verification]
@@ -1743,6 +1811,73 @@ components:
           properties:
             frame_id: { type: string }
             frame_name: { type: string }
+
+    CodeTrace:
+      type: object
+      description: 이슈 상세의 코드 추적(AC34). GitHub는 읽기만 한다
+      properties:
+        issue_key: { type: string, example: QA-34, description: 커밋 메시지·PR 제목에 적으면 fixes에 연결된다 }
+        code:
+          type: object
+          nullable: true
+          description: 첫 QA가 값을 읽은 곳. 수동 QA는 null
+          properties:
+            path: { type: string }
+            line: { type: integer, nullable: true }
+            symbol: { type: string, nullable: true, description: 비교 분석 매핑의 컴포넌트 이름 }
+            commit_sha: { type: string, nullable: true }
+            url: { type: string, nullable: true }
+        related:
+          type: array
+          description: 같은 Figma 요소의 다른 첫 QA 이슈(id 오름차순)
+          items:
+            type: object
+            properties:
+              issue_id: { type: string }
+              property: { type: string }
+              expected_value: { type: string }
+              actual_value: { type: string }
+              status: { type: string }
+        origin:
+          type: object
+          nullable: true
+          description: 문제 코드가 들어온 커밋과 그 커밋의 PR
+          properties:
+            basis: { type: string, enum: [line, file] }
+            commit: { $ref: '#/components/schemas/TraceCommit' }
+            pull_requests:
+              type: array
+              items: { $ref: '#/components/schemas/TracePull' }
+        fixes:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: { type: string, enum: [commit, pull_request] }
+              source: { type: string, enum: [key, manual, re_qa] }
+              commit: { allOf: [{ $ref: '#/components/schemas/TraceCommit' }], nullable: true }
+              pull_request: { allOf: [{ $ref: '#/components/schemas/TracePull' }], nullable: true }
+              url: { type: string }
+              verdict: { type: string, enum: [pass, fail], nullable: true, description: re_qa일 때만 }
+        github: { type: string, enum: [ok, not_connected, unavailable] }
+
+    TraceCommit:
+      type: object
+      properties:
+        sha: { type: string }
+        message: { type: string, nullable: true, description: 첫 줄 }
+        author: { type: string, nullable: true }
+        committed_at: { type: string, format: date-time, nullable: true }
+        url: { type: string }
+
+    TracePull:
+      type: object
+      properties:
+        number: { type: integer }
+        title: { type: string, nullable: true }
+        state: { type: string, enum: [open, closed, merged], nullable: true }
+        author: { type: string, nullable: true }
+        url: { type: string }
 
     ScreenFrameLink:
       type: object

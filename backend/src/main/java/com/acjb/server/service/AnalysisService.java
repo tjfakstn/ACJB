@@ -26,6 +26,8 @@ import com.acjb.server.repository.DesignCodeMappingRepository;
 import com.acjb.server.repository.ProjectRepository;
 import com.acjb.server.repository.ProjectRunRepository;
 
+import tools.jackson.databind.json.JsonMapper;
+
 /**
  * AC22 비교 분석 시작·상태, AC27 매핑 조회. 시작 검사 순서: 소유자(403) → 연결 둘 다(409) → 진행 중·이미 성공(409).
  * 실제 분석은 커밋 뒤 AnalysisJob이 한다
@@ -38,14 +40,16 @@ public class AnalysisService {
     private final DesignCodeMappingRepository mappings;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final JsonMapper json;
 
     public AnalysisService(ProjectRepository projects, ProjectRunRepository runs, DesignCodeMappingRepository mappings,
-                           ApplicationEventPublisher events, Clock clock) {
+                           ApplicationEventPublisher events, Clock clock, JsonMapper json) {
         this.projects = projects;
         this.runs = runs;
         this.mappings = mappings;
         this.events = events;
         this.clock = clock;
+        this.json = json;
     }
 
     @Transactional
@@ -78,7 +82,7 @@ public class AnalysisService {
         ProjectRun run = runs.findFirstByProjectIdAndKindAndStatusOrderByFinishedAtDescIdDesc(projectId, RunKind.ANALYSIS, RunStatus.SUCCEEDED)
             .orElse(null);
         if (run == null) {
-            return new MappingListResponse(null, null, List.of());
+            return new MappingListResponse(null, null, List.of(), List.of());
         }
         // 정렬은 쿼리가 고정한다(프레임 이름·id → 프레임 짝 먼저 → 노드 이름·id)
         Map<String, MappingListResponse.FrameMapping> frames = new LinkedHashMap<>();
@@ -92,6 +96,14 @@ public class AnalysisService {
                 }
             }
         }
-        return new MappingListResponse(ProjectRunView.of(run), run.getCommitSha(), List.copyOf(frames.values()));
+        return new MappingListResponse(ProjectRunView.of(run), run.getCommitSha(), List.copyOf(frames.values()), unmapped(run));
+    }
+
+    /** 2026-11-10 이전 분석은 기록이 없어 빈 목록이다 */
+    private List<MappingListResponse.UnmappedFrame> unmapped(ProjectRun run) {
+        if (run.getUnmappedFrames() == null || run.getUnmappedFrames().isBlank()) {
+            return List.of();
+        }
+        return List.of(json.readValue(run.getUnmappedFrames(), MappingListResponse.UnmappedFrame[].class));
     }
 }

@@ -231,7 +231,7 @@ function FirstQaBanner({ run, running, justFinished, projectId, onRetry, canRun 
 }) {
   if (running && run) {
     return <Banner tone="blue" icon="refresh" title="첫 QA를 실행하고 있어요" badge="첫 QA"
-      sub={`Figma 디자인과 구현 코드를 비교하고 있습니다 · ${formatDateTime(run.created_at)} 시작 · 실행이 끝나면 결과를 확인할 수 있어요. 실행 중에는 새 QA를 시작할 수 없습니다.`}
+      sub={<>{`Figma 디자인과 구현 코드를 비교하고 있습니다 · ${formatDateTime(run.created_at)} 시작 · 실행이 끝나면 결과를 확인할 수 있어요. 실행 중에는 새 QA를 시작할 수 없습니다.`}<RunProgress run={run} /></>}
       action={<span className={`${PRIMARY_BTN} opacity-40`}><Icon name="refresh" className="h-4 w-4" />QA 실행 중</span>} />
   }
   if (justFinished && run) {
@@ -247,10 +247,31 @@ function FirstQaBanner({ run, running, justFinished, projectId, onRetry, canRun 
   return null
 }
 
+/** 비교 진행률(2026-11-10) — 서버가 묶음이 끝날 때마다 남기는 "비교한 Figma 요소 수/전체". 비교 전(Figma·코드 읽는 중)이면 준비 문구 */
+function RunProgress({ run }: { run: ProjectRun }) {
+  const total = run.progress_total ?? 0
+  if (total <= 0) {
+    return run.kind === 'first_qa' || (run.added_scope?.length ?? 0) > 0
+      ? <span className="mt-2 block">Figma 화면과 코드를 읽는 중이에요…</span> : null
+  }
+  const done = Math.min(run.progress_done ?? 0, total)
+  const pct = Math.floor((done / total) * 100)
+  return (
+    <span className="mt-2 block" role="status">
+      <span className="flex items-center justify-between font-medium text-black">
+        <span>Figma 요소 {done.toLocaleString()} / {total.toLocaleString()}개 비교</span><span>{pct}%</span>
+      </span>
+      <span className="mt-1 block h-1.5 w-full overflow-hidden rounded-full bg-white">
+        <span className="block h-full rounded-full bg-qa-primary transition-[width]" style={{ width: `${pct}%` }} />
+      </span>
+    </span>
+  )
+}
+
 function ReQaBanner({ run, running, onRetry, canRun }: { run: ProjectRun | null; running: boolean; onRetry: () => void; canRun: boolean }) {
   if (running && run) {
     return <Banner tone="blue" icon="refresh" title="Re-QA를 실행하고 있어요" badge="Re-QA"
-      sub={`수정 완료된 문제를 첫 QA와 같은 기준으로 다시 비교하고 있습니다 · ${formatDateTime(run.created_at)} 시작`} />
+      sub={<>{`수정 완료된 문제를 첫 QA와 같은 기준으로 다시 비교하고 있습니다 · ${formatDateTime(run.created_at)} 시작`}<RunProgress run={run} /></>} />
   }
   if (run?.status === 'failed') {
     return <Banner tone="red" icon="refresh" title="Re-QA를 완료하지 못했어요" badge="실행 실패"

@@ -32,12 +32,33 @@ public interface QaComparator {
     record Target(String frameId, String frameName, String nodeId, String nodeName, String codePath, String codeSymbol) {
     }
 
+    /** 진행률 — 비교한 Figma 요소 수/전체 요소 수(2026-11-10). 실행 화면이 "N/M개 비교"로 보여 준다 */
+    @FunctionalInterface
+    interface Progress {
+        Progress NONE = (done, total) -> { };
+
+        void update(int done, int total);
+    }
+
     record FirstQaInput(String repo, String commitSha, String figmaFileKey, Set<QaScope> scope, List<StyleProperty> properties,
-                        List<Target> targets) {
+                        List<Target> targets, Progress progress) {
+
+        public FirstQaInput(String repo, String commitSha, String figmaFileKey, Set<QaScope> scope, List<StyleProperty> properties,
+                            List<Target> targets) {
+            this(repo, commitSha, figmaFileKey, scope, properties, targets, Progress.NONE);
+        }
 
         /** Figma 파일을 읽지 않는 비교기(가짜 비교기)용 */
         public FirstQaInput(String repo, String commitSha, Set<QaScope> scope, List<StyleProperty> properties, List<Target> targets) {
             this(repo, commitSha, null, scope, properties, targets);
+        }
+
+        public FirstQaInput withCommit(String sha) {
+            return new FirstQaInput(repo, sha, figmaFileKey, scope, properties, targets, progress);
+        }
+
+        public FirstQaInput withProgress(Progress p) {
+            return new FirstQaInput(repo, commitSha, figmaFileKey, scope, properties, targets, p == null ? Progress.NONE : p);
         }
     }
 

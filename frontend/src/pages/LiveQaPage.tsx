@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
-  ApiError, captureScreen, createManualQa, formatDateTime, getDeployTarget, getFirstQa, listIssues, listMembers, manualQaId,
+  ApiError, captureScreen, createManualQa, formatDateTime, getDeployTarget, getFirstQa, getFramePreview, listIssues, listMembers, manualQaId,
   TEAM_LABELS, updateDeployUrl, uploadCapture, type DeployTarget, type ManualQaInput, type ProjectMember, type ProjectRun,
   type QaCapture, type QaIssue, type Team, type Viewport,
 } from '../lib/api'
@@ -9,7 +9,7 @@ import { Icon } from '../components/common/Icon'
 import { WorkflowStepper } from '../components/workspace/WorkspaceCards'
 import { currentStep } from '../components/workspace/workflow'
 import { AssignPanel } from '../components/qa/AssignPanel'
-import { ErrorCard, Loading, OUTLINE_BTN, PageTitle, PRIMARY_BTN, QaShell, loadErrorMessage, useProject } from '../components/qa/QaParts'
+import { ErrorCard, Loading, OUTLINE_BTN, PageTitle, PRIMARY_BTN, QaShell, issueParts, loadErrorMessage, useProject } from '../components/qa/QaParts'
 import { LivePreview, type PreviewSurface } from '../components/liveqa/LivePreview'
 import { QaItemList } from '../components/liveqa/QaItemList'
 import { ManualQaDetail } from '../components/liveqa/ManualQaDetail'
@@ -45,6 +45,8 @@ export function LiveQaPage() {
   const [toast, setToast] = useState<{ text: string; sub: string } | null>(null)
   const selectedId = params.get('issue')
   const draftRef = useRef<Draft | null>(null)
+  const issuesRef = useRef<QaIssue[] | null>(null)
+  issuesRef.current = issues
   const previewRef = useRef<HTMLDivElement>(null)
   draftRef.current = draft
 
@@ -88,6 +90,50 @@ export function LiveQaPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [registerMode, confirmDiscard, requestClose])
+
+  // 항목을 고르면 위쪽 화면도 그 항목의 화면으로 바꾼다(2026-11-10 설만수 요청)
+  //  - 수동 QA(배포 화면에서 찍음): 그 경로의 배포 화면 — 핀이 함께 보인다
+  //  - 수동 QA(첨부 이미지에서 찍음): 그 첨부 이미지
+  //  - 자동 QA(첫 QA): 배포 경로가 없어 그 항목의 Figma 프레임과 비교한 요소 위치(AC32) — 경로를 추측하지 않는다
+  const issuesLoaded = issues !== null
+  const previewToken = useRef(0)
+  useEffect(() => {
+    if (!selectedId || !issuesLoaded) return
+    const item = issuesRef.current?.find((i) => i.id === selectedId)
+    if (!item) return
+    const token = ++previewToken.current
+    const m = item.manual_qa
+    if (m) {
+      if (m.location_basis === 'capture_image' && m.capture_id) {
+        setSurface({
+          kind: 'image',
+          attachment: { id: m.capture_id, kind: 'upload', page_url: null, width: m.viewport.width, height: m.viewport.height, created_at: item.created_at },
+        })
+      } else {
+        setSurface({ kind: 'live', attachment: null })
+        setPath(m.page_path)
+      }
+      return
+    }
+    const frameId = item.style_mismatch?.frame_id
+    if (!frameId) return
+    const title = issueParts(item).screen
+    setSurface({ kind: 'figma', attachment: null, figma: { state: 'loading', title } })
+    getFramePreview(projectId, frameId, item.style_mismatch?.node_id ?? null)
+      .then((preview) => {
+        if (previewToken.current === token) setSurface({ kind: 'figma', attachment: null, figma: { state: 'ok', title, preview } })
+      })
+      .catch((e) => {
+        if (previewToken.current === token) {
+          setSurface({ kind: 'figma', attachment: null, figma: { state: 'error', title, message: e instanceof ApiError ? e.message : 'Figma 디자인을 불러오지 못했어요.' } })
+        }
+      })
+  }, [selectedId, issuesLoaded, projectId])
+
+  const backToLive = () => {
+    previewToken.current++
+    setSurface({ kind: 'live', attachment: null })
+  }
 
   const isOwner = !!me && !!detail && detail.owner_id === me.id
   const manualPins = useMemo(() => (issues ?? []).filter((i) => i.manual_qa), [issues])
@@ -199,6 +245,7 @@ export function LiveQaPage() {
   // 목록의 [수동 QA 등록] — 위치는 배포 화면에서 찍으므로 등록 모드를 켜고 화면을 배포 화면으로 올린다.
   // 찍을 화면이 없으면 그 이유에 맞는 다음 단계로 보낸다(삽입 제한이면 스크린샷 첨부, 주소가 없으면 소유자에게 주소 입력)
   const blocked = target?.embeddable === false
+  // Figma 프레임을 보는 중이면 배포 화면 기준으로 판단한다 — 등록을 누르면 배포 화면으로 돌아간다
   const canPick = surface.kind === 'image' ? !!surface.attachment : !!target?.url && !blocked
   const registerHint = !target ? null
     : canPick ? null
@@ -210,6 +257,7 @@ export function LiveQaPage() {
       return
     }
     if (canPick) {
+      if (surface.kind === 'figma') backToLive()
       setRegisterMode(true)
       select(null)
     } else if (!target?.url && isOwner) {
@@ -274,7 +322,7 @@ export function LiveQaPage() {
               onPathChange={(p) => { setPath(p); setSurface({ kind: 'live', attachment: null }) }}
               reloadKey={reloadKey} onReload={() => setReloadKey((k) => k + 1)}
               surface={surface} registerMode={registerMode}
-              onToggleRegister={() => { if (draft) requestClose(); else setRegisterMode((v) => !v) }}
+              onBackToLive={backToLive}
               onPick={onPick} pins={manualPins}
               draftPin={draft ? { x: draft.x, y: draft.y, viewport: draft.viewport, number: nextPin } : null}
               selectedId={selectedId} onSelectPin={(id) => { if (!draft) select(id) }}
@@ -346,7 +394,7 @@ export function LiveQaPage() {
                 <div className="mt-3 text-sm font-bold text-black">확인할 QA 항목을 선택하세요</div>
                 <p className="mt-2 max-w-[420px] text-xs leading-4 text-qa-text-sub">
                   자동 QA 항목은 Figma 기준값과 구현값의 차이를, 수동 QA 항목은 등록 당시 캡처와 위치를 보여 줘요.
-                  배포 화면에서 문제를 발견했다면 [QA 등록]을 누르고 위치를 클릭해 바로 등록할 수 있어요.
+                  배포 화면에서 문제를 발견했다면 [수동 QA 등록]을 누르고 위치를 클릭해 바로 등록할 수 있어요.
                 </p>
                 <div className="mt-4 flex gap-6 text-center text-xs text-qa-text-sub">
                   <span><b className="block text-base text-black">{autoCount}</b>자동 QA</span>

@@ -24,36 +24,8 @@ export function AssignPanel({ issue, projectId, members, onClose, onAssigned }: 
   onClose: () => void
   onAssigned: (updated: QaIssue, previous: Team | null) => void
 }) {
-  const [editing, setEditing] = useState(issue.assigned_team === null)
-  const [choice, setChoice] = useState<Team | null>(issue.assigned_team)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // 다른 문제를 고르면 그 문제의 상태로 다시 시작한다
-  useEffect(() => {
-    setEditing(issue.assigned_team === null)
-    setChoice(issue.assigned_team)
-    setError(null)
-  }, [issue.id, issue.assigned_team])
-
   const m = issue.style_mismatch
   const parts = issueParts(issue)
-  const changing = issue.assigned_team !== null
-
-  const save = async () => {
-    if (!choice) return
-    setSaving(true)
-    setError(null)
-    try {
-      const updated = await assignTeam(projectId, issue.id, choice)
-      setEditing(false)
-      onAssigned(updated, issue.assigned_team)
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : '담당 팀을 저장하지 못했어요.')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <aside className="rounded-xl border border-qa-primary/50 bg-white" aria-label="문제 상세">
@@ -87,6 +59,49 @@ export function AssignPanel({ issue, projectId, members, onClose, onAssigned }: 
         )}
       </div>
 
+      <TeamAssignSection issue={issue} projectId={projectId} members={members} onAssigned={onAssigned} />
+    </aside>
+  )
+}
+
+/** 수정 담당 팀 배정·변경과 수정 진행 상태 — QA 결과 패널과 실시간 QA 워크스페이스의 수동 QA 상세가 함께 쓴다(시안 ASN·M-10A·B) */
+export function TeamAssignSection({ issue, projectId, members, onAssigned }: {
+  issue: QaIssue
+  projectId: string
+  members: ProjectMember[]
+  onAssigned: (updated: QaIssue, previous: Team | null) => void
+}) {
+  const [editing, setEditing] = useState(issue.assigned_team === null)
+  const [choice, setChoice] = useState<Team | null>(issue.assigned_team)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // 다른 문제를 고르면 그 문제의 상태로 다시 시작한다
+  useEffect(() => {
+    setEditing(issue.assigned_team === null)
+    setChoice(issue.assigned_team)
+    setError(null)
+  }, [issue.id, issue.assigned_team])
+
+  const changing = issue.assigned_team !== null
+
+  const save = async () => {
+    if (!choice) return
+    setSaving(true)
+    setError(null)
+    try {
+      const updated = await assignTeam(projectId, issue.id, choice)
+      setEditing(false)
+      onAssigned(updated, issue.assigned_team)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '담당 팀을 저장하지 못했어요.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
       <div className="p-5">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-bold text-black">수정 담당 팀 <span className="text-qa-warning">*</span></h3>
@@ -158,6 +173,6 @@ export function AssignPanel({ issue, projectId, members, onClose, onAssigned }: 
         </div>
         <ProgressChip status={issue.status} />
       </div>
-    </aside>
+    </>
   )
 }

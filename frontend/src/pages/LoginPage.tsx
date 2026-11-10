@@ -11,13 +11,19 @@ export function LoginPage() {
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
+    // 정리된 effect의 응답은 무시한다 — StrictMode에서 두 번 이동해 저장된 경로를 덮어쓰지 않게(LandingPage와 같은 이유)
+    let cancelled = false
     fetchMe().then((me) => {
+      if (cancelled) return
       if (me.authenticated) {
         navigate(takeAfterLogin() ?? '/app/projects', { replace: true })
       } else {
         setChecking(false)
       }
     })
+    return () => {
+      cancelled = true
+    }
   }, [navigate])
 
   if (checking) {

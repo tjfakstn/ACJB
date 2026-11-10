@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
-  formatDate, formatDateTime, getReQa, listIssues, TEAM_LABELS, type IssueStatus, type ProjectRun, type QaIssue, type Team,
+  formatDate, formatDateTime, getReQa, listIssues, manualQaId, TEAM_LABELS, type IssueStatus, type ProjectRun, type QaIssue, type Team,
 } from '../lib/api'
 import { Icon } from '../components/common/Icon'
 import { CARD, WorkflowStepper } from '../components/workspace/WorkspaceCards'
@@ -134,7 +134,7 @@ export function QaQueuePage() {
             <p className="text-xs leading-5 text-black">
               {reQa?.status === 'succeeded'
                 ? `Re-QA 결과 반영 — ${formatDateTime(reQa.finished_at ?? reQa.created_at)} Re-QA에서 ${reQa.created_count}건이 재검증을 통과해 해결됐고, ${reQa.failed_count ?? 0}건은 여전히 달라 재확인이 필요해요${reQa.dropped_count ? ` (근거를 다시 얻지 못해 건너뛴 ${reQa.dropped_count}건은 수정 완료로 남아 있어요)` : ''}. 남은 문제는 담당 팀이 수정한 뒤 Re-QA로 다시 확인하세요.`
-                : '작업목록 등록 기준 — 첫 QA에서 발견된 수정 필요 문제가 이슈 단위로 등록돼요. 담당 팀이 정해지지 않은 문제는 미배정으로 표시되고, 디자인-코드 매핑 근거는 문제 상세에서 확인할 수 있어요.'}
+                : '작업목록 등록 기준 — 첫 QA(자동 QA)에서 발견된 수정 필요 문제와 실시간 QA 워크스페이스에서 등록한 수동 QA가 이슈 ID 기준으로 한 번씩 등록돼요. 출처는 그대로 유지되고, 담당 팀이 정해지지 않은 문제는 미배정으로 표시돼요.'}
             </p>
           </div>
 
@@ -155,10 +155,13 @@ export function QaQueuePage() {
                         className={`cursor-pointer rounded-xl border bg-white px-5 py-4 ${active ? 'border-qa-primary ring-1 ring-qa-primary' : 'border-qa-border hover:border-qa-sub'}`}>
                         <div className="flex items-start justify-between gap-3">
                           <button type="button" onClick={() => setSelectedId(i.id)} className="min-w-0 text-left text-sm font-bold text-black">{issueTitle(i)}</button>
-                          <Verdict pass={i.status === 'resolved'} />
+                          {/* 수동 QA는 사람이 확인한 문제라 PASS/FAIL 판정이 없다(시안 M-10C) — 출처 배지로 대신한다 */}
+                          {i.source === 'manual'
+                            ? <span className="rounded bg-[#7c3aed]/10 px-1.5 text-xs font-medium leading-5 text-[#7c3aed]">수동 QA</span>
+                            : <Verdict pass={i.status === 'resolved'} />}
                         </div>
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                          <span className="text-xs text-qa-text-sub">#{i.id} · {issueParts(i).screen}{i.source === 'manual' ? ' · 직접 등록' : ''}</span>
+                          <span className="text-xs text-qa-text-sub">{i.manual_qa ? manualQaId(i.manual_qa.pin_number) : `#${i.id}`} · {issueParts(i).screen}{i.source === 'manual' ? ' · 수동 QA' : ''}</span>
                           <span className="flex flex-wrap items-center gap-2">
                             <ProgressChip status={i.status} />
                             <TeamTag team={i.assigned_team} />
@@ -182,7 +185,9 @@ export function QaQueuePage() {
                   <aside className="rounded-xl border border-qa-primary/50 bg-white p-5">
                     <div className="flex items-center gap-2">
                       <h2 className="text-sm font-bold text-black">이슈 요약</h2>
-                      <Verdict pass={selected.status === 'resolved'} />
+                      {selected.source === 'manual'
+                        ? <span className="rounded bg-[#7c3aed]/10 px-1.5 text-xs font-medium leading-5 text-[#7c3aed]">수동 QA</span>
+                        : <Verdict pass={selected.status === 'resolved'} />}
                     </div>
                     <div className="mt-3 text-sm font-bold text-black">{issueTitle(selected)}</div>
                     <div className="text-xs text-qa-text-sub">{issueParts(selected).screen}</div>
@@ -193,7 +198,7 @@ export function QaQueuePage() {
                         { label: '배정 상태', value: selected.assigned_team ? '배정 완료' : '미배정' },
                         { label: '수정 진행', value: <ProgressChip status={selected.status} /> },
                         { label: '등록일', value: formatDate(selected.created_at) },
-                        { label: '출처', value: selected.source === 'first_qa' ? '첫 QA' : '직접 등록' },
+                        { label: '출처', value: selected.source === 'first_qa' ? '첫 QA' : selected.manual_qa ? `수동 QA · ${manualQaId(selected.manual_qa.pin_number)}` : '직접 등록' },
                       ]} />
                     </div>
                   </aside>

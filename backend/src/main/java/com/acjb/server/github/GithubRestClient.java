@@ -23,12 +23,14 @@ public class GithubRestClient implements GithubClient {
 
     private final RestClient http;
     private final JsonMapper json;
+    private final boolean hasToken;
 
     public GithubRestClient(JsonMapper json,
                             @Value("${app.github.base-url:https://api.github.com}") String baseUrl,
                             @Value("${app.github.token:}") String token,
                             @Value("${app.github.timeout:15s}") Duration timeout) {
         this.json = json;
+        this.hasToken = token != null && !token.isBlank();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
             HttpClient.newBuilder().connectTimeout(timeout).build());
         factory.setReadTimeout(timeout);
@@ -191,6 +193,148 @@ public class GithubRestClient implements GithubClient {
             return new RepoInfo(name.asString(), branch.asString(), priv.asBoolean());
         } catch (JacksonException e) {
             throw new GithubApiException("GitHub 응답이 JSON이 아닙니다.", 0, e);
+        }
+    }
+
+    // ---------------------------------------------------------------- 코드 추적(AC34) — 읽기만
+
+    private static final String BLAME_QUERY = """
+        query($o:String!,$r:String!,$sha:GitObjectID!,$p:String!){repository(owner:$o,name:$r){object(oid:$sha){... on Commit{
+          blame(path:$p){ranges{startingLine endingLine commit{oid messageHeadline committedDate url author{name user{login}}
+            associatedPullRequests(first:5){nodes{number title body headRefName state createdAt url author{login}}}}}}}}}}""";
+
+    @Override
+    public boolean hasToken() {
+        return hasToken;
+    }
+
+    @Override
+    public java.util.Optional<Origin> blameLine(String owner, String repo, String sha, String path, int line) {
+        if (!hasToken) {
+            return java.util.Optional.empty();
+        }
+        java.util.Map<String, Object> body = java.util.Map.of("query", BLAME_QUERY,
+            "variables", java.util.Map.of("o", owner, "r", repo, "sha", sha, "p", path));
+        JsonNode root = read(() -> http.post().uri("/graphql").contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .body(json.writeValueAsString(body)).retrieve().body(String.class));
+        if (root == null || root.has("errors")) {
+            // GraphQL은 오류도 200으로 준다 — 첫 오류 메시지만 남긴다(토큰·코드는 담기지 않는다)
+            String detail = root == null ? "" : text(root.at("/errors/0/message"));
+            throw new GithubApiException("GitHub blame 조회가 실패했습니다: " + detail, 0, null);
+        }
+        JsonNode ranges = root.at("/data/repository/object/blame/ranges");
+        if (!ranges.isArray()) {
+            return java.util.Optional.empty();
+        }
+        for (JsonNode r : ranges) {
+            if (r.path("startingLine").asInt() <= line && line <= r.path("endingLine").asInt()) {
+                JsonNode c = r.path("commit");
+                String login = text(c.at("/author/user/login"));
+                CommitInfo commit = new CommitInfo(text(c.get("oid")), text(c.get("messageHeadline")),
+                    login != null ? login : text(c.at("/author/name")), instant(c.get("committedDate")), text(c.get("url")));
+                java.util.List<PullInfo> pulls = new java.util.ArrayList<>();
+                for (JsonNode p : c.at("/associatedPullRequests/nodes")) {
+                    pulls.add(new PullInfo(p.path("number").asInt(), text(p.get("title")), text(p.get("body")), text(p.get("headRefName")),
+                        text(p.get("state")) == null ? null : text(p.get("state")).toLowerCase(java.util.Locale.ROOT), text(p.at("/author/login")),
+                        instant(p.get("createdAt")), text(p.get("url"))));
+                }
+                return commit.sha() == null ? java.util.Optional.empty() : java.util.Optional.of(new Origin(commit, pulls));
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
+    @Override
+    public java.util.Optional<CommitInfo> lastCommitForPath(String owner, String repo, String sha, String path) {
+        JsonNode root = read(() -> http.get().uri(b -> b.path("/repos/{owner}/{repo}/commits").queryParam("sha", sha).queryParam("path", path)
+            .queryParam("per_page", 1).build(owner, repo)).retrieve().body(String.class));
+        return root != null && root.isArray() && !root.isEmpty() ? java.util.Optional.of(commitOf(root.get(0))) : java.util.Optional.empty();
+    }
+
+    @Override
+    public java.util.List<PullInfo> pullsForCommit(String owner, String repo, String sha) {
+        JsonNode root = read(() -> http.get().uri("/repos/{owner}/{repo}/commits/{sha}/pulls?per_page=5", owner, repo, sha)
+            .retrieve().body(String.class));
+        return pullsOf(root);
+    }
+
+    @Override
+    public java.util.List<CommitInfo> commitsSince(String owner, String repo, String branch, java.time.Instant since) {
+        JsonNode root = read(() -> http.get().uri(b -> b.path("/repos/{owner}/{repo}/commits").queryParam("sha", branch)
+            .queryParam("since", since.toString()).queryParam("per_page", 100).build(owner, repo)).retrieve().body(String.class));
+        java.util.List<CommitInfo> out = new java.util.ArrayList<>();
+        if (root != null && root.isArray()) {
+            root.forEach(c -> out.add(commitOf(c)));
+        }
+        return out;
+    }
+
+    @Override
+    public java.util.List<PullInfo> recentPulls(String owner, String repo) {
+        JsonNode root = read(() -> http.get().uri("/repos/{owner}/{repo}/pulls?state=all&sort=created&direction=desc&per_page=100", owner, repo)
+            .retrieve().body(String.class));
+        return pullsOf(root);
+    }
+
+    @Override
+    public java.util.Optional<CommitInfo> commit(String owner, String repo, String sha) {
+        try {
+            JsonNode root = read(() -> http.get().uri("/repos/{owner}/{repo}/commits/{sha}", owner, repo, sha).retrieve().body(String.class));
+            return root == null || !root.isObject() ? java.util.Optional.empty() : java.util.Optional.of(commitOf(root));
+        } catch (GithubApiException e) {
+            if (e.status() == 404 || e.status() == 422) {
+                return java.util.Optional.empty();
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public java.util.Optional<PullInfo> pull(String owner, String repo, int number) {
+        try {
+            JsonNode root = read(() -> http.get().uri("/repos/{owner}/{repo}/pulls/{n}", owner, repo, number).retrieve().body(String.class));
+            return root == null || !root.isObject() ? java.util.Optional.empty() : java.util.Optional.of(pullOf(root));
+        } catch (GithubApiException e) {
+            if (e.status() == 404) {
+                return java.util.Optional.empty();
+            }
+            throw e;
+        }
+    }
+
+    private static CommitInfo commitOf(JsonNode c) {
+        String message = text(c.at("/commit/message"));
+        String login = text(c.at("/author/login"));
+        return new CommitInfo(text(c.get("sha")), message == null ? null : message.lines().findFirst().orElse(""),
+            login != null ? login : text(c.at("/commit/author/name")), instant(c.at("/commit/committer/date")), text(c.get("html_url")));
+    }
+
+    private static java.util.List<PullInfo> pullsOf(JsonNode root) {
+        java.util.List<PullInfo> out = new java.util.ArrayList<>();
+        if (root != null && root.isArray()) {
+            root.forEach(p -> out.add(pullOf(p)));
+        }
+        return out;
+    }
+
+    private static PullInfo pullOf(JsonNode p) {
+        String state = text(p.get("state"));
+        if (p.hasNonNull("merged_at")) {
+            state = "merged";
+        }
+        return new PullInfo(p.path("number").asInt(), text(p.get("title")), text(p.get("body")), text(p.at("/head/ref")), state,
+            text(p.at("/user/login")), instant(p.get("created_at")), text(p.get("html_url")));
+    }
+
+    private static String text(JsonNode n) {
+        return n != null && n.isString() ? n.asString() : null;
+    }
+
+    private static java.time.Instant instant(JsonNode n) {
+        try {
+            return n != null && n.isString() ? java.time.Instant.parse(n.asString()) : null;
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
         }
     }
 }

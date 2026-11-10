@@ -102,21 +102,29 @@ public record QaIssueResponse(
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ManualQaView(int pinNumber, String title, String pagePath, String pageUrl, AnchorView anchor, ViewportView viewport,
                                String locationBasis, String captureStatus, String captureId, String severity, String expectedResult,
-                               String actualResult) {
+                               String actualResult, FigmaFrameView figmaFrame) {
         static ManualQaView of(ManualQaPin p) {
             if (p == null) {
                 return null;
             }
             return new ManualQaView(p.getPinNumber(), p.getTitle(), p.getPagePath(), p.getPageUrl(),
-                new AnchorView(p.getXPx(), p.getYPx(), ratio(p.getXPx(), p.getViewportWidth()), ratio(p.getYPx(), p.getViewportHeight())),
-                new ViewportView(p.getViewportWidth(), p.getViewportHeight()), lower(p.getLocationBasis()), lower(p.getCaptureStatus()),
+                // 위치 없이 등록(none)하면 좌표·화면 크기가 없다
+                p.getXPx() == null ? null
+                    : new AnchorView(p.getXPx(), p.getYPx(), ratio(p.getXPx(), p.getViewportWidth()), ratio(p.getYPx(), p.getViewportHeight())),
+                p.getViewportWidth() == null ? null : new ViewportView(p.getViewportWidth(), p.getViewportHeight()),
+                lower(p.getLocationBasis()), lower(p.getCaptureStatus()),
                 p.getCapture() == null ? null : String.valueOf(p.getCapture().getId()), lower(p.getSeverity()), p.getExpectedResult(),
-                p.getActualResult());
+                p.getActualResult(), p.getFigmaFrameId() == null ? null : new FigmaFrameView(p.getFigmaFrameId(), p.getFigmaFrameName()));
         }
 
         private static double ratio(int v, int size) {
             return Math.round((double) v / size * 10000) / 10000.0;
         }
+    }
+
+    /** 수동 QA를 등록할 때 고른 기준 Figma 프레임(AC33) */
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record FigmaFrameView(String frameId, String frameName) {
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

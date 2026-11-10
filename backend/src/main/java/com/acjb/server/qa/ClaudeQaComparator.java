@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,6 +38,7 @@ import com.anthropic.core.JsonValue;
 import com.anthropic.core.http.StreamResponse;
 import com.anthropic.errors.AnthropicException;
 import com.anthropic.helpers.MessageAccumulator;
+import com.anthropic.models.messages.CacheControlEphemeral;
 import com.anthropic.models.messages.JsonOutputFormat;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
@@ -64,7 +66,7 @@ public class ClaudeQaComparator implements QaComparator {
     private static final Logger log = LoggerFactory.getLogger(ClaudeQaComparator.class);
 
     static final String SYSTEM = """
-        You locate, in React + Tailwind source code, the exact code that renders each element of a Figma design node.
+        You locate, in React + Tailwind source code, the exact code that renders each element of the listed Figma design node(s).
         For each listed element and each listed property, find the JSX element in the provided code that renders that design element, and return:
         - file: the file path exactly as given
         - line: the 1-based line number where the value is written
@@ -85,6 +87,8 @@ public class ClaudeQaComparator implements QaComparator {
     private static final int MAX_CSS_FILES = 30;
     private static final int FRAME_BATCH = 20;
     private static final long MAX_TOKENS = 32_000L;
+    /** 한 번에 묻는 Figma 요소 수 — 응답이 MAX_TOKENS 안에 들어오게(요소 하나에 property 여러 개) */
+    static final int MAX_ELEMENTS_PER_CALL = 60;
 
     private final GithubClient github;
     private final FigmaClient figma;
@@ -122,22 +126,48 @@ public class ClaudeQaComparator implements QaComparator {
         TailwindValues theme = new TailwindValues(repo.themeCss());
         Map<String, JsonNode> frames = frames(input.figmaFileKey(), input.targets().stream().map(Target::frameId).toList());
 
-        List<Job> jobs = new ArrayList<>();
+        // 같은 코드 파일을 그리는 노드는 한 번에 묻는다(2026-11-10) — 노드마다 물으면 같은 파일 묶음을 수십 번 다시 보낸다.
+        // 같은 파일 안에서 비교 근거가 똑같은 요소(같은 경로·종류·Figma 값·크기)는 처음 것만 묻는다 — 헤더·사이드바처럼
+        // 모든 프레임에 들어 있는 컴포넌트는 인스턴스마다 Figma id만 다르고 입력이 같아, 몇 번을 물어도 같은 줄·같은 판정이 나온다
+        Map<String, List<Unit>> byFile = new LinkedHashMap<>();
+        Set<String> seenElements = new HashSet<>();
+        int repeated = 0;
         for (Target t : input.targets()) {
             JsonNode frame = frames.get(t.frameId());
             Optional<JsonNode> node = frame == null ? Optional.empty() : FigmaFacts.find(frame, t.nodeId());
             if (node.isEmpty() || !repo.has(t.codePath())) {
                 continue; // 시안이나 파일이 사라졌으면 비교할 근거가 없다
             }
-            List<Element> elements = FigmaFacts.collect(node.get(), allowed);
+            List<Element> all = FigmaFacts.collect(node.get(), allowed);
+            List<Element> elements = all.stream().filter(e -> seenElements.add(sameInput(t.codePath(), e))).toList();
+            repeated += all.size() - elements.size();
             if (!elements.isEmpty()) {
-                jobs.add(new Job(t, elements, repo.bundle(t.codePath()), theme));
+                byFile.computeIfAbsent(t.codePath(), k -> new ArrayList<>()).add(new Unit(t, elements));
+            }
+        }
+        // 파일마다 요소 MAX_ELEMENTS_PER_CALL개씩 나눈다. 파일마다 첫 묶음을 먼저 줄 세워, 같은 파일의 다음 묶음이 캐시된 코드를 읽게 한다
+        List<List<Job>> perFile = new ArrayList<>();
+        for (Map.Entry<String, List<Unit>> e : byFile.entrySet()) {
+            Map<String, String> code = repo.bundle(e.getKey());
+            perFile.add(chunk(e.getValue()).stream().map(units -> new Job(units, code, theme)).toList());
+        }
+        List<Job> jobs = new ArrayList<>();
+        for (int round = 0; ; round++) {
+            boolean any = false;
+            for (List<Job> fileJobs : perFile) {
+                if (round < fileJobs.size()) {
+                    jobs.add(fileJobs.get(round));
+                    any = true;
+                }
+            }
+            if (!any) {
+                break;
             }
         }
         List<Finding> findings = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         int dropped = 0;
-        for (JobResult r : run(jobs)) {
+        for (JobResult r : run(jobs, input.progress())) {
             dropped += r.dropped();
             for (Finding f : r.findings()) {
                 // 같은 코드 줄·property·값의 차이는 하나로 — 같은 컴포넌트를 여러 번 그린 시안이 이슈를 불리지 않게
@@ -146,22 +176,66 @@ public class ClaudeQaComparator implements QaComparator {
                 }
             }
         }
-        log.info("첫 QA 비교: 대상 {}개, 차이 {}개, 버림 {}개", jobs.size(), findings.size(), dropped);
+        log.info("첫 QA 비교: 노드 {}개, 파일 {}개, 호출 {}번, 반복 요소 건너뜀 {}개, 차이 {}개, 버림 {}개",
+            byFile.values().stream().mapToInt(List::size).sum(), byFile.size(), jobs.size(), repeated, findings.size(), dropped);
         return new FirstQaResult(input.commitSha(), findings, dropped);
     }
 
-    private record Job(Target target, List<Element> elements, Map<String, String> code, TailwindValues theme) {
+    /** 비교 근거가 같은지 가르는 키 — Figma id는 빼고, 판정에 쓰는 값(경로·종류·값·크기·앞쪽 아이콘 폭)만 */
+    static String sameInput(String codePath, Element e) {
+        return codePath + "|" + e.path() + "|" + e.type() + "|" + e.values() + "|" + e.width() + "|" + e.height() + "|" + e.lead();
+    }
+
+    /** 한 번에 묻는 노드 묶음 — 같은 파일. 노드 하나는 가능하면 나누지 않고, 혼자 한도를 넘는 노드만 요소를 나눈다 */
+    static List<List<Unit>> chunk(List<Unit> units) {
+        List<List<Unit>> out = new ArrayList<>();
+        List<Unit> current = new ArrayList<>();
+        int size = 0;
+        for (Unit u : units) {
+            for (int i = 0; i < u.elements().size(); i += MAX_ELEMENTS_PER_CALL) {
+                Unit part = new Unit(u.target(), u.elements().subList(i, Math.min(u.elements().size(), i + MAX_ELEMENTS_PER_CALL)));
+                if (!current.isEmpty() && size + part.elements().size() > MAX_ELEMENTS_PER_CALL) {
+                    out.add(current);
+                    current = new ArrayList<>();
+                    size = 0;
+                }
+                current.add(part);
+                size += part.elements().size();
+            }
+        }
+        if (!current.isEmpty()) {
+            out.add(current);
+        }
+        return out;
+    }
+
+    /** 노드 하나와 그 노드에서 비교할 Figma 요소 */
+    record Unit(Target target, List<Element> elements) {
+    }
+
+    private record Job(List<Unit> units, Map<String, String> code, TailwindValues theme) {
+
+        int size() {
+            return units.stream().mapToInt(u -> u.elements().size()).sum();
+        }
     }
 
     record JobResult(List<Finding> findings, int dropped) {
     }
 
-    private List<JobResult> run(List<Job> jobs) {
+    private List<JobResult> run(List<Job> jobs, Progress progress) {
+        int total = jobs.stream().mapToInt(Job::size).sum();
+        AtomicInteger done = new AtomicInteger();
+        progress.update(0, total);
         ExecutorService pool = Executors.newFixedThreadPool(concurrency);
         try {
             List<Future<JobResult>> futures = new ArrayList<>();
             for (Job j : jobs) {
-                futures.add(pool.submit(() -> judgeWith(j.target(), j.elements(), j.code(), locate(j.target(), j.elements(), j.code()), j.theme())));
+                futures.add(pool.submit(() -> {
+                    JobResult r = judgeGroup(j, locate(j.units(), j.code()));
+                    progress.update(done.addAndGet(j.size()), total);
+                    return r;
+                }));
             }
             List<JobResult> out = new ArrayList<>();
             for (Future<JobResult> f : futures) {
@@ -171,6 +245,31 @@ public class ClaudeQaComparator implements QaComparator {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    /** 묶음의 답을 노드별로 나눠 판정한다. 묶음에 없는 요소를 가리킨 답은 버린다(N17) */
+    static JobResult judgeGroup(Job j, List<Binding> bindings) {
+        Map<String, Unit> unitOf = new LinkedHashMap<>();
+        for (Unit u : j.units()) {
+            u.elements().forEach(e -> unitOf.putIfAbsent(e.id(), u));
+        }
+        Map<Unit, List<Binding>> byUnit = new LinkedHashMap<>();
+        int dropped = 0;
+        for (Binding b : bindings) {
+            Unit u = unitOf.get(b.elementId());
+            if (u == null) {
+                dropped++;
+                continue;
+            }
+            byUnit.computeIfAbsent(u, k -> new ArrayList<>()).add(b);
+        }
+        List<Finding> findings = new ArrayList<>();
+        for (Map.Entry<Unit, List<Binding>> e : byUnit.entrySet()) {
+            JobResult r = judgeWith(e.getKey().target(), e.getKey().elements(), j.code(), e.getValue(), j.theme());
+            findings.addAll(r.findings());
+            dropped += r.dropped();
+        }
+        return new JobResult(findings, dropped);
     }
 
     static JobResult judgeWith(Target t, List<Element> elements, Map<String, String> code, List<Binding> bindings, TailwindValues theme) {
@@ -350,8 +449,28 @@ public class ClaudeQaComparator implements QaComparator {
         return Optional.of(lines[b.line() - 1]);
     }
 
-    /** LLM — 요소마다 줄·토큰. 응답은 스키마로 받고 여기서 다시 형태를 검사한다(AGENTS.md 5절) — 형태가 틀린 항목은 버린다 */
-    private List<Binding> locate(Target t, List<Element> elements, Map<String, String> code) {
+    /** 첫 QA — 같은 파일을 그리는 여러 노드의 요소를 한 번에 묻는다(2026-11-10). 요소 id는 Figma 전체에서 고유하다 */
+    private List<Binding> locate(List<Unit> units, Map<String, String> code) {
+        List<Map<String, Object>> nodes = new ArrayList<>();
+        for (Unit u : units) {
+            Target t = u.target();
+            Map<String, Object> n = new LinkedHashMap<>();
+            n.put("node", t.nodeName());
+            if (t.frameName() != null && !t.frameName().isBlank()) {
+                n.put("frame", t.frameName());
+            }
+            if (t.codeSymbol() != null) {
+                n.put("component", t.codeSymbol());
+            }
+            n.put("elements", elementList(u.elements()));
+            nodes.add(n);
+        }
+        String user = "These Figma nodes are implemented in " + units.get(0).target().codePath() + " (and the files it imports).\n"
+            + "Nodes and their elements (top to bottom, depth-first):\n" + json.writeValueAsString(nodes);
+        return bindings(call(numbered(code), user));
+    }
+
+    private static List<Map<String, Object>> elementList(List<Element> elements) {
         List<Map<String, Object>> list = new ArrayList<>();
         for (Element e : elements) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -365,10 +484,19 @@ public class ClaudeQaComparator implements QaComparator {
             }
             list.add(m);
         }
+        return list;
+    }
+
+    /** LLM — 요소마다 줄·토큰. 응답은 스키마로 받고 여기서 다시 형태를 검사한다(AGENTS.md 5절) — 형태가 틀린 항목은 버린다 */
+    private List<Binding> locate(Target t, List<Element> elements, Map<String, String> code) {
+        List<Map<String, Object>> list = elementList(elements);
         String user = "Figma node '" + t.nodeName() + "'" + (t.frameName() == null || t.frameName().isBlank() ? "" : " in frame '" + t.frameName() + "'")
             + " is implemented " + (t.codeSymbol() == null ? "in " : "by `" + t.codeSymbol() + "` in ") + t.codePath() + ".\n"
             + "Elements (top to bottom, depth-first):\n" + json.writeValueAsString(list);
-        JsonNode root = call(numbered(code), user);
+        return bindings(call(numbered(code), user));
+    }
+
+    private static List<Binding> bindings(JsonNode root) {
         List<Binding> out = new ArrayList<>();
         JsonNode arr = root.get("bindings");
         if (arr == null || !arr.isArray()) {
@@ -424,7 +552,9 @@ public class ClaudeQaComparator implements QaComparator {
         MessageCreateParams params = MessageCreateParams.builder()
             .model(model)
             .maxTokens(MAX_TOKENS)
-            .systemOfTextBlockParams(List.of(TextBlockParam.builder().text(SYSTEM).build(), TextBlockParam.builder().text(code).build()))
+            // 코드 묶음은 같은 파일의 다음 묶음·Re-QA가 다시 읽는다 — 캐시로 입력 비용을 줄인다(2026-11-10)
+            .systemOfTextBlockParams(List.of(TextBlockParam.builder().text(SYSTEM).build(), TextBlockParam.builder().text(code)
+                .cacheControl(CacheControlEphemeral.builder().build()).build()))
             .outputConfig(OutputConfig.builder()
                 .format(JsonOutputFormat.builder().schema(JsonOutputFormat.Schema.builder().putAllAdditionalProperties(schema).build()).build())
                 .effort(OutputConfig.Effort.HIGH)
@@ -445,7 +575,8 @@ public class ClaudeQaComparator implements QaComparator {
             log.warn("첫 QA LLM이 정상 종료하지 않음: stop_reason={}", stop);
             throw new QaFailedException("AI 비교가 결과를 끝까지 내지 못했어요.");
         }
-        log.info("첫 QA LLM 사용량: input={} output={}", response.usage().inputTokens(), response.usage().outputTokens());
+        log.info("첫 QA LLM 사용량: input={} output={} cache_read={} cache_write={}", response.usage().inputTokens(), response.usage().outputTokens(),
+            response.usage().cacheReadInputTokens().orElse(0L), response.usage().cacheCreationInputTokens().orElse(0L));
         String text = response.content().stream().flatMap(b -> b.text().stream()).map(t -> t.text()).findFirst()
             .orElseThrow(() -> new QaFailedException("AI 비교 응답이 비어 있어요."));
         try {

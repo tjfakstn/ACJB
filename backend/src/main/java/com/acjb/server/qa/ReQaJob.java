@@ -115,8 +115,16 @@ public class ReQaJob {
                 String head = sha != null ? sha : comparator.latestCommit(input.repo(), input.branch());
                 QaComparator.FirstQaInput a = prepared.added();
                 addedInput = head == null ? a
-                    : new QaComparator.FirstQaInput(a.repo(), head, a.figmaFileKey(), a.scope(), a.properties(), a.targets());
-                addedResult = comparator.compare(addedInput);
+                    : a.withCommit(head);
+                addedResult = comparator.compare(addedInput.withProgress((done, total) -> {
+                    synchronized (this) {
+                        try {
+                            tx.executeWithoutResult(s -> runs.findById(runId).ifPresent(r -> r.progress(done, total)));
+                        } catch (RuntimeException e) {
+                            log.warn("Re-QA 진행률 기록 실패 run_id={}", runId);
+                        }
+                    }
+                }));
                 if (sha == null) {
                     sha = addedResult.commitSha();
                 }

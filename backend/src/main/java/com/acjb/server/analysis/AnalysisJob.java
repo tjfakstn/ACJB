@@ -38,6 +38,7 @@ import com.acjb.server.repository.DesignCodeMappingRepository;
 import com.acjb.server.repository.ProjectRunRepository;
 
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 비교 분석(AC22) 실행. 요청 트랜잭션이 커밋된 뒤 별도 스레드에서 돈다.
@@ -67,6 +68,7 @@ public class AnalysisJob {
     private final DesignCodeMappingRepository mappings;
     private final TransactionTemplate tx;
     private final Clock clock;
+    private final JsonMapper json;
     private final int nodeConcurrency;
     private final int maxCodeChars;
     /** 테스트에서 실제로 기다리지 않게 바꿔 끼운다(setSleeper) */
@@ -88,7 +90,7 @@ public class AnalysisJob {
     }
 
     public AnalysisJob(FigmaClient figma, GithubClient github, DesignCodeMapper mapper, ProjectRunRepository runs,
-                       DesignCodeMappingRepository mappings, PlatformTransactionManager txManager, Clock clock,
+                       DesignCodeMappingRepository mappings, PlatformTransactionManager txManager, Clock clock, JsonMapper json,
                        @Value("${app.analysis.node-concurrency:4}") int nodeConcurrency,
                        @Value("${app.analysis.max-code-chars:1000000}") int maxCodeChars) {
         this.figma = figma;
@@ -98,6 +100,7 @@ public class AnalysisJob {
         this.mappings = mappings;
         this.tx = new TransactionTemplate(txManager);
         this.clock = clock;
+        this.json = json;
         this.nodeConcurrency = Math.max(1, nodeConcurrency);
         this.maxCodeChars = maxCodeChars;
     }
@@ -134,6 +137,7 @@ public class AnalysisJob {
                         ? DesignCodeMapping.frame(project, run, m.frameId(), m.frameName(), m.path(), now)
                         : DesignCodeMapping.node(project, run, m.frameId(), m.frameName(), m.nodeId(), m.nodeName(), m.path(), m.symbol(), now));
                 }
+                run.setUnmappedFrames(json.writeValueAsString(result.unmapped()));
                 run.succeed(result.commitSha(), result.mappings().size(), result.dropped(), now);
             });
         } catch (MappingFailedException e) {
@@ -256,7 +260,14 @@ public class AnalysisJob {
                 saved.add(new Saved(frameId, frameName, n.nodeId(), nodeNames.get(frameId).get(n.nodeId()), n.file(), n.symbol()));
             }
         }
-        return new Result(sha, saved, dropped);
+        // 코드 파일을 찾지 못한 프레임 — 이슈가 아니라 "확인해 볼 곳"(LLM이 놓쳤을 수도 있다). 순서는 Figma에서 모은 순서
+        List<Unmapped> unmapped = new ArrayList<>();
+        for (String id : ids) {
+            if (!framePath.containsKey(id) && frameNames.containsKey(id)) {
+                unmapped.add(new Unmapped(id, frameNames.get(id), frameSection.get(id)));
+            }
+        }
+        return new Result(sha, saved, dropped, unmapped);
     }
 
     private DesignCodeMapper.CodeBundle readCode(String owner, String repo, String sha, String fullName) {
@@ -317,6 +328,11 @@ public class AnalysisJob {
     private record Saved(String frameId, String frameName, String nodeId, String nodeName, String path, String symbol) {
     }
 
-    private record Result(String commitSha, List<Saved> mappings, int dropped) {
+    private record Result(String commitSha, List<Saved> mappings, int dropped, List<Unmapped> unmapped) {
+    }
+
+    /** 저장 형태 — MappingListResponse.UnmappedFrame과 같은 이름(snake_case) */
+    @tools.jackson.databind.annotation.JsonNaming(tools.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record Unmapped(String frameId, String frameName, String section) {
     }
 }

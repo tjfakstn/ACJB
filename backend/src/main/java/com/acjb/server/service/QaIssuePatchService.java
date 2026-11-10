@@ -17,6 +17,7 @@ import com.acjb.server.domain.NotificationEvent;
 import com.acjb.server.domain.QAIssue;
 import com.acjb.server.domain.StatusHistory;
 import com.acjb.server.dto.QaIssueResponse;
+import com.acjb.server.repository.ManualQaPinRepository;
 import com.acjb.server.repository.NotificationRepository;
 import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.QAIssueRepository;
@@ -44,9 +45,11 @@ public class QaIssuePatchService {
     private final StatusHistoryRepository histories;
     private final NotificationRepository notifications;
     private final TeamNotifier teamNotifier;
+    private final ManualQaPinRepository pins;
 
     public QaIssuePatchService(QAIssueRepository issues, ProjectMemberRepository projectMembers, StatusHistoryRepository histories,
-                               NotificationRepository notifications, TeamNotifier teamNotifier) {
+                               NotificationRepository notifications, TeamNotifier teamNotifier, ManualQaPinRepository pins) {
+        this.pins = pins;
         this.issues = issues;
         this.projectMembers = projectMembers;
         this.histories = histories;
@@ -118,7 +121,8 @@ public class QaIssuePatchService {
             }
         }
         issues.flush();
-        return QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()));
+        return QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()),
+            pins.findByIssueId(issue.getId()).orElse(null));
     }
 
     private static IssueStatus parseStatus(JsonNode node) {

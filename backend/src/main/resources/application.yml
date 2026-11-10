@@ -15,6 +15,12 @@ spring:
   flyway:
     locations: classpath:db/migration
 
+  # 수동 QA 이미지 첨부는 5MB까지(SPEC AC30) — 요청 전체는 여유를 조금 둔다
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
   jpa:
     # Hibernate는 테이블을 고치지 않고 엔티티와 맞는지 검사만 한다 — 어긋나면 서버가 뜨지 않는다
     hibernate:
@@ -75,6 +81,10 @@ app:
   scan:
     allow-localhost: ${SCAN_ALLOW_LOCALHOST:false}
     timeout: 30s
+  # 실시간 QA 워크스페이스(SPEC AC29~AC31) — 배포 화면 캡처는 scan과 같은 주소 제한(app.scan.allow-localhost)을 쓴다
+  capture:
+    timeout: 30s
+    embed-check-timeout: 8s
   parse:
     model: claude-sonnet-5
     api-key: ${ANTHROPIC_API_KEY:}

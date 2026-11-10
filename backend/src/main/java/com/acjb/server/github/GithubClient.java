@@ -29,4 +29,10 @@ public interface GithubClient {
 
     record TreeFile(String path, long size) {
     }
+
+    /**
+     * 최근 배포 중 마지막 상태가 success이고 environment_url이 있는 첫 배포의 주소(AC29). 없으면 빈 값.
+     * GET /repos/{owner}/{repo}/deployments?per_page=10 과 배포마다 GET .../deployments/{id}/statuses?per_page=1 — 읽기만 한다
+     */
+    java.util.Optional<String> latestDeploymentUrl(String owner, String repo);
 }

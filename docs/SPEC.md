@@ -50,6 +50,7 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
     - 조회 — 내가 속한 프로젝트와 그 멤버(담당 팀 구성 확인용)
     - 소유자는 프로젝트를 삭제할 수 있다 — 프로젝트와 그 안의 데이터를 모두 지우고 되돌릴 수 없다. 멤버 계정은 남는다(AC26, 2026-11-07)
     - 범위 밖(v1): 소유자 이전, 휴지통(삭제 복구), 초대 거절 기록, 멤버 스스로 나가기, 비공개 GitHub 저장소(GitHub App)
+  - 실시간 QA 워크스페이스 (2026-11-10, 시안 W-01~05·M-01~M-10) — QA 결과를 배포 화면(Live Preview)과 함께 본다. 배포 주소는 소유자가 입력한 값, 없으면 연결된 GitHub 저장소의 최근 성공 배포 주소다(AC29). 배포 화면 위 위치를 찍어 수동 QA를 등록하고(제목·설명 필수, 위치·캡처 자동 연결 — AC31), 서버 브라우저가 같은 주소·화면 크기로 캡처를 남긴다(실패해도 등록은 막지 않는다, 사용자 첨부 가능 — AC30). 화면 삽입이 막힌 사이트는 첨부 이미지 위에서 위치를 찍는다. 클릭 동작 자동 검사는 E2E 자동화라 포함하지 않는다(N13)
   - 프로젝트 작업공간 — 프로젝트를 열면 오는 홈. 연결 상태·비교 분석·첫 QA 상태·멤버 수·상태별 이슈 수를 한 번에 보여 준다(AC25, 2026-11-07)
   - 알림 조회 — 내게 온 앱 내 알림만. 읽음 처리와 이메일·Slack 등 외부 채널은 v2
   - 인증 — 구글 로그인 세션 쿠키 + 상태 변경 요청의 CSRF 토큰(`X-XSRF-TOKEN` 헤더)
@@ -64,7 +65,7 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 
 ## 5. 인터페이스
 
-전체 명세: `docs/openapi.yaml` v0.7.0 (base `/api/v1`). 핵심만 발췌. 두 문서가 어긋나면 이 스펙이 정본이다.
+전체 명세: `docs/openapi.yaml` v0.8.0 (base `/api/v1`). 핵심만 발췌. 두 문서가 어긋나면 이 스펙이 정본이다.
 `/projects/{projectId}/**` 경로는 모두 로그인한 그 프로젝트의 `Member`만 호출할 수 있다(미인증 401, 비멤버 403 — AC12).
 인증은 구글 로그인 세션 쿠키다. POST·PATCH는 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더에 실어 보내야 하고, 없거나 틀리면 403이다. 멤버를 가리키는 값(`reported_by`, `verified_by`, `changed_by` 등)은 모두 멤버 id다. 담당 팀 `assigned_team`은 역할 값(`planner`·`designer`·`frontend`·`backend`)이다.
 
@@ -78,6 +79,9 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - `POST /projects/{projectId}/analysis` → 202 `AnalysisRun`(비동기) / `GET .../analysis` → 최근 비교 분석 상태 — 소유자만 시작 (AC22) / `GET .../analysis/mappings` → 최근 성공한 분석의 프레임·노드 매핑 (AC27)
 - `POST /projects/{projectId}/first-qa` — body `{scope[]}` → 202 `FirstQaRun`(비동기) / `GET .../first-qa` → 첫 QA 상태·검증 범위·만든 이슈 수 — 소유자만 시작, 성공 1번 (AC23)
 - `POST /projects/{projectId}/re-qa` → 202 `ReQaRun`(비동기) / `GET .../re-qa` → 최근 Re-QA 상태와 해결·재실패·건너뜀 수 — 소유자만, `fixed`인 첫 QA 이슈가 있을 때 (AC28)
+- `PUT /projects/{projectId}/deploy-url` — body `{url}`(null이면 지움) → 배포 대상 — 소유자만 / `GET .../deploy-target` → `{url, source: manual|github_deployment|none, embeddable, embed_blocked_reason}` (AC29)
+- `POST /projects/{projectId}/captures` — body `{page_path, viewport{width, height}}` → 201 `QaCapture`(서버가 배포 주소를 열어 캡처) / `POST .../captures/upload`(multipart `file`) → 201 `QaCapture` / `GET .../captures/{captureId}/image` → 이미지 (AC30)
+- `POST /projects/{projectId}/manual-qa` — body `{client_request_id, title, description, page_path, anchor{x_px, y_px}, viewport{width, height}, location_basis, capture_id?, capture_status?, severity?, expected_result?, actual_result?}` → 201 `QAIssue`(`manual_qa` 포함, 같은 `client_request_id`면 200으로 처음 것) (AC31)
 - `GET /projects/{projectId}/members` → `Member[]` — 담당 팀 구성 확인용, 프로젝트별 `role` 포함 (AC15)
 - `PATCH /projects/{projectId}/members/{memberId}` — body `{role}` → 역할 변경, 소유자만 (AC24)
 - `DELETE /projects/{projectId}/members/{memberId}` — 소유자만 (AC19)
@@ -100,7 +104,7 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - `GET /projects/{projectId}/qa-issues/{issueId}/verifications` → `Verification[]` (수동 재검증과 Re-QA 기록 모두, `verified_at asc`)
 - `POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions` — 본문 없음 → `{issue_id, suggestions[{screen, reason, evidence[{type, id}]}], searched_count, dropped_count}` (재검증 범위 제안, 재검증 등록 권한자만, `fixed` 이슈만 — AC20. 결과는 저장하지 않는다)
 
-오류 코드는 2026-11-07에 3개를 더해 16개다 — `CONNECTION_FORBIDDEN`(422)·`CONNECTION_FAILED`(502)·`NOT_READY`(409). 목록은 `docs/openapi.yaml` `Error.code`
+오류 코드는 2026-11-07에 3개, 2026-11-10에 1개를 더해 17개다 — `CONNECTION_FORBIDDEN`(422)·`CONNECTION_FAILED`(502)·`NOT_READY`(409)·`CAPTURE_FAILED`(502, AC30). 목록은 `docs/openapi.yaml` `Error.code`
 
 ## 6. 수용 기준 (테스트로 검증 — Definition of Done)
 
@@ -134,9 +138,12 @@ QA 전담 인력 없이 QA를 나눠 맡는 제품팀의 개발자와 디자이�
 - **AC23** [이벤트 기반]: 소유자가 검증 범위(`scope`: `size_spacing`·`color_typography`·`border_radius`·`layout`·`presence` 중 1개 이상)를 골라 첫 QA를 실행하면, QAting은 비교 분석이 성공했고 첫 QA가 아직 성공하지 않았을 때만 비동기 실행을 1건 만들고(202), 매핑된 짝마다 Figma 값과 코드 값을 비교해 다른 항목을 이슈로 저장한다. `scope`가 비었거나 정해진 값이 아니면 400. 각 이슈는 `source: first_qa`, `status: needs_check`, `reported_by`=실행한 소유자, `assigned_team` 없음, `platform_scope: common`이고, `screen_location`은 Figma 프레임·노드 이름, `repro_steps`는 ["'{프레임}' 화면을 연다", "'{노드}'를 확인한다"], `style_mismatch`는 Figma 값(expected)과 코드 값(actual)이다. 근거가 모자란 항목은 저장하지 않고 `dropped_count`에 센다(N17). 실행 중·이미 성공·분석 전이면 409(`NOT_READY`). 실패하면 이슈를 하나도 남기지 않고 상태가 `failed`가 되며 다시 실행할 수 있다. 담당 팀이 없으므로 알림은 만들지 않는다(AC3). 개발용 가짜 비교기가 켜져 있으면 실행에 `demo: true`, 이슈 `description` 앞에 `[시연용]`을 남긴다(4절). (시안 QA-01~04·02F·04P)
 - **AC24** [이벤트 기반]: 소유자가 멤버의 역할을 바꾸면, QAting은 그 프로젝트에서의 `role`만 바꾼다(소유자 본인 포함). 소유자가 아니면 403, 그 프로젝트 멤버가 아니면 404, 정해진 값이 아니면 400이다. 이슈·담당 팀·알림은 바꾸지 않는다(이후 그 멤버의 팀 권한·알림은 새 역할을 따른다 — 2026-11-08). (시안 MEM-06)
 - **AC25** [이벤트 기반]: 프로젝트 멤버가 `GET /projects/{projectId}`를 호출하면, QAting은 이름·설명·소유자·만든 시각(`created_at`)·내 역할(미지정이면 null), Figma·GitHub 연결(없으면 null), 비교 분석·첫 QA의 최근 상태(`none`/`queued`/`running`/`succeeded`/`failed`), 멤버 수·대기 중 초대 수, 상태별 이슈 수(5개 상태 모두, 0 포함)를 반환한다. 비멤버는 AC12대로 403. (시안 WS-01·01N·01M·02)
-- **AC26** [이벤트 기반]: 소유자가 프로젝트를 삭제하면, QAting은 그 프로젝트와 그 안의 이슈(재현 절차·스크린샷·`status_history`)·재검증·알림·스타일 차이·scan·Figma 동기화·프레임·임베딩·비교 분석/첫 QA 실행·초대·멤버십을 한 트랜잭션으로 모두 지우고 204를 반환한다. `Member` 계정과 다른 프로젝트의 데이터는 그대로다. 소유자가 아니면 403이고 아무것도 지우지 않는다. 비교 분석·첫 QA가 실행 중(queued·running)이면 409(`NOT_READY`)다. 삭제한 뒤 그 프로젝트 경로는 AC12대로 403이다(멤버가 아니게 되므로). 이름을 입력해 확인하는 것은 화면의 일이다. (2026-11-07)
+- **AC26** [이벤트 기반]: 소유자가 프로젝트를 삭제하면, QAting은 그 프로젝트와 그 안의 이슈(재현 절차·스크린샷·`status_history`·수동 QA 위치)·재검증·알림·캡처·스타일 차이·scan·Figma 동기화·프레임·임베딩·비교 분석/첫 QA 실행·초대·멤버십을 한 트랜잭션으로 모두 지우고 204를 반환한다. `Member` 계정과 다른 프로젝트의 데이터는 그대로다. 소유자가 아니면 403이고 아무것도 지우지 않는다. 비교 분석·첫 QA가 실행 중(queued·running)이면 409(`NOT_READY`)다. 삭제한 뒤 그 프로젝트 경로는 AC12대로 403이다(멤버가 아니게 되므로). 이름을 입력해 확인하는 것은 화면의 일이다. (2026-11-07)
 - **AC27** [이벤트 기반]: 프로젝트 멤버가 `GET /projects/{projectId}/analysis/mappings`를 호출하면, QAting은 가장 최근에 **성공한** 비교 분석의 매핑을 프레임 이름순(같으면 프레임 id순)으로, 프레임마다 파일과 노드 매핑(노드 이름순, 같으면 노드 id순)을 담아 반환한다. 성공한 분석이 없으면 빈 목록이다. 비멤버는 AC12대로 403. (시안 WS-03, 작업공간 "디자인-코드 매핑" 카드 — 2026-11-07)
 - **AC28** [이벤트 기반]: 소유자가 Re-QA를 실행하면, QAting은 `status: fixed`이고 `source: first_qa`인 이슈가 1건 이상이고 첫 QA·Re-QA가 실행 중이 아닐 때만 비동기 실행을 1건 만들고(202, 아니면 409 `NOT_READY`), 그 이슈마다 첫 QA와 같은 노드·같은 파일을 현재 브랜치 최신 커밋에서 다시 비교한다. 다시 읽은 코드 값이 Figma 값과 같으면 `Verification(result: pass)`를 만들고 `resolved`로, 여전히 다르면 `fail`로 `needs_recheck`로 바꾼다(AC7과 같은 전이, `status_history`에 남김). 이 기록은 `source: re_qa`, `verified_by`=실행한 소유자, `observed_value`=다시 읽은 코드 값이다. `fail`이면 AC11대로 알림을 만든다. 노드·파일을 다시 읽지 못해 근거가 모자란 이슈는 바꾸지 않고 `fixed`로 두며 `skipped_count`에 센다(N18). 실행이 실패하면 어떤 이슈도 바꾸지 않는다. 소유자가 아니면 403. (2026-11-08, 시안 RQA-01~03F·FIN-01·02)
+- **AC29** [이벤트 기반]: 소유자가 `PUT /projects/{projectId}/deploy-url`로 http(s) 주소를 저장하면, QAting은 scan과 같은 주소 제한(내부망·루프백 거부, 루프백은 로컬 개발 설정에서만)을 통과할 때만 저장하고(아니면 400) 배포 대상을 돌려준다. `url: null`이면 지운다. 소유자가 아니면 403. 프로젝트 멤버가 `GET .../deploy-target`을 호출하면, 저장된 주소가 있으면 그것(`source: manual`), 없으면 연결된 GitHub 저장소의 최근 성공 배포의 `environment_url`(`source: github_deployment`), 둘 다 없으면 `url: null`(`source: none`)을 돌려준다. 주소가 있으면 서버가 그 주소를 한 번 요청해 `X-Frame-Options`(DENY·SAMEORIGIN)나 CSP `frame-ancestors`가 QAting 화면 삽입을 막으면 `embeddable: false`와 이유를, 막지 않으면 `true`를, 확인하지 못하면 `null`을 준다. (2026-11-10, 시안 W-01·M-09B)
+- **AC30** [이벤트 기반]: 프로젝트 멤버가 `POST .../captures`로 경로와 화면 크기(320~3840 × 320~2160)를 보내면, QAting은 배포 대상 주소에 그 경로를 붙인 주소를 서버 브라우저로 그 크기에서 열어 화면을 PNG로 저장하고 201 `QaCapture{id, kind: auto, page_url, width, height}`를 돌려준다. 배포 주소가 없으면 409(`NOT_READY`), 주소 제한에 걸리거나 열지 못하면 502(`CAPTURE_FAILED`)이고 아무것도 저장하지 않는다. `POST .../captures/upload`는 png·jpeg·webp 이미지(5MB 이하, 내용으로 형식 확인)만 `kind: upload`로 저장하고 그 밖은 400이다. 캡처 이미지는 그 프로젝트 멤버만 읽는다(AC12). (2026-11-10, 시안 M-04·M-09A·C)
+- **AC31** [이벤트 기반]: 프로젝트 멤버가 `POST .../manual-qa`로 수동 QA를 등록하면, QAting은 `title`(100자 이하)·`description`이 비었거나, `page_path`가 `/`로 시작하지 않거나, `anchor`가 `viewport` 밖이거나, `location_basis`가 `live_overlay`·`capture_image`가 아니거나(`capture_image`는 `capture_id` 필수), `capture_id`가 그 프로젝트의 캡처가 아니거나, `severity`가 정해진 4개 값이 아니면 400으로 거부하고 아무것도 저장하지 않는다. `live_overlay`인데 배포 대상 주소가 없으면 409(`NOT_READY`)다. 통과하면 `source: manual`, `status: needs_check`, `assigned_team` 없음, `platform_scope: common`, `environment.platform: web`인 이슈와 그 위치(`ManualQaPin` — 프로젝트별 다음 핀 번호)를 한 트랜잭션으로 저장하고 201을 돌려준다. 이슈의 `screen_location`은 `"{경로} (x {x}, y {y} · {너비}×{높이})"`, `repro_steps`는 `live_overlay`면 `["'{배포 주소}{경로}'를 {너비}×{높이} 화면으로 연다", "(x {x}, y {y}) 위치를 확인한다"]`, `capture_image`면 `["첨부 이미지(캡처 {id})를 연다", "(x {x}, y {y}) 위치를 확인한다"]`로 찍은 위치에서 만들고, `description`은 요청 그대로다. `capture_id`가 있으면 그 캡처의 종류로 `capture_status`(`captured`/`user_attached`)를, 없으면 요청의 `failed`·`none`(기본 `none`)을 둔다. 담당 팀이 없으므로 알림은 만들지 않는다(AC3). 같은 프로젝트에 같은 `client_request_id`로 이미 만든 이슈가 있으면 새로 만들지 않고 200으로 그 이슈를 돌려준다. 이슈 응답(목록·상세)의 `manual_qa`에 핀 번호·제목·위치·캡처·심각도·기대/실제 결과가 담긴다. (2026-11-10, 시안 M-03~M-06·M-08A·B)
 > AC1~AC8을 실행할 수 있는 골든 케이스는 `tests/harness/golden_cases.yaml`에 둔다(강의 5에서 작성). AC11~AC13과 6.1절 금지 기준의 골든 케이스도 같은 파일에 둔다(2026-10-11 설만수 승인 후 추가). AC14~AC19와 AC13 수정분(등록자 제거 시 소유자 재검증)의 골든 케이스도 같은 파일에 둔다(2026-11-05 설만수 승인 후 추가). AC20과 N16의 골든 케이스(`rs-001`~`rs-004`, `ng-014`~`ng-016`)도 같은 파일에 둔다(2026-11-06 설만수 승인 후 추가). AC21~AC25, AC6·AC13·AC17 수정분, N17의 골든 케이스와 AC15·AC16 수정분(`pj-003`·`pj-004` 교체, `pj-007`·`pj-008`), AC26(`pj-009`~`pj-011`)(`st-004`~`st-007`, `au-010`, `iv-003` 교체, `iv-008`·`iv-009`, `cn-001`~`cn-005`, `an-001`~`an-003`, `fq-001`~`fq-004`, `rl-001`~`rl-003`, `ws-001`·`ws-002`, `ng-017`~`ng-019`)도 같은 파일에 둔다(2026-11-07 설만수 승인 후 추가). AC21 섹션 링크 허용(`cn-006` 수정, `cn-008`)과 AC22·AC27 매핑(`an-004`~`an-006`)도 같은 파일에 둔다(2026-11-07 설만수 승인 후 추가). AC8은 `src/qating/prompts/parse_query.md`의 실패 모드 점검표와도 연결된다. [상시 적용] AC(AC2, AC6, AC12, AC13)는 `AGENTS.md` 절대 규칙에도 같은 내용으로 둔다.
 
 ### 6.1 금지 기준 (구현 중 이탈 방지)
@@ -163,3 +170,4 @@ AC를 구현하면서 에이전트가 "편의상" 범위를 넓히거나 값을 
 | N16 | 4절·AC20 | 비교 분석·이력 기반 점검 후보의 LLM 결과로 이슈·`StyleMismatch`를 자동 저장하지 않는다(자동 저장은 첫 QA 한 지점뿐 — AC23·N17). 근거(실제 노드·화면·추출값, 실제 이슈 id)가 없는 후보는 버린다. 다른 프로젝트의 데이터를 검색·근거로 쓰지 않는다 | `ng-014`~`ng-016` |
 | N17 | AC23 | 첫 QA는 Figma API로 읽은 노드 값과, LLM이 인용한 파일·줄에 실제로 있는 코드 값이 **둘 다** 있을 때만 이슈를 만든다. LLM이 말한 값만으로 저장하지 않고, 인용한 파일·줄이 저장소에 없거나 그 값이 없으면 버린다. 실패한 실행의 이슈를 일부만 남기지 않는다. 다른 프로젝트의 연결·매핑을 쓰지 않는다. 예외는 개발용 가짜 비교기(`app.qa.fake-comparator=true`, 기본 false)가 켜졌을 때뿐이고, 그때 만든 이슈는 `[시연용]`·`demo: true`로 구분한다 | `ng-017`~`ng-019` |
 | N18 | AC28 | Re-QA는 첫 QA 이슈의 같은 노드·같은 파일을 다시 읽어 얻은 값으로만 판정한다. 다시 읽지 못한 이슈를 `pass`나 `fail`로 바꾸지 않고(`fixed` 유지), 실패한 실행으로 일부 이슈만 바꾸지 않는다. 사람이 등록한 이슈(`source: manual`)를 자동으로 판정하지 않는다 | `rq-001`~`rq-004`
+| N19 | AC29~AC31 | 수동 QA의 위치·캡처를 지어내지 않는다 — 캡처에 실패했으면 다른 이미지로 채우지 않고 `failed`로 둔다. 배포 주소를 추측하지 않는다(입력값과 GitHub 배포 기록만). 서버 브라우저·헤더 확인 요청은 AC29의 주소 제한을 거친다. 배포 화면에서 클릭 동작을 자동으로 검사해 이슈를 만들지 않는다(N13) | 사람 승인 후 `lq-001`~ |

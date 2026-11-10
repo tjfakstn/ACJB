@@ -643,6 +643,43 @@ export function changeIssueStatus(projectId: string, issueId: string, status: 'i
   return request<QaIssue>('PATCH', `/api/v1/projects/${projectId}/qa-issues/${issueId}`, { status })
 }
 
+/** 이슈 상세 코드 추적(AC34) — GitHub는 읽기만 한다 */
+export interface TraceCommit { sha: string; message: string | null; author: string | null; committed_at: string | null; url: string | null }
+export interface TracePull { number: number; title: string | null; state: 'open' | 'closed' | 'merged' | null; author: string | null; created_at: string | null; url: string | null }
+export interface TraceFix {
+  kind: 'commit' | 'pull_request'
+  /** key=커밋·PR에 적은 이슈 키, manual=담당 팀이 붙인 링크, re_qa=Re-QA가 판정한 커밋 */
+  source: 'key' | 'manual' | 're_qa'
+  commit: TraceCommit | null
+  pull_request: TracePull | null
+  url: string | null
+  verdict: 'pass' | 'fail' | null
+  at: string | null
+}
+export interface CodeTrace {
+  /** 커밋 메시지·PR 제목에 적으면 fixes에 연결된다 */
+  issue_key: string
+  code: { path: string; line: number | null; symbol: string | null; commit_sha: string | null; url: string | null } | null
+  related: { issue_id: string; property: StyleProperty; expected_value: string; actual_value: string; status: IssueStatus }[]
+  /** 문제 코드가 들어온 커밋과 그 PR — basis line=그 줄, file=그 파일 */
+  origin: { basis: 'line' | 'file'; commit: TraceCommit; pull_requests: TracePull[] } | null
+  fixes: TraceFix[]
+  github: 'ok' | 'not_connected' | 'unavailable'
+}
+
+export function getCodeTrace(projectId: string, issueId: string): Promise<CodeTrace> {
+  return request<CodeTrace>('GET', `/api/v1/projects/${projectId}/qa-issues/${issueId}/code-trace`)
+}
+
+/** 담당 팀만. 연결된 저장소의 PR·커밋 주소만 */
+export function putFixLink(projectId: string, issueId: string, url: string): Promise<CodeTrace> {
+  return request<CodeTrace>('PUT', `/api/v1/projects/${projectId}/qa-issues/${issueId}/fix-link`, { url })
+}
+
+export async function deleteFixLink(projectId: string, issueId: string): Promise<void> {
+  await request<unknown>('DELETE', `/api/v1/projects/${projectId}/qa-issues/${issueId}/fix-link`)
+}
+
 /** verified_at desc */
 export async function listVerifications(projectId: string, issueId: string): Promise<Verification[]> {
   const data = await request<{ items: Verification[] }>('GET', `/api/v1/projects/${projectId}/qa-issues/${issueId}/verifications`)

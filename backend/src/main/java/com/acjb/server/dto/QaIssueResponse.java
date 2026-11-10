@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 
 import com.acjb.server.domain.Environment;
+import com.acjb.server.domain.ManualQaPin;
 import com.acjb.server.domain.Member;
 import com.acjb.server.domain.QAIssue;
 import com.acjb.server.domain.StatusHistory;
@@ -32,11 +33,17 @@ public record QaIssueResponse(
     String assignedTeam,
     String reportedBy,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    ManualQaView manualQa
 ) {
 
-    /** 지연 로딩 컬렉션을 읽으므로 트랜잭션 안에서 호출한다 */
+    /** 지연 로딩 컬렉션을 읽으므로 트랜잭션 안에서 호출한다. 수동 QA 위치(핀)가 없는 이슈용 */
     public static QaIssueResponse of(QAIssue issue, List<StatusHistory> history) {
+        return of(issue, history, null);
+    }
+
+    /** pin — 실시간 QA 워크스페이스에서 위치를 찍어 등록한 이슈면 그 핀(AC31), 아니면 null */
+    public static QaIssueResponse of(QAIssue issue, List<StatusHistory> history, ManualQaPin pin) {
         return new QaIssueResponse(
             String.valueOf(issue.getId()),
             String.valueOf(issue.getProject().getId()),
@@ -54,7 +61,8 @@ public record QaIssueResponse(
             lower(issue.getAssignedTeam()),
             idOf(issue.getReportedBy()),
             issue.getCreatedAt(),
-            issue.getUpdatedAt());
+            issue.getUpdatedAt(),
+            ManualQaView.of(pin));
     }
 
     static String lower(Enum<?> value) {
@@ -87,5 +95,34 @@ public record QaIssueResponse(
         static StatusHistoryView of(StatusHistory h) {
             return new StatusHistoryView(lower(h.getStatus()), idOf(h.getChangedBy()), h.getChangedAt());
         }
+    }
+
+    /** openapi ManualQaPin — 비율은 등록 때 화면 크기 기준(소수 넷째 자리) */
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ManualQaView(int pinNumber, String title, String pagePath, String pageUrl, AnchorView anchor, ViewportView viewport,
+                               String locationBasis, String captureStatus, String captureId, String severity, String expectedResult,
+                               String actualResult) {
+        static ManualQaView of(ManualQaPin p) {
+            if (p == null) {
+                return null;
+            }
+            return new ManualQaView(p.getPinNumber(), p.getTitle(), p.getPagePath(), p.getPageUrl(),
+                new AnchorView(p.getXPx(), p.getYPx(), ratio(p.getXPx(), p.getViewportWidth()), ratio(p.getYPx(), p.getViewportHeight())),
+                new ViewportView(p.getViewportWidth(), p.getViewportHeight()), lower(p.getLocationBasis()), lower(p.getCaptureStatus()),
+                p.getCapture() == null ? null : String.valueOf(p.getCapture().getId()), lower(p.getSeverity()), p.getExpectedResult(),
+                p.getActualResult());
+        }
+
+        private static double ratio(int v, int size) {
+            return Math.round((double) v / size * 10000) / 10000.0;
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record AnchorView(int xPx, int yPx, double xRatio, double yRatio) {
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ViewportView(int width, int height) {
     }
 }

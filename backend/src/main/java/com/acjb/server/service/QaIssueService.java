@@ -15,6 +15,7 @@ import com.acjb.server.domain.EnvPlatform;
 import com.acjb.server.domain.Environment;
 import com.acjb.server.domain.IssueSource;
 import com.acjb.server.domain.IssueStatus;
+import com.acjb.server.domain.ManualQaPin;
 import com.acjb.server.domain.Member;
 import com.acjb.server.domain.MemberRole;
 import com.acjb.server.domain.Notification;
@@ -31,6 +32,7 @@ import com.acjb.server.dto.CreateQaIssueRequest.EnvironmentInput;
 import com.acjb.server.dto.CreateQaIssueRequest.StyleMismatchInput;
 import com.acjb.server.dto.QaIssueListResponse;
 import com.acjb.server.dto.QaIssueResponse;
+import com.acjb.server.repository.ManualQaPinRepository;
 import com.acjb.server.repository.MemberRepository;
 import com.acjb.server.repository.NotificationRepository;
 import com.acjb.server.repository.ProjectMemberRepository;
@@ -66,14 +68,16 @@ public class QaIssueService {
     private final StatusHistoryRepository histories;
     private final NotificationRepository notifications;
     private final TeamNotifier teamNotifier;
+    private final ManualQaPinRepository pins;
 
     private final ApplicationEventPublisher events;
 
     public QaIssueService(QAIssueRepository issues, ProjectRepository projects, MemberRepository members,
                           ProjectMemberRepository projectMembers, StyleMismatchRepository mismatches,
                           StatusHistoryRepository histories, NotificationRepository notifications,
-                          TeamNotifier teamNotifier, ApplicationEventPublisher events) {
+                          TeamNotifier teamNotifier, ApplicationEventPublisher events, ManualQaPinRepository pins) {
         this.teamNotifier = teamNotifier;
+        this.pins = pins;
         this.events = events;
         this.issues = issues;
         this.projects = projects;
@@ -159,8 +163,14 @@ public class QaIssueService {
         IssueStatus statusFilter = status == null ? null : parseEnum(IssueStatus.class, status, "status");
         IssueSource sourceFilter = source == null ? null : parseEnum(IssueSource.class, source, "source");
         MemberRole teamFilter = assignedTeam == null ? null : Teams.parse(assignedTeam);
-        List<QaIssueResponse> items = issues.search(projectId, statusFilter, sourceFilter, teamFilter).stream()
-            .map(issue -> QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId())))
+        List<QAIssue> found = issues.search(projectId, statusFilter, sourceFilter, teamFilter);
+        // 수동 QA 위치(AC31)는 한 번에 읽는다 — 이슈마다 따로 읽지 않게
+        java.util.Map<Long, ManualQaPin> pinByIssue = found.isEmpty() ? java.util.Map.of()
+            : pins.findByIssueIdIn(found.stream().map(QAIssue::getId).toList()).stream()
+                .collect(java.util.stream.Collectors.toMap(p -> p.getIssue().getId(), p -> p));
+        List<QaIssueResponse> items = found.stream()
+            .map(issue -> QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()),
+                pinByIssue.get(issue.getId())))
             .toList();
         return new QaIssueListResponse(items, items.size());
     }
@@ -173,7 +183,8 @@ public class QaIssueService {
         if (issue == null) {
             throw ApiException.notFound("이슈를 찾을 수 없습니다.");
         }
-        return QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()));
+        return QaIssueResponse.of(issue, histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()),
+            pins.findByIssueId(issue.getId()).orElse(null));
     }
 
     /** AC2: expected_value와 actual_value가 둘 다 있어야 한다. 빠진 값을 추론하거나 채우지 않는다(N3) */

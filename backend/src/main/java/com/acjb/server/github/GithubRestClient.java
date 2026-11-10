@@ -73,6 +73,36 @@ public class GithubRestClient implements GithubClient {
         }
     }
 
+    @Override
+    public java.util.Optional<String> latestDeploymentUrl(String owner, String repo) {
+        JsonNode deployments = read(() -> http.get().uri("/repos/{owner}/{repo}/deployments?per_page=10", owner, repo)
+            .retrieve().body(String.class));
+        if (deployments == null || !deployments.isArray()) {
+            throw new GithubApiException("GitHub 응답 형식이 올바르지 않습니다.", 0, null);
+        }
+        // GitHub는 최신 배포부터 준다. 배포마다 가장 최근 상태 하나만 본다 — 실패·진행 중인 배포의 주소는 쓰지 않는다
+        for (JsonNode d : deployments) {
+            JsonNode id = d.get("id");
+            if (id == null || !id.isNumber()) {
+                continue;
+            }
+            long deploymentId = id.asLong();
+            JsonNode statuses = read(() -> http.get()
+                .uri("/repos/{owner}/{repo}/deployments/{id}/statuses?per_page=1", owner, repo, deploymentId)
+                .retrieve().body(String.class));
+            if (statuses == null || !statuses.isArray() || statuses.isEmpty()) {
+                continue;
+            }
+            JsonNode latest = statuses.get(0);
+            JsonNode state = latest.get("state");
+            JsonNode url = latest.get("environment_url");
+            if (state != null && "success".equals(state.asString()) && url != null && url.isString() && !url.asString().isBlank()) {
+                return java.util.Optional.of(url.asString().trim());
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
     private JsonNode read(java.util.function.Supplier<String> call) {
         String body;
         try {

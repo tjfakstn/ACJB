@@ -29,7 +29,7 @@ public class ProjectDeletionService {
         "notifications", "verifications", "status_histories", "qa_issue_repro_steps", "qa_issue_screenshots");
     /** project_id로 바로 지우는 표 — 이 순서대로(style_mismatches는 style_scans를 참조) */
     private static final List<String> PROJECT_CHILDREN = List.of(
-        "qa_issues", "style_mismatches", "style_scans", "figma_syncs", "figma_frames", "embeddings", "design_code_mappings", "project_runs",
+        "manual_qa_pins", "qa_captures", "qa_issues", "style_mismatches", "style_scans", "figma_syncs", "figma_frames", "embeddings", "design_code_mappings", "project_runs",
         "invitations", "project_members");
 
     private final ProjectRepository projects;

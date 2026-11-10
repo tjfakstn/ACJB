@@ -175,7 +175,7 @@ client-fix-<설명>
 - API 명세: [docs/SPEC.md](docs/SPEC.md)(정본) / [docs/openapi.yaml](docs/openapi.yaml)(기계가 읽는 버전, 어긋나면 SPEC.md가 정본)
 - 프로젝트 현황 스냅샷: [docs/ssot.md](docs/ssot.md)
 - 인터뷰 로그: [docs/research/interviews.md](docs/research/interviews.md)
-- 배포 주소: TODO
+- 배포 주소: https://acjb-qating.com (`main` 기준, 절차 `deploy/README.md`)
 
 ### 7.7 진행 상태
 

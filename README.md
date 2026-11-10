@@ -23,7 +23,9 @@
 
 ## 실행 방법
 
-로컬에서 백엔드(Spring Boot, :8080)·프론트(React, :5173)·MySQL(Docker)을 띄웁니다. 배포 주소는 아직 없습니다.
+운영 주소: **https://acjb-qating.com** (AWS Lightsail, `main` 기준 — 배포 절차는 [deploy/README.md](deploy/README.md)).
+
+로컬에서는 백엔드(Spring Boot, :8080)·프론트(React, :5173)·MySQL(Docker)을 띄웁니다.
 
 ### 1. 준비물
 

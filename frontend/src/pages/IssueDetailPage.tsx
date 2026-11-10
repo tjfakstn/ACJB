@@ -286,7 +286,7 @@ function Evidence({ issue, latestReQa, projectId, fileKey, trace }: {
               ))}
             </div>
           </div>
-        ) : <p className="mt-4 text-sm text-black">{issue.description}</p>}
+        ) : <ManualCompare issue={issue} />}
         {latestReQa && (
           <Link to={`/app/projects/${projectId}/issues/${issue.id}/re-qa`}
             className="mt-4 flex items-center justify-between gap-2 rounded-lg bg-qa-surface px-4 py-2.5 text-xs hover:bg-qa-primary/5">
@@ -324,6 +324,39 @@ function Evidence({ issue, latestReQa, projectId, fileKey, trace }: {
   )
 }
 
+/**
+ * 수동 QA(AC31)는 Figma 값·코드 값 비교가 없다 — 등록할 때 적은 기대 결과·실제 결과를 같은 표 모양으로 보여 준다.
+ * 적지 않았으면 비어 있다고 알린다(설명은 불일치 요약에 있으니 되풀이하지 않는다)
+ */
+function ManualCompare({ issue }: { issue: QaIssue }) {
+  const mq = issue.manual_qa
+  const expected = mq?.expected_result ?? null
+  const actual = mq?.actual_result ?? null
+  if (!expected && !actual) {
+    return (
+      <div className="mt-4 rounded-lg bg-qa-surface px-4 py-4 text-center">
+        <div className="text-sm font-medium leading-5 text-black">기대 결과 · 실제 결과가 없습니다</div>
+        <div className="mt-1 text-xs leading-4 text-qa-text-sub">수동 QA를 등록할 때 상세 입력에서 기대 결과와 실제 결과를 적으면 여기에 비교로 보여 줘요.</div>
+      </div>
+    )
+  }
+  return (
+    <div className="mt-4 overflow-x-auto rounded-lg border border-qa-border">
+      <div className="min-w-[520px]">
+        <div className={`${COLS} border-b border-qa-border bg-qa-surface py-2 text-xs font-medium leading-4 text-qa-text-sub`}>
+          <span>항목</span><span>기대 결과</span><span>실제 결과</span><span>판정</span>
+        </div>
+        <div className={`${COLS} py-3 text-sm leading-5`}>
+          <span className="truncate font-medium text-black">{mq?.title ?? '수동 QA'}</span>
+          <span className="break-words text-qa-text-sub">{expected ?? '-'}</span>
+          <span className="break-words text-qa-text-sub">{actual ?? '-'}</span>
+          <ResultMark ok={issue.status === 'resolved'} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Fact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
@@ -346,7 +379,9 @@ function History({ issue, verifications }: { issue: QaIssue; verifications: Veri
     ...issue.status_history.map((h, idx) => ({
       at: h.changed_at,
       key: `h${idx}`,
-      title: idx === 0 && issue.source === 'first_qa' ? '이슈 최초 생성 — 첫 QA 실행에서 발견' : HISTORY_TEXT[h.status],
+      title: idx === 0 && issue.source === 'first_qa' ? '이슈 최초 생성 — 첫 QA 실행에서 발견'
+        // 수동 QA는 Re-QA가 아니라 등록자가 재검증한다(AC5)
+        : h.status === 'fixed' && issue.source === 'manual' ? '수정 완료로 변경 (등록자 재검증 필요)' : HISTORY_TEXT[h.status],
       sub: PROGRESS[h.status].label,
     })),
     ...verifications.map((v) => ({

@@ -46,7 +46,7 @@ public class FakeQaComparator implements QaComparator {
                 }
                 StyleProperty p = input.properties().get(h % input.properties().size());
                 String[] v = SAMPLES.get(p);
-                findings.add(new Finding(t.nodeId(), p, v[0], v[1], t.codePath(), 1 + h % 120));
+                findings.add(new Finding(t.nodeId(), t.nodeId(), t.nodeName(), p, v[0], v[1], t.codePath(), 1 + h % 120));
             }
         }
         return new FirstQaResult(input.commitSha(), findings, 0);

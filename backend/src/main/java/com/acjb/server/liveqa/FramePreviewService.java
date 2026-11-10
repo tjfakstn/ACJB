@@ -28,6 +28,8 @@ import com.acjb.server.repository.ProjectRepository;
 public class FramePreviewService {
 
     private static final Pattern NODE_ID = Pattern.compile("\\d+:\\d+");
+    /** 첫 QA는 하위 요소 단위로 비교해 인스턴스 하위 id("I1:2;3:4")도 온다(2026-11-10) */
+    private static final Pattern SUB_NODE_ID = Pattern.compile("(\\d+:\\d+|I\\d+:\\d+(;\\d+:\\d+)+)");
     private static final Duration CACHE_TTL = Duration.ofMinutes(30);
 
     /** 노드 상자는 프레임 기준 비율 — 프레임 밖으로 나간 부분은 잘라 낸다 */
@@ -52,7 +54,7 @@ public class FramePreviewService {
     }
 
     public FramePreviewView preview(Long projectId, String frameId, String nodeId) {
-        if (frameId == null || !NODE_ID.matcher(frameId).matches() || (nodeId != null && !NODE_ID.matcher(nodeId).matches())) {
+        if (frameId == null || !NODE_ID.matcher(frameId).matches() || (nodeId != null && !SUB_NODE_ID.matcher(nodeId).matches())) {
             throw ApiException.badRequest("frame_id·node_id는 Figma 노드 id 형식(예: 12:34)이어야 합니다.");
         }
         Project project = projects.findById(projectId).orElseThrow(() -> ApiException.notFound("프로젝트를 찾을 수 없습니다."));

@@ -61,7 +61,8 @@ public class StyleMismatch {
     @Column(name = "frame_id", length = 50, updatable = false)
     private String frameId;
 
-    @Column(length = 50, updatable = false)
+    /** 첫 QA는 매핑 노드 안 하위 요소 id(인스턴스 하위 "I1:2;3:4" 포함, V12) */
+    @Column(length = 200, updatable = false)
     private String nodeId;
 
     /** 비교한 화면. scan이면 target_url */

@@ -8,8 +8,8 @@ import com.acjb.server.domain.StyleProperty;
 
 /**
  * 첫 QA(AC23)·Re-QA(AC28)의 "값 비교" 부분. 실행·저장·상태·알림은 FirstQaJob·ReQaJob이 하고, 여기서는 값만 돌려준다.
- * 실제 구현(Figma 노드 값 + LLM이 인용한 코드 줄 확인)은 첫 QA 스파이크 뒤에 만든다.
- * 지금은 개발용 가짜 비교기(app.qa.fake-comparator=true)와, 설정이 없을 때 실패시키는 기본 구현만 있다
+ * 실제 구현은 ClaudeQaComparator(2026-11-10 스파이크 방식 — Figma 값은 노드 JSON, 코드 값은 LLM이 고른 줄의 토큰을 서버가 변환).
+ * 개발용 가짜 비교기(app.qa.fake-comparator=true)는 시연용 값을 만든다
  */
 public interface QaComparator {
 
@@ -24,11 +24,26 @@ public interface QaComparator {
     record Target(String frameId, String frameName, String nodeId, String nodeName, String codePath, String codeSymbol) {
     }
 
-    record FirstQaInput(String repo, String commitSha, Set<QaScope> scope, List<StyleProperty> properties, List<Target> targets) {
+    record FirstQaInput(String repo, String commitSha, String figmaFileKey, Set<QaScope> scope, List<StyleProperty> properties,
+                        List<Target> targets) {
+
+        /** Figma 파일을 읽지 않는 비교기(가짜 비교기)용 */
+        public FirstQaInput(String repo, String commitSha, Set<QaScope> scope, List<StyleProperty> properties, List<Target> targets) {
+            this(repo, commitSha, null, scope, properties, targets);
+        }
     }
 
-    /** 찾은 차이 하나 — Figma 값(expected)과 코드 값(actual), 코드 값을 확인한 파일·줄 */
-    record Finding(String nodeId, StyleProperty property, String expectedValue, String actualValue, String codePath, Integer codeLine) {
+    /**
+     * 찾은 차이 하나 — Figma 값(expected)과 코드 값(actual), 코드 값을 확인한 파일·줄.
+     * nodeId는 입력 Target의 노드, elementId·elementName은 그 노드 안에서 실제로 비교한 하위 요소(노드 자신이면 같은 값)
+     */
+    record Finding(String nodeId, String elementId, String elementName, StyleProperty property, String expectedValue, String actualValue,
+                   String codePath, Integer codeLine) {
+
+        /** 노드 자신을 비교한 차이 */
+        public Finding(String nodeId, StyleProperty property, String expectedValue, String actualValue, String codePath, Integer codeLine) {
+            this(nodeId, nodeId, null, property, expectedValue, actualValue, codePath, codeLine);
+        }
     }
 
     /** dropped=근거가 모자라 버린 수(N17) */
@@ -40,7 +55,13 @@ public interface QaComparator {
                     String expectedValue, String previousActualValue, int priorReQa) {
     }
 
-    record ReQaInput(String repo, String commitSha, List<ReQaItem> items) {
+    /** branch=연결된 브랜치 — 실제 비교기는 그 브랜치의 최신 커밋을 다시 읽는다. commitSha는 첫 QA 때 읽은 커밋(참고) */
+    record ReQaInput(String repo, String branch, String commitSha, String figmaFileKey, List<ReQaItem> items) {
+
+        /** 코드를 다시 읽지 않는 비교기(가짜 비교기)용 */
+        public ReQaInput(String repo, String commitSha, List<ReQaItem> items) {
+            this(repo, null, commitSha, null, items);
+        }
     }
 
     /** observed: issueId → 다시 읽은 코드 값. 맵에 없으면 다시 읽지 못한 것(N18 — 판정하지 않는다) */

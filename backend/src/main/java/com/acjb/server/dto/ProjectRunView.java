@@ -16,7 +16,10 @@ public record ProjectRunView(String id, String kind, String status, int createdC
                              java.util.List<String> scope, boolean demo, String errorMessage, Instant createdAt, Instant finishedAt) {
 
     public static ProjectRunView of(ProjectRun r) {
-        java.util.List<String> scope = r.getScope() == null || r.getScope().isBlank() ? null : java.util.List.of(r.getScope().split(","));
+        // 이제 없는 범위(2026-11-10 이전의 layout·presence)는 보여 주지 않는다
+        java.util.List<String> scope = r.getScope() == null || r.getScope().isBlank() ? null
+            : java.util.Arrays.stream(r.getScope().split(",")).map(com.acjb.server.qa.QaScope::parse).flatMap(java.util.Optional::stream)
+                .map(com.acjb.server.qa.QaScope::value).toList();
         return new ProjectRunView(String.valueOf(r.getId()), r.getKind().name().toLowerCase(Locale.ROOT),
             r.getStatus().name().toLowerCase(Locale.ROOT), r.getCreatedCount(), r.getDroppedCount(), r.getFailedCount(), scope, r.isDemo(),
             r.getErrorMessage(), r.getCreatedAt(), r.getFinishedAt());

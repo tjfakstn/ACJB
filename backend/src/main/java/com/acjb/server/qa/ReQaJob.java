@@ -112,7 +112,7 @@ public class ReQaJob {
                     m.getExpectedValue(), m.getActualValue(), (int) verifications.countByIssueIdAndSource(i.getId(), VerificationSource.RE_QA));
             })
             .toList();
-        return new QaComparator.ReQaInput(p.getGithubRepo(), sha, items);
+        return new QaComparator.ReQaInput(p.getGithubRepo(), p.getGithubBranch(), sha, p.getFigmaFileKey(), items);
     }
 
     private void save(Long runId, QaComparator.ReQaInput input, QaComparator.ReQaResult result, boolean demo) {

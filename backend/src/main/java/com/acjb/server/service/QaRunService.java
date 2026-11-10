@@ -106,7 +106,7 @@ public class QaRunService {
         }
     }
 
-    /** scope는 1개 이상, 정해진 5개 값만(AC23, 골든 케이스 fq-005) */
+    /** scope는 1개 이상, 정해진 4개 값만(AC23·2026-11-10, 골든 케이스 fq-005) */
     private static Set<QaScope> parseScope(JsonNode body) {
         JsonNode node = body == null ? null : body.get("scope");
         if (node == null || !node.isArray() || node.isEmpty()) {
@@ -123,7 +123,7 @@ public class QaRunService {
                 }
             }
             if (match == null) {
-                throw ApiException.badRequest("검증 범위는 size_spacing·color_typography·border_radius·layout·presence 중에서 골라 주세요.");
+                throw ApiException.badRequest("검증 범위는 size_spacing·color_typography·border_radius·text 중에서 골라 주세요.");
             }
             scope.add(match);
         }

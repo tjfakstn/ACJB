@@ -178,7 +178,7 @@ class QaRunApiTest {
         // 비교기에는 고른 범위의 property와 노드 짝만 넘긴다
         ArgumentCaptor<QaComparator.FirstQaInput> input = ArgumentCaptor.forClass(QaComparator.FirstQaInput.class);
         verify(comparator).compare(input.capture());
-        assertThat(input.getValue().properties()).containsExactly(StyleProperty.COLOR, StyleProperty.FONT_WEIGHT, StyleProperty.FONT_FAMILY);
+        assertThat(input.getValue().properties()).containsExactly(StyleProperty.COLOR, StyleProperty.FONT_WEIGHT, StyleProperty.FONT_SIZE);
         assertThat(input.getValue().targets()).extracting(QaComparator.Target::nodeId).containsExactly("12:34");
     }
 

@@ -7,8 +7,8 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -132,7 +132,8 @@ public class FirstQaJob {
         if (targets.isEmpty()) {
             throw new QaFailedException("비교할 디자인-코드 매핑이 없어요. 연결한 Figma 페이지·섹션과 GitHub 브랜치를 확인해 주세요.");
         }
-        return new QaComparator.FirstQaInput(p.getGithubRepo(), analysis.getCommitSha(), scope, QaScope.propertiesOf(scope), targets);
+        return new QaComparator.FirstQaInput(p.getGithubRepo(), analysis.getCommitSha(), p.getFigmaFileKey(), scope, QaScope.propertiesOf(scope),
+            targets);
     }
 
     private void save(Long runId, QaComparator.FirstQaInput input, QaComparator.FirstQaResult result, boolean demo) {
@@ -152,10 +153,13 @@ public class FirstQaJob {
                 dropped++;
                 continue;
             }
-            StyleMismatch m = mismatches.save(StyleMismatch.firstQa(project, t.frameId(), t.frameName(), t.nodeId(), f.property(),
+            // 비교한 하위 요소가 노드 자신이 아니면 "노드 > 요소"로 적는다 — 어느 요소인지 다시 찾지 않게
+            String elementId = isBlank(f.elementId()) ? t.nodeId() : f.elementId();
+            String where = isBlank(f.elementName()) || elementId.equals(t.nodeId()) ? t.nodeName() : t.nodeName() + " > " + f.elementName();
+            StyleMismatch m = mismatches.save(StyleMismatch.firstQa(project, t.frameId(), t.frameName(), elementId, f.property(),
                 f.expectedValue(), f.actualValue(), f.codePath(), f.codeLine()));
             QAIssue issue = issues.save(QAIssue.firstQa(project, run,
-                QaText.description(t.nodeName(), f.property(), f.expectedValue(), f.actualValue(), demo), t.frameName(), t.nodeName(),
+                QaText.description(where, f.property(), f.expectedValue(), f.actualValue(), demo), t.frameName(), where,
                 m, run.getRequestedBy()));
             histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, run.getRequestedBy()));
             created++;
@@ -177,7 +181,7 @@ public class FirstQaJob {
     static Set<QaScope> parseScope(String csv) {
         Set<QaScope> scope = EnumSet.noneOf(QaScope.class);
         if (csv != null && !csv.isBlank()) {
-            Arrays.stream(csv.split(",")).map(v -> QaScope.valueOf(v.trim().toUpperCase(Locale.ROOT))).forEach(scope::add);
+            Arrays.stream(csv.split(",")).map(QaScope::parse).flatMap(Optional::stream).forEach(scope::add);
         }
         return scope;
     }

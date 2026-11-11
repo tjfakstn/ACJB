@@ -509,3 +509,11 @@
 - **테스트**: 재검증 pass에 알림이 생기면서 기존 단언 3개(VerificationApiTest nt006, QaRunApiTest rq001·Re-QA 범위 추가)를 사용자 승인으로 바꿨다. 골든 케이스 nt-006(`recheck_failed` 0건)은 그대로 성립한다
 - **영향**: SPEC AC11·AC14·N5 수정, AC35 추가, ontology Notification, `Notification.schema.json`, openapi v0.17.0, db V18(`notifications.project_id`·`run_id`·`actor_id`·`cause`·`read_at`, `qa_issue_id` NULL 허용), README 6절
 - **결정자**: 설만수(시안 6유형 모두, 읽음 처리, 프로젝트별). 스펙·DB 변경이라 오단비 확인 필요
+
+## 2026-11-11 다른 수업 팀 공개 전 — 사용량 한도, 재시작 시 실행 정리, 동시 실행 제한, 앱 안 초대 수락
+
+- **결정**: (1) 사용량 한도를 건다 — 소유 프로젝트 3개, 프로젝트마다 하루(최근 24시간) 비교 분석 5번·첫 QA 5번·Re-QA 10번(실패 포함), AI 문장 정리 100번·재검증 범위 제안 50번·초대 메일 30번. 넘으면 429 `RATE_LIMITED`(AC36). 실행은 DB 기록으로, 기록이 남지 않는 AI 호출·초대 메일은 서버 메모리로 센다(재시작하면 0부터). 값은 환경 변수(`LIMIT_*`)로 바꾼다. (2) 서버가 시작될 때 queued·running으로 남은 실행(비교 분석·첫 QA·Re-QA·scan·Figma 동기화)을 실패로 바꾸고 실행한 사람에게 `run_failed` 알림을 보낸다. (3) 비교 분석·첫 QA·Re-QA는 전용 실행기에서 동시에 2개만 돌리고 나머지는 queued로 기다린다(`JOBS_HEAVY_CONCURRENCY`). 초대 메일·임베딩·동기화는 기본 실행기. (4) 서버 크로미움(배포 화면 캡처·scan)은 동시에 2개까지(`BROWSER_MAX_CONCURRENT`), 캡처는 20초 기다려도 자리가 없으면 429. (5) 배포: 백엔드 컨테이너 메모리 상한 5GB, 모든 컨테이너 로그 10MB×5. (6) 프로젝트 목록에 "받은 초대"를 두어 메일 없이 앱 안에서 역할을 골라 수락한다(이미 있던 `GET/POST /invitations/mine` 사용)
+- **왜**: 다른 수업 팀들이 서버 한 대와 팀 공용 Anthropic·Voyage·Figma·Gmail 계정을 같이 쓰게 됐다. 점검해 보니 (1) 구글 계정만 있으면 비용이 드는 호출을 무제한으로 할 수 있었고, (2) 재배포하면 진행 중이던 실행이 영원히 "진행 중"으로 남아 다시 실행도 프로젝트 삭제도 못 했고(409), (3) 무거운 실행과 메일이 기본 실행기 하나를 같이 써서 여러 팀이 동시에 돌리면 AI 동시 호출이 수십 개가 되고 메일이 밀렸고, (4) 캡처마다 띄우는 크로미움에 동시 제한·메모리 상한이 없어 서버 전체가 멈출 수 있었고, (5) README는 "앱 안에서 초대 수락"을 안내했지만 화면이 없었다
+- **보류**: 로그인 허용 도메인 제한(`ajou.ac.kr`), 세션 DB 저장, DB 자동 백업은 이번에 하지 않는다
+- **영향**: SPEC AC36 추가·오류 코드 18개, openapi v0.18.0, 백엔드 설정 `app.limits.*`·`app.jobs.heavy-concurrency`·`app.browser.max-concurrent`, deploy/docker-compose.yml, README 6절. API·DB 스키마 변경 없음
+- **결정자**: 설만수(공개 전 반드시 고칠 것 4가지). 한도 값은 설만수가 정한 기본값이라 오단비 확인 필요

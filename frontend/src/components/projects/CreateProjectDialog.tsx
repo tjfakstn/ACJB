@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createProject, formatDate, type Project } from '../../lib/api'
+import { ApiError, createProject, formatDate, type Project } from '../../lib/api'
 import { Spinner } from '../common/Spinner'
 import { Icon } from '../common/Icon'
 import { CloseButton, Kv, NextStep, Overlay, Stepper } from './WizardParts'
@@ -43,6 +43,7 @@ function checkName(name: string) {
 }
 
 export function CreateProjectDialog({ onClose, onCreated, onManageMembers, onStart }: CreateProjectDialogProps) {
+  const [limitMessage, setLimitMessage] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('form')
   // 초대 완료 화면(INV-05)은 입력·확인(760)보다 좁은 600px 창이다
   const [inviteSent, setInviteSent] = useState(false)
@@ -67,8 +68,9 @@ export function CreateProjectDialog({ onClose, onCreated, onManageMembers, onSta
       setCreated(project)
       setPhase('done')
       onCreated(project)
-    } catch {
-      // 입력은 그대로 두고 다시 시도할 수 있게 한다(PRJ-03F)
+    } catch (e) {
+      // 입력은 그대로 두고 다시 시도할 수 있게 한다(PRJ-03F). 프로젝트 수 한도(429)는 서버 문구를 그대로 보여 준다(2026-11-11)
+      setLimitMessage(e instanceof ApiError && e.status === 429 ? e.message : null)
       setPhase('failed')
     }
   }
@@ -118,7 +120,7 @@ export function CreateProjectDialog({ onClose, onCreated, onManageMembers, onSta
             <Icon name="alert" className="mt-px h-5 w-5 flex-none text-qa-warning" />
             <div>
               <div className="text-sm font-medium text-black">프로젝트를 만들지 못했어요</div>
-              <div className="mt-0.5 text-xs text-qa-text-sub">일시적인 서버 오류가 발생했어요. 입력한 내용은 그대로 유지되니 다시 시도해 주세요.</div>
+              <div className="mt-0.5 text-xs text-qa-text-sub">{limitMessage ?? '일시적인 서버 오류가 발생했어요. 입력한 내용은 그대로 유지되니 다시 시도해 주세요.'}</div>
             </div>
           </div>
         )}

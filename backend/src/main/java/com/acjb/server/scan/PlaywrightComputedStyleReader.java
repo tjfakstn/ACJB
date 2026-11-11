@@ -54,16 +54,30 @@ public class PlaywrightComputedStyleReader implements ComputedStyleReader {
           };
         }""";
 
+    /** scan은 뒤에서 돈다 — 캡처보다 조금 더 기다린다 */
+    private static final Duration SLOT_WAIT = Duration.ofSeconds(60);
+
     private final TargetUrlPolicy policy;
     private final double timeoutMs;
+    private final BrowserSlots slots;
 
-    public PlaywrightComputedStyleReader(TargetUrlPolicy policy, @Value("${app.scan.timeout:30s}") Duration timeout) {
+    public PlaywrightComputedStyleReader(TargetUrlPolicy policy, @Value("${app.scan.timeout:30s}") Duration timeout, BrowserSlots slots) {
         this.policy = policy;
         this.timeoutMs = timeout.toMillis();
+        this.slots = slots;
     }
 
+    /** 동시에 띄우는 브라우저 수를 지킨다(BrowserSlots) */
     @Override
     public ComputedStyle read(String targetUrl, String selector) {
+        try {
+            return slots.run(SLOT_WAIT, () -> doRead(targetUrl, selector));
+        } catch (BrowserSlots.Busy e) {
+            throw new ScanFailedException(e.getMessage());
+        }
+    }
+
+    private ComputedStyle doRead(String targetUrl, String selector) {
         Playwright.CreateOptions create = new Playwright.CreateOptions().setEnv(Map.of("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1"));
         try (Playwright pw = Playwright.create(create);
              Browser browser = launch(pw);

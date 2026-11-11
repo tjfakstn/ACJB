@@ -1,9 +1,18 @@
 # QAting 운영 배포 — 서버에서 저장소 루트로 가서: docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 # 값은 deploy/.env(커밋 금지, deploy/.env.example 참고)
+
+# 컨테이너 로그는 10MB × 5개까지만 남긴다 — 다른 팀들이 쓰기 시작하면 로그가 디스크를 채운다(2026-11-11)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   mysql:
     image: mysql:8.4
     restart: unless-stopped
+    logging: *logging
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?deploy/.env 에 DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME:-qating}
@@ -25,6 +34,10 @@ services:
       context: ..
       dockerfile: deploy/backend.Dockerfile
     restart: unless-stopped
+    logging: *logging
+    # 서버 브라우저(크로미움)는 JVM 힙 밖에서 메모리를 쓴다. 상한을 둬서 넘치면 백엔드만 다시 뜨고 서버 전체(DB·웹)는 멈추지 않게 한다(2026-11-11).
+    # JVM 힙은 이 값의 60%(backend.Dockerfile)
+    mem_limit: ${BACKEND_MEM_LIMIT:-5g}
     depends_on:
       mysql:
         condition: service_healthy
@@ -41,6 +54,7 @@ services:
       context: ..
       dockerfile: deploy/web.Dockerfile
     restart: unless-stopped
+    logging: *logging
     depends_on:
       - backend
     environment:

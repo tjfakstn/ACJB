@@ -1,7 +1,7 @@
 package com.acjb.server.common;
 
 /**
- * ErrorResponse.error.code 값(17개, 2026-11-05 확정·11-06 SUGGESTION_FAILED·11-07 연결·실행 3개·11-10 CAPTURE_FAILED 추가). openapi Error.code 설명에 상태 코드와 함께 적혀 있다 —
+ * ErrorResponse.error.code 값(18개, 2026-11-05 확정·11-06 SUGGESTION_FAILED·11-07 연결·실행 3개·11-10 CAPTURE_FAILED·11-11 RATE_LIMITED 추가). openapi Error.code 설명에 상태 코드와 함께 적혀 있다 —
  * 값을 추가하면 그 설명도 같이 고친다. enum이 아닌 이유: 프레임워크 단계 오류는 HTTP 상태 이름이 온다.
  */
 public final class ErrorCodes {
@@ -33,6 +33,8 @@ public final class ErrorCodes {
     public static final String NOT_READY = "NOT_READY";
     /** 서버 브라우저가 배포 화면을 열거나 캡처하지 못함(AC30, 502) */
     public static final String CAPTURE_FAILED = "CAPTURE_FAILED";
+    /** 사용량 한도를 넘음 — 프로젝트 수, 하루 실행·AI 호출·초대 횟수, 동시 화면 캡처(2026-11-11, 429) */
+    public static final String RATE_LIMITED = "RATE_LIMITED";
     /** Figma 연동이 설정되지 않음(FIGMA_ACCESS_TOKEN 없음) */
     public static final String FIGMA_UNAVAILABLE = "FIGMA_UNAVAILABLE";
 

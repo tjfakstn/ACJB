@@ -23,4 +23,10 @@ public interface ProjectRunRepository extends JpaRepository<ProjectRun, Long> {
 
     /** 성공한 첫 QA·Re-QA — 지금까지 검사한 범위(covered_scope, AC28) */
     java.util.List<ProjectRun> findByProjectIdAndKindInAndStatus(Long projectId, java.util.Collection<RunKind> kinds, RunStatus status);
+
+    /** 최근 24시간 실행 수(실패 포함) — 하루 실행 한도(2026-11-11) */
+    long countByProjectIdAndKindAndCreatedAtAfter(Long projectId, RunKind kind, java.time.Instant after);
+
+    /** 서버가 다시 시작될 때 끝나지 못한 실행을 찾는다(2026-11-11) */
+    java.util.List<ProjectRun> findByStatusIn(java.util.Collection<RunStatus> statuses);
 }

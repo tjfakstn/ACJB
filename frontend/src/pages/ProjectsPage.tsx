@@ -7,6 +7,7 @@ import { ProjectListItem } from '../components/projects/ProjectListItem'
 import { EmptyState } from '../components/projects/EmptyState'
 import { CreateProjectDialog } from '../components/projects/CreateProjectDialog'
 import { Icon } from '../components/common/Icon'
+import { ReceivedInvitations } from '../components/projects/ReceivedInvitations'
 
 // 모든 프로젝트(시안 PRJ-01, 빈 상태 PRJ-01E, 분석 미완료 PRJ-01A). 내가 멤버인 프로젝트만 서버가 name asc로 준다(SPEC AC15).
 // "이상 없음"=비교 분석이 끝났고 미해결 이슈가 0건, "FAIL 이슈 보유"=미해결 이슈가 있음, "분석 미완료"=비교 분석이 끝나지 않음.
@@ -69,6 +70,8 @@ export function ProjectsPage() {
             <Icon name="plus" className="h-5 w-5" />새 프로젝트
           </button>
         </div>
+
+        <ReceivedInvitations onJoined={(p) => navigate(`/app/projects/${p.id}`)} />
 
         {loadError ? (
           <div role="alert" className="mt-6 rounded-2xl border border-qa-border bg-white p-10 text-center">

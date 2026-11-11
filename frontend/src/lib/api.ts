@@ -272,6 +272,16 @@ export function acceptInvitation(token: string, role: MemberRole): Promise<Proje
   return request<Project>('POST', `/api/v1/invitations/${encodeURIComponent(token)}/accept`, { role })
 }
 
+/** 내 구글 이메일로 온 대기 중 초대 — 메일을 못 받아도 앱 안에서 수락한다(2026-11-11) */
+export async function listMyInvitations(): Promise<Invitation[]> {
+  const data = await request<{ items: Invitation[] }>('GET', '/api/v1/invitations/mine')
+  return data.items
+}
+
+export function acceptMyInvitation(invitationId: string, role: MemberRole): Promise<Project> {
+  return request<Project>('POST', `/api/v1/invitations/mine/${encodeURIComponent(invitationId)}/accept`, { role })
+}
+
 // ---------------------------------------------------------------- 로그인 후 돌아갈 곳
 
 const AFTER_LOGIN_KEY = 'qating.afterLogin'

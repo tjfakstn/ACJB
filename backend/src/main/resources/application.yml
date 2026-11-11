@@ -125,6 +125,22 @@ app:
     model: voyage-4
     dimension: 1024
     timeout: 30s
+  # 여러 팀이 서버 한 대·공용 AI·Figma·Gmail 계정을 같이 쓰므로 거는 한도(2026-11-11). 넘으면 429 RATE_LIMITED, 0이면 끈다
+  # 실행 수는 프로젝트별 최근 24시간(실패 포함), AI 호출·초대 메일은 프로젝트별 최근 24시간(서버 메모리 — 재시작하면 0부터)
+  limits:
+    projects-per-owner: ${LIMIT_PROJECTS_PER_OWNER:3}
+    analysis-per-day: ${LIMIT_ANALYSIS_PER_DAY:5}
+    first-qa-per-day: ${LIMIT_FIRST_QA_PER_DAY:5}
+    re-qa-per-day: ${LIMIT_RE_QA_PER_DAY:10}
+    parse-per-day: ${LIMIT_PARSE_PER_DAY:100}
+    suggestions-per-day: ${LIMIT_SUGGESTIONS_PER_DAY:50}
+    invitations-per-day: ${LIMIT_INVITATIONS_PER_DAY:30}
+  # 비교 분석·첫 QA·Re-QA를 동시에 돌리는 수(나머지는 queued로 기다린다)
+  jobs:
+    heavy-concurrency: ${JOBS_HEAVY_CONCURRENCY:2}
+  # 서버 헤드리스 크로미움(배포 화면 캡처·scan)을 동시에 띄우는 수
+  browser:
+    max-concurrent: ${BROWSER_MAX_CONCURRENT:2}
   # 프론트(client) 로컬 개발 origin — frontend/ 스캐폴딩 완료로 확정 (Vite 기본 포트 5173)
   cors:
     # 쉼표로 여러 개. 배포에서는 프론트와 API가 같은 도메인이라 그 주소 하나

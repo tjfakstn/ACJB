@@ -41,6 +41,10 @@ public class ProjectCommandService {
         this.issues = issues;
     }
 
+    /** 사용량 한도(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private UsageLimits limits;
+
     /**
      * AC16 — 요청자가 소유자이자 역할 미지정(null)의 첫 멤버(2026-11-07). 역할은 이후 소유자가 정한다(AC24).
      * 검사를 모두 통과한 뒤에만 저장한다
@@ -61,6 +65,7 @@ public class ProjectCommandService {
         if (desc != null && desc.length() > DESCRIPTION_MAX) {
             throw ApiException.badRequest("description은 " + DESCRIPTION_MAX + "자 이하여야 합니다.");
         }
+        limits.checkProjectCreate(requester);
         Project project = projects.save(new Project(trimmed, desc, requester));
         projectMembers.save(new ProjectMember(project, requester, null));
         return ProjectResponse.of(project);

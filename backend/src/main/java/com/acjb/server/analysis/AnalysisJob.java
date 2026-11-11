@@ -105,7 +105,7 @@ public class AnalysisJob {
         this.maxCodeChars = maxCodeChars;
     }
 
-    @Async
+    @Async(com.acjb.server.config.AsyncConfig.HEAVY)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onRequested(AnalysisRequested event) {
         run(event.runId());

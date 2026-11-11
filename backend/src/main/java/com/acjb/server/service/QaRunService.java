@@ -55,6 +55,10 @@ public class QaRunService {
         this.clock = clock;
     }
 
+    /** 사용량 한도(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private UsageLimits limits;
+
     @Transactional
     public ProjectRunView startFirstQa(Long projectId, JsonNode body, Member requester) {
         Project project = ownedProject(projectId, requester, "첫 QA는 프로젝트 소유자만 실행할 수 있어요.");
@@ -66,6 +70,7 @@ public class QaRunService {
             throw notReady("첫 QA는 이미 끝났어요. 이후에는 Re-QA로 다시 확인해요.");
         }
         checkIdle(projectId);
+        limits.checkRunStart(projectId, RunKind.FIRST_QA);
         ProjectRun run = new ProjectRun(project, RunKind.FIRST_QA, requester, clock.instant());
         run.setScope(scope.stream().map(QaScope::value).collect(Collectors.joining(",")));
         run = runs.save(run);
@@ -96,6 +101,7 @@ public class QaRunService {
         if (added.isEmpty() && issues.countByProjectIdAndStatusAndSource(projectId, IssueStatus.FIXED, IssueSource.FIRST_QA) == 0) {
             throw notReady("수정 완료된 첫 QA 문제가 없어요. 담당 팀이 수정 완료로 바꾼 뒤에 실행하거나, 검사하지 않은 범위를 더해 주세요.");
         }
+        limits.checkRunStart(projectId, RunKind.RE_QA);
         ProjectRun run = new ProjectRun(project, RunKind.RE_QA, requester, clock.instant());
         Set<QaScope> all = EnumSet.noneOf(QaScope.class);
         all.addAll(covered);

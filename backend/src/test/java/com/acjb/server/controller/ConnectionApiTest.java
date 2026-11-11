@@ -265,4 +265,24 @@ class ConnectionApiTest {
         mvc.perform(get("/api/v1/projects/" + project.getId()).with(oauth2Login().attributes(a -> a.put("email", member.getEmail()))))
             .andExpect(jsonPath("$.data.github.branch").value("develop"));
     }
+
+    @Test
+    void 브랜치_주소를_넣으면_400이고_저장소_주소만_넣으라고_안내한다() throws Exception {
+        connect("github", owner, "https://github.com/TEAMFICIAL/teamficial-fe/tree/main")
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error.message").value(org.hamcrest.Matchers.containsString("저장소 주소만")));
+        connect("github", owner, "https://github.com/TEAMFICIAL/teamficial-fe/blob/main/README.md").andExpect(status().isBadRequest());
+        verify(github, never()).repository(any(), any());
+        assertThat(reload().getGithubRepo()).isNull();
+    }
+
+    @Test
+    void 내보내기가_막힌_Figma_파일은_422이고_보기_권한이_아니라_내보내기_설정을_안내한다() throws Exception {
+        when(figma.outline("AbC123")).thenThrow(new FigmaApiException("forbidden", 403, null).markNotExportable());
+        connect("figma", owner, FIGMA_URL)
+            .andExpect(status().is(422))
+            .andExpect(jsonPath("$.error.code").value("CONNECTION_FORBIDDEN"))
+            .andExpect(jsonPath("$.error.message").value(org.hamcrest.Matchers.containsString("내보내기")));
+        assertThat(reload().getFigmaFileKey()).isNull();
+    }
 }

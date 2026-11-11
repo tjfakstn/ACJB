@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { captureImageUrl, SEVERITY_LABELS, type Severity } from '../../lib/api'
+import { captureImageUrl, PLATFORM_LABELS, SEVERITY_LABELS, type AppPlatform, type Severity } from '../../lib/api'
 import { Icon } from '../common/Icon'
 import type { Draft } from './draft'
 
@@ -130,6 +130,8 @@ export function OptionalFields({ draft, onChange }: { draft: Draft; onChange: (p
         <textarea value={draft.actual} maxLength={1000} rows={2} disabled={draft.saving} onChange={(e) => onChange({ actual: e.target.value })}
           className={`${INPUT} mt-1 resize-none border-qa-border`} />
       </label>
+      <PlatformField platform={draft.platform} only={draft.platformOnly} disabled={draft.saving}
+        onChange={(platform, platformOnly) => onChange({ platform, platformOnly })} />
     </>
   )
 }
@@ -173,4 +175,41 @@ export function FrameField({ draft, frames, suggested, onChange }: {
       )}
     </label>
   )
+}
+
+const PLATFORMS: AppPlatform[] = ['web', 'aos', 'ios']
+
+/** 발생 환경(앱 지원, 2026-11-11) — 웹이 아니면 "이 플랫폼에서만"을 고를 수 있다. 고르지 않으면 공통 문제로 등록한다 */
+export function PlatformField({ platform, only, disabled, onChange }: {
+  platform: AppPlatform
+  only: boolean
+  disabled?: boolean
+  onChange: (platform: AppPlatform, only: boolean) => void
+}) {
+  return (
+    <fieldset className="mt-3">
+      <legend className="text-xs font-medium text-black">발생 환경</legend>
+      <div className="mt-1 grid grid-cols-3 gap-1.5">
+        {PLATFORMS.map((p) => (
+          <button key={p} type="button" aria-pressed={platform === p} disabled={disabled}
+            onClick={() => onChange(p, p === 'web' ? false : only)}
+            className={`h-8 rounded-lg border text-xs ${platform === p ? 'border-qa-primary bg-qa-primary/10 font-medium text-qa-primary-hover' : 'border-qa-border bg-white text-black hover:bg-qa-surface'}`}>
+            {PLATFORM_LABELS[p]}
+          </button>
+        ))}
+      </div>
+      {platform !== 'web' && (
+        <label className="mt-2 flex items-center gap-2 text-xs text-black">
+          <input type="checkbox" checked={only} disabled={disabled} onChange={(e) => onChange(platform, e.target.checked)} />
+          {PLATFORM_LABELS[platform]}에서만 생기는 문제예요
+        </label>
+      )}
+    </fieldset>
+  )
+}
+
+/** 서버로 보낼 발생 환경·적용 범위 — 웹·공통이면 보내지 않는다(서버 기본값) */
+export function platformInput(platform: AppPlatform, only: boolean): { platform?: AppPlatform; platform_scope?: 'aos' | 'ios' } {
+  if (platform === 'web') return {}
+  return only ? { platform, platform_scope: platform } : { platform }
 }

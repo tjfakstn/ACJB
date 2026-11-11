@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.19.0
+  version: 0.20.0
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -947,6 +947,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /projects/{projectId}/notifications/stream:
+    get:
+      tags: [Notification]
+      summary: 새 알림 신호 스트림 (SPEC AC37, 2026-11-11)
+      description: >-
+        Server-Sent Events. 이 프로젝트에서 요청자에게 Notification이 저장(커밋)될 때마다 `event: notification`,
+        `data: {"notification_id": "..."}`를 한 번 보낸다. 알림 내용은 싣지 않으므로 받으면 GET .../notifications를 다시 읽는다.
+        25초마다 주석 하트비트(`:`), 30분 뒤 서버가 연결을 닫는다(EventSource가 다시 연결). 한 사람이 한 프로젝트에 연결 5개까지 — 넘으면 가장 오래된 것을 닫는다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: 이벤트 스트림
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: "retry: 5000\n\nevent: notification\ndata: {\"notification_id\":\"42\"}\n\n"
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

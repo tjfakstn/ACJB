@@ -65,6 +65,9 @@ public class CaptureService {
             png = capturer.capture(pageUrl, viewport.width(), viewport.height());
         } catch (CaptureFailedException e) {
             throw new ApiException(HttpStatus.BAD_GATEWAY, ErrorCodes.CAPTURE_FAILED, e.getMessage());
+        } catch (com.acjb.server.scan.BrowserSlots.Busy e) {
+            // 동시에 띄우는 브라우저 수를 넘었다(2026-11-11) — 서버 문제가 아니라 잠시 뒤 다시 하면 된다
+            throw com.acjb.server.service.UsageLimits.limited(e.getMessage());
         }
         return save(projectId, requester, CaptureKind.AUTO, "image/png", pageUrl, viewport.width(), viewport.height(), png);
     }

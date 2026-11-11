@@ -61,6 +61,10 @@ public class InvitationService {
     public record InviteResult(InvitationDtos.View view, boolean renewed) {
     }
 
+    /** 사용량 한도(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private UsageLimits limits;
+
     /**
      * AC17 — 같은 이메일에 대기 중(만료 전) 초대가 있으면 새로 만들지 않고 그 초대를 연장해 다시 보낸다(2026-11-07).
      * 만료됐지만 상태가 pending으로 남은 행은 취소하고 새로 만든다 — 대기 초대가 이메일당 하나만 남게. 메일은 커밋 뒤 보낸다
@@ -78,6 +82,7 @@ public class InvitationService {
         if (projectMembers.existsByProjectIdAndMemberEmail(projectId, email)) {
             throw new ApiException(HttpStatus.CONFLICT, ErrorCodes.ALREADY_MEMBER, "이미 이 프로젝트의 멤버입니다.");
         }
+        limits.hit(UsageLimits.Counter.INVITATION, projectId);
         Instant now = clock.instant();
         Invitation open = null;
         for (Invitation pending : invitations.findByProjectIdAndEmailAndStatus(projectId, email, InvitationStatus.PENDING)) {
@@ -108,6 +113,7 @@ public class InvitationService {
         if (!invitation.isOpen(now)) {
             throw new ApiException(HttpStatus.CONFLICT, ErrorCodes.INVITATION_CLOSED, "대기 중인 초대가 아닙니다.");
         }
+        limits.hit(UsageLimits.Counter.INVITATION, projectId);
         return renewAndSend(invitation, requester, now);
     }
 

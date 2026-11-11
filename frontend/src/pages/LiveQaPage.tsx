@@ -14,7 +14,7 @@ import { ErrorCard, Loading, OUTLINE_BTN, PageTitle, PRIMARY_BTN, QaShell, issue
 import { LivePreview, type PreviewSurface } from '../components/liveqa/LivePreview'
 import { QaItemList } from '../components/liveqa/QaItemList'
 import { ManualQaDetail } from '../components/liveqa/ManualQaDetail'
-import { CaptureStatusBox, FrameField, OptionalFields, RequiredFields } from '../components/liveqa/DraftFields'
+import { CaptureStatusBox, FrameField, OptionalFields, platformInput, RequiredFields } from '../components/liveqa/DraftFields'
 import { NoLocationForm } from '../components/liveqa/NoLocationForm'
 import { hasContent, newRequestId, type Draft } from '../components/liveqa/draft'
 
@@ -174,6 +174,7 @@ export function LiveQaPage() {
     setDraft({
       requestId, basis, x, y, viewport, pagePath: path, title: '', description: '', severity: null, expected: '', actual: '',
       frameId: linked.length === 1 ? linked[0].frame_id : null,
+      platform: 'web', platformOnly: false,
       capture: attachment ? { state: 'ok', capture: attachment } : { state: 'loading' },
       expanded: false, saving: false, errors: {}, saveError: null,
     })
@@ -233,6 +234,7 @@ export function LiveQaPage() {
       ...(d.expected.trim() ? { expected_result: d.expected.trim() } : {}),
       ...(d.actual.trim() ? { actual_result: d.actual.trim() } : {}),
       ...(d.frameId ? { figma_frame_id: d.frameId } : {}),
+      ...platformInput(d.platform, d.platformOnly),
     }
     try {
       const created = await createManualQa(projectId, input)

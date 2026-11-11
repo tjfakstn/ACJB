@@ -442,6 +442,8 @@ export interface QaIssue {
   screen_location: string
   repro_steps: string[]
   platform_scope: 'common' | 'aos' | 'ios'
+  /** 실제 발생 환경(Environment) — 수동 QA는 platform만 채운다 */
+  environment?: { platform: AppPlatform | null } | null
   figma_link: string | null
   style_mismatch: StyleMismatch | null
   status: IssueStatus
@@ -526,7 +528,14 @@ export interface ManualQaInput {
   expected_result?: string
   actual_result?: string
   figma_frame_id?: string
+  /** 발생 환경(앱 지원, 2026-11-11) — 보내지 않으면 web */
+  platform?: AppPlatform
+  /** 적용 범위 — 보내지 않으면 common. aos·ios면 platform과 같아야 한다 */
+  platform_scope?: 'common' | 'aos' | 'ios'
 }
+
+export type AppPlatform = 'web' | 'aos' | 'ios'
+export const PLATFORM_LABELS: Record<AppPlatform, string> = { web: '웹', aos: 'Android', ios: 'iOS' }
 
 export function getDeployTarget(projectId: string): Promise<DeployTarget> {
   return request<DeployTarget>('GET', `/api/v1/projects/${projectId}/deploy-target`)

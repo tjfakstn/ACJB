@@ -3,6 +3,7 @@ package com.acjb.server.controller;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,6 +17,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 import com.acjb.server.auth.CurrentMember;
 import com.acjb.server.common.ApiResponses;
@@ -45,6 +49,10 @@ public class ProjectController {
     /** 알림함(2026-11-11) */
     @org.springframework.beans.factory.annotation.Autowired
     private com.acjb.server.service.NotificationService notificationService;
+
+    /** 실시간 알림 스트림(AC37, 2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.service.NotificationStream notificationStream;
 
     public ProjectController(ProjectQueryService service, ProjectCommandService commands, ConnectionService connections,
                              ProjectDeletionService deletion, CurrentMember currentMember) {
@@ -121,6 +129,16 @@ public class ProjectController {
     public Map<String, Object> notifications(@PathVariable Long projectId, @RequestParam(required = false) String event,
                                              @AuthenticationPrincipal OAuth2User principal) {
         return ApiResponses.ok(notificationService.inbox(projectId, currentMember.require(principal), event));
+    }
+
+    /** 새 알림 신호(AC37) — 멤버 검사는 경로 보안(AC12)이 먼저 한다. 내용 없이 신호만 보내고 화면이 목록을 다시 읽는다 */
+    @GetMapping(path = "/{projectId}/notifications/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter notificationStream(@PathVariable Long projectId, @AuthenticationPrincipal OAuth2User principal,
+                                         HttpServletResponse response) {
+        // 프록시(nginx 등)가 응답을 모아 두지 않게
+        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("X-Accel-Buffering", "no");
+        return notificationStream.subscribe(projectId, currentMember.require(principal).getId());
     }
 
     /** 알림 한 건 읽음(2026-11-11) — 본인 알림만, 아니면 404 */

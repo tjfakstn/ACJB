@@ -148,14 +148,20 @@ export async function listMembers(projectId: string): Promise<ProjectMember[]> {
 }
 
 /** page_id·page_name은 페이지 또는 섹션 — scope가 어느 쪽인지 알려 준다(2026-11-07) */
-export interface FigmaConnection { url: string; file_key: string; file_name: string; page_id: string; page_name: string; scope: 'page' | 'section'; connected_at: string }
+export interface FigmaConnection {
+  url: string; file_key: string; file_name: string; page_id: string; page_name: string; scope: 'page' | 'section'; connected_at: string
+  /** 소유자 본인 Figma 토큰으로 읽는지와 그 끝 4자리(2026-11-11) — 토큰 값은 오지 않는다 */
+  uses_own_token: boolean
+  token_hint: string | null
+}
 export interface GithubConnection { url: string; repo: string; default_branch: string; branch: string; connected_at: string }
 /** 연결 응답에만 — 고를 수 있는 브랜치(이름순, 최대 100개) */
 export interface GithubConnectResult extends GithubConnection { branches: string[] }
 
 /** 소유자만. Figma 앱 페이지 [공유하기]로 복사한 페이지 링크만 받는다. 보기 권한 확인 후 저장 — 400 페이지 링크 아님, 422, 502(SPEC AC21) */
-export function connectFigma(projectId: string, url: string): Promise<FigmaConnection> {
-  return request<FigmaConnection>('PUT', `/api/v1/projects/${projectId}/connections/figma`, { url })
+export function connectFigma(projectId: string, url: string, token?: string): Promise<FigmaConnection> {
+  // token: QAting 서버 계정이 그 파일을 읽지 못할 때만(422) 소유자 본인 Figma 토큰을 함께 보낸다(2026-11-11)
+  return request<FigmaConnection>('PUT', `/api/v1/projects/${projectId}/connections/figma`, token ? { url, token } : { url })
 }
 
 /** 소유자만. 공개 저장소만 — GitHub 404(비공개·없는 저장소)는 422(SPEC AC21) */

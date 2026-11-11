@@ -517,3 +517,16 @@
 - **보류**: 로그인 허용 도메인 제한(`ajou.ac.kr`), 세션 DB 저장, DB 자동 백업은 이번에 하지 않는다
 - **영향**: SPEC AC36 추가·오류 코드 18개, openapi v0.18.0, 백엔드 설정 `app.limits.*`·`app.jobs.heavy-concurrency`·`app.browser.max-concurrent`, deploy/docker-compose.yml, README 6절. API·DB 스키마 변경 없음
 - **결정자**: 설만수(공개 전 반드시 고칠 것 4가지). 한도 값은 설만수가 정한 기본값이라 오단비 확인 필요
+
+## 2026-11-11 앱(React Native·Flutter) 프로젝트 지원 — 비교 분석·첫 QA·수동 QA
+
+- **결정**: 앱 프로젝트를 첫 QA까지 지원한다. 대상은 **React Native와 Flutter**다(Kotlin·Swift 네이티브는 제외). 프로젝트에 "앱/웹" 종류를 따로 두지 않고 저장소 코드로 판단한다.
+  - 비교 분석: `.dart`를 UI 코드로 읽는다. 생성 코드(`*.g.dart`·`*.freezed.dart` 등)와 `android`·`ios`·`.dart_tool` 등 네이티브·도구 폴더는 뺀다. 코드의 절반 넘게 Dart면 노드 지시문을 "Flutter 위젯"으로 바꾼다(웹·RN 지시문은 정확도를 잰 그대로).
+  - 첫 QA·Re-QA: 짝 파일이 `.dart`면 Flutter 지시문, 저장소 `package.json`에 `react-native`가 있으면 RN 지시문, 아니면 기존 웹 지시문. LLM은 여전히 줄과 토큰만 고르고, 서버가 토큰이 그 줄에 있는지 확인한 뒤 값을 읽는다(N17).
+    - RN 토큰(`borderRadius: 8`)은 기존 CSS-in-JS 객체 규칙으로 읽는다.
+    - Flutter 토큰(위젯 인자 하나)은 새 `DartValues`가 읽는다 — 리터럴과 저장소 상수 파일의 `static const`만, Theme·변수·상태별 값·투명도 색·Material 팔레트는 읽지 않는다. Dart import는 `package:앱/…`을 저장소 `lib/…`로, 상대 경로는 그대로 풀어 1단계까지 함께 넘긴다.
+  - 수동 QA: 발생 환경(`platform`: 웹·Android·iOS)과 적용 범위(`platform_scope`: 공통·그 플랫폼만)를 고른다. 앱이면 위치 없이 등록할 때 경로 대신 화면 이름을 적을 수 있다. 상세에 발생 환경을 보여 준다.
+- **왜**: 다른 수업 팀들에 앱 프로젝트가 있다(사용자 요청). 원래 "MVP 이후 확장"으로 보류했던 항목이다.
+- **확인 필요**: 앱 코드의 첫 QA 정확도는 실제 프로젝트로 재지 않았다(웹 스파이크 기준만 있음). 단위 테스트로 값 읽기 규칙만 확인했다. 첫 앱 프로젝트 결과를 보고 지시문을 다듬는다.
+- **영향**: SPEC 4절(첫 QA 비교 방식)·AC31, openapi v0.19.0(manual-qa `platform`·`platform_scope`), README 6절. DB 변경 없음. 단일 컴포넌트 scan은 그대로 웹만.
+- **결정자**: 설만수(React Native·Flutter, 첫 QA까지 전부). 범위 변경이라 오단비 확인 필요

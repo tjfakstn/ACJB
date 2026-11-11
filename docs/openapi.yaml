@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.18.0
+  version: 0.19.0
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -561,6 +561,8 @@ paths:
                 expected_result: { type: string, nullable: true, maxLength: 1000 }
                 actual_result: { type: string, nullable: true, maxLength: 1000 }
                 figma_frame_id: { type: string, nullable: true, description: '이 화면의 기준 Figma 프레임(AC33). 최근 성공한 비교 분석 매핑에 있어야 한다. 없으면 서버가 고르지 않는다' }
+                platform: { type: string, enum: [web, aos, ios], description: '발생 환경 → environment.platform(기본 web, 2026-11-11 앱 지원). aos·ios이고 location_basis none이면 page_path에 앱 화면 이름을 적을 수 있다' }
+                platform_scope: { type: string, enum: [common, aos, ios], description: '적용 범위 → platform_scope(기본 common). aos·ios면 platform과 같아야 한다(아니면 400)' }
       responses:
         '201':
           description: 등록됨

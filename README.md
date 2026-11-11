@@ -119,17 +119,18 @@ AI 판단이 섞여 있어 이슈 개수는 실행할 때마다 조금씩 다를
 | --- | --- |
 | Figma | 최종 시안만 담은 **페이지 또는 섹션 링크**(`figma.com/design/...?node-id=...`). 페이지는 [공유하기], 섹션은 우클릭 [링크 복사]로 얻습니다. 프레임 링크나 프로토타입 링크는 쓸 수 없습니다 |
 | Figma 접근 권한 | QAting 서버가 그 파일을 읽을 수 있어야 합니다. Figma 파일의 [공유]에서 **"링크가 있는 모든 사용자 → 보기 가능"**으로 설정해 주세요. 연결할 때 QAting이 그 파일을 읽지 못하면(내보내기가 막힌 파일, 무료 플랜 팀 파일의 Figma API 한도 등) **본인 Figma 토큰** 입력칸이 나타납니다. Figma 계정 메뉴 → Settings → Security → Personal access tokens에서 **File content: Read only** 권한으로 만든 토큰을 넣으면 그 토큰으로 읽습니다(암호화해 저장하고 다시 보여 주지 않습니다). 학교·회사 조직 파일처럼 외부 링크 공유가 막혀 있으면 연결이 안 될 수 있으니, 그때는 7절 Issues로 알려 주세요 |
-| GitHub | **공개 저장소**만 가능합니다. 주소는 `https://github.com/조직/저장소`까지만 넣고(`/tree/브랜치` 주소는 안 됨), 브랜치는 연결한 뒤 드롭다운에서 고릅니다. 웹 프론트엔드 코드(`.tsx`·`.jsx`·`.ts`·`.js`·`.vue`·`.svelte`)가 있어야 합니다 |
+| GitHub | **공개 저장소**만 가능합니다. 주소는 `https://github.com/조직/저장소`까지만 넣고(`/tree/브랜치` 주소는 안 됨), 브랜치는 연결한 뒤 드롭다운에서 고릅니다. 웹 프론트엔드 코드(`.tsx`·`.jsx`·`.ts`·`.js`·`.vue`·`.svelte`)나 앱 코드(React Native, Flutter `.dart`)가 있어야 합니다 |
 | 크기 | UI 코드 파일 300개·100만 자 이하, 화면 1,000개 이하 |
-| 비교되는 코드 | Tailwind CSS 클래스, 컴포넌트가 import한 CSS·SCSS·LESS·CSS modules 파일의 선언, styled-components·emotion, 인라인 `style`의 값과 코드에 적힌 고정 문구를 읽습니다. 변수·보간(`${...}`)·`calc()`로 정한 값은 비교하지 않습니다 |
+| 비교되는 코드 | Tailwind CSS 클래스, 컴포넌트가 import한 CSS·SCSS·LESS·CSS modules 파일의 선언, styled-components·emotion, 인라인 `style`의 값과 코드에 적힌 고정 문구를 읽습니다. 앱은 React Native `StyleSheet`·style 객체 값, Flutter 위젯 인자(`Color(0xFF…)`·`FontWeight.w600`·`BorderRadius.circular(8)`·`EdgeInsets`·`spacing`)와 `AppColors.primary` 같은 저장소 상수를 읽습니다. 변수·보간(`${...}`)·`calc()`·`Theme.of(context)`로 정한 값은 비교하지 않습니다 |
 
 - **비용 문제로 화면 10개 안팎의 섹션으로 연결해 주세요.** 화면 수에 비례해 시간과 비용이 늘어납니다(화면 10개 기준 첫 QA 약 5~7분).
 - 배포 주소가 없어도 됩니다. 이때 실시간 QA 화면은 비어 있고, 수동 QA는 스크린샷 첨부나 위치 없이 등록하면 됩니다.
+- **앱 프로젝트**는 배포 주소 없이 쓰면 됩니다. 수동 QA는 [위치 없이 등록]에서 발생 환경을 Android·iOS로 고르고, 화면 이름(예: 홈 화면)과 스크린샷을 넣어 주세요.
 
 ## 6. 제한 사항과 알려진 문제
 
 **MVP에서 아직 안 되는 것**
-- **앱(AOS·iOS) 프로젝트:** 웹 화면과 웹 프론트엔드 코드만 지원합니다.
+- **네이티브 앱 코드:** 앱은 React Native와 Flutter만 지원합니다. Kotlin·Swift로 만든 네이티브 앱은 코드 비교가 안 되고, 수동 QA(스크린샷)만 쓸 수 있습니다.
 - **GitHub 이슈·PR 생성:** GitHub는 읽기만 합니다. 이슈를 GitHub로 내보내지 않습니다.
 - **첫 QA는 프로젝트당 성공 1번:** 다시 처음부터 비교하려면 새 프로젝트를 만듭니다.
 

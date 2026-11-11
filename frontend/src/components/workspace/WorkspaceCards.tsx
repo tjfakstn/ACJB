@@ -322,7 +322,7 @@ export function ConnectionsCard({ detail }: { detail: ProjectDetail }) {
     <section className={`${CARD} p-5`}>
       <div className="flex h-8 items-center justify-between">
         <h2 className="text-base font-bold leading-6 text-black">연결 상태</h2>
-        <SmallButton kind="ghost" disabled title="연결 관리 화면은 준비 중이에요">연결 관리</SmallButton>
+        <SmallButton kind="ghost" to={`/app/projects/${detail.id}/connections`}>연결 관리</SmallButton>
       </div>
       <div className="mt-4 flex flex-col gap-4">
         <ConnectionRow icon="figma" title="Figma 연결" connected={!!figma}

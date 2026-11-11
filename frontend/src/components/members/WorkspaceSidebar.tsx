@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { Icon } from '../common/Icon'
 
 // 프로젝트 작업공간 왼쪽 메뉴(시안 WS-01 "작업 메뉴" — 240px, 항목 207×40, 아이콘 20, 활성 primary 10% 배경).
-// 연결 관리(LNK)만 아직 화면이 없어 시안 모양 그대로 두되 누를 수 없게 한다. QA 화면 3개는 2026-11-08에 연결했다.
+// QA 화면 3개는 2026-11-08, 연결 관리(LNK)는 2026-11-11에 연결했다.
 // 이슈 상세·Re-QA 결과는 QA Queue 아래 화면이라 QA Queue를 켜 둔다.
 // 멤버 관리는 시안 메뉴에 없다 — 작업공간 홈의 "프로젝트 멤버" 카드 [멤버 관리]로 들어간다.
 const ITEMS: { label: string; icon: string; path: string | null }[] = [
@@ -11,7 +11,7 @@ const ITEMS: { label: string; icon: string; path: string | null }[] = [
   { label: '디자인 QA', icon: 'shield-check', path: 'qa' },
   { label: 'QA 결과', icon: 'list-checks', path: 'results' },
   { label: 'QA Queue', icon: 'inbox', path: 'queue' },
-  { label: '연결 관리', icon: 'link', path: null },
+  { label: '연결 관리', icon: 'link', path: 'connections' },
 ]
 
 const ITEM_CLASS = 'flex h-10 w-[207px] items-center gap-3 rounded-lg px-3 text-sm'

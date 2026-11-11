@@ -1,3 +1,4 @@
+import { ConnectionsPage } from './pages/ConnectionsPage'
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
@@ -26,6 +27,7 @@ function App() {
         <Route path="/app/projects/:projectId/qa" element={<QaRunPage />} />
         <Route path="/app/projects/:projectId/results" element={<LiveQaPage />} />
         <Route path="/app/projects/:projectId/queue" element={<QaQueuePage />} />
+        <Route path="/app/projects/:projectId/connections" element={<ConnectionsPage />} />
         <Route path="/app/projects/:projectId/issues/:issueId" element={<IssueDetailPage />} />
         <Route path="/app/projects/:projectId/issues/:issueId/re-qa" element={<ReQaResultPage />} />
         <Route path="/invitations/:token" element={<InvitationPage />} />

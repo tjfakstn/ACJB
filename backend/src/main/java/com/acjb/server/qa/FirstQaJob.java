@@ -53,7 +53,15 @@ public class FirstQaJob {
     }
 
     /** 테스트에서도 직접 부른다. 결과는 run 행의 status·created_count·dropped_count로 남는다 */
+    /** 프로젝트에 소유자 Figma 토큰이 있으면 작업 전체를 그 토큰으로 부른다(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.figma.ProjectFigmaToken figmaTokens;
+
     public void run(Long runId) {
+        figmaTokens.withRun(runId, () -> execute(runId));
+    }
+
+    private void execute(Long runId) {
         QaComparator.FirstQaInput input;
         try {
             input = tx.execute(s -> {

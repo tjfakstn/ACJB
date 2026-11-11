@@ -53,7 +53,15 @@ public class FramePreviewService {
         this.clock = clock;
     }
 
+    /** 소유자 Figma 토큰이 있으면 그 토큰으로 그린다(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.figma.ProjectFigmaToken figmaTokens;
+
     public FramePreviewView preview(Long projectId, String frameId, String nodeId) {
+        return figmaTokens.withProject(projectId, () -> render(projectId, frameId, nodeId));
+    }
+
+    private FramePreviewView render(Long projectId, String frameId, String nodeId) {
         if (frameId == null || !NODE_ID.matcher(frameId).matches() || (nodeId != null && !SUB_NODE_ID.matcher(nodeId).matches())) {
             throw ApiException.badRequest("frame_id·node_id는 Figma 노드 id 형식(예: 12:34)이어야 합니다.");
         }
@@ -76,9 +84,7 @@ public class FramePreviewService {
         try {
             fresh = load(fileKey, frameId, nodeId);
         } catch (FigmaApiException e) {
-            String message = e.status() == 429
-                ? "Figma 요청 한도를 넘었어요. " + (e.retryAfterSeconds() > 0 ? e.retryAfterSeconds() + "초 뒤" : "잠시 뒤") + " 다시 시도해 주세요."
-                : e.getMessage();
+            String message = com.acjb.server.figma.FigmaErrors.message(e);
             throw new ApiException(HttpStatus.BAD_GATEWAY, ErrorCodes.CONNECTION_FAILED, message);
         }
         cache.put(key, new Cached(fresh, now.plus(CACHE_TTL)));

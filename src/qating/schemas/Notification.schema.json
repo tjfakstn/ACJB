@@ -1,15 +1,22 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Notification",
-  "description": "이슈 등록·조치 사실을 상대에게 알리는 일 (docs/ontology.yaml Notification). SPEC.md AC3(등록 시 담당자에게), AC4(조치 완료 시 등록자에게), AC11(재검증 fail 시 담당자에게)에서 정확히 1건씩 생성됨",
+  "description": "이슈 등록·조치 사실을 상대에게 알리는 일 (docs/ontology.yaml Notification). SPEC.md AC3(등록 시 담당자에게), AC4(조치 완료 시 등록자에게), AC11(재검증 fail 시 담당자에게)에서 정확히 1건씩 생성됨. resolved(재검증 pass → 담당 팀)·run_failed(실행 실패 → 실행한 사람, 이슈 없음)와 읽음 처리는 2026-11-11 추가(AC11·AC35)",
   "type": "object",
   "properties": {
     "id": { "type": "string" },
-    "qa_issue_id": { "type": "string" },
-    "event": { "type": "string", "enum": ["issue_created", "fixed", "recheck_failed"] },
+    "project_id": { "type": "string" },
+    "qa_issue_id": { "type": ["string", "null"], "description": "run_failed면 null" },
+    "event": { "type": "string", "enum": ["issue_created", "fixed", "recheck_failed", "resolved", "run_failed"] },
+    "cause": { "type": ["string", "null"], "enum": ["registered", "team_assigned", null], "description": "issue_created일 때만 — 팀과 함께 등록 / 나중에 팀 지정" },
     "channel": { "type": "string", "description": "예: email, discord, slack" },
     "to_member_id": { "type": "string", "description": "알림을 받는 팀원" },
-    "created_at": { "type": "string", "format": "date-time" }
+    "actor_id": { "type": ["string", "null"], "description": "알림을 일으킨 사람" },
+    "actor_name": { "type": ["string", "null"] },
+    "created_at": { "type": "string", "format": "date-time" },
+    "read_at": { "type": ["string", "null"], "format": "date-time", "description": "null이면 읽지 않음" },
+    "issue": { "type": ["object", "null"], "description": "이슈 요약 {id, status, source, assigned_team, description, screen_location, mismatch_property, manual_title, pin_number} — run_failed면 null" },
+    "run": { "type": ["object", "null"], "description": "run_failed일 때만 {id, kind, error_message}" }
   },
-  "required": ["id", "qa_issue_id", "event", "to_member_id", "created_at"]
+  "required": ["id", "project_id", "event", "to_member_id", "created_at"]
 }

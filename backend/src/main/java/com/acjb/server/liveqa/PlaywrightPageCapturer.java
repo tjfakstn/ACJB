@@ -36,16 +36,27 @@ public class PlaywrightPageCapturer implements PageCapturer {
     /** load 뒤 네트워크가 잠잠해질 때까지 조금 더 기다린다 — SPA는 load 시점에 내용이 비어 있는 경우가 많다 */
     private static final double SETTLE_MS = 3000;
 
+    /** 캡처는 사용자가 화면 앞에서 기다린다 — 자리가 나기를 오래 기다리지 않는다 */
+    private static final Duration SLOT_WAIT = Duration.ofSeconds(20);
+
     private final TargetUrlPolicy policy;
     private final double timeoutMs;
+    private final com.acjb.server.scan.BrowserSlots slots;
 
-    public PlaywrightPageCapturer(TargetUrlPolicy policy, @Value("${app.capture.timeout:30s}") Duration timeout) {
+    public PlaywrightPageCapturer(TargetUrlPolicy policy, @Value("${app.capture.timeout:30s}") Duration timeout,
+                                  com.acjb.server.scan.BrowserSlots slots) {
         this.policy = policy;
         this.timeoutMs = timeout.toMillis();
+        this.slots = slots;
     }
 
+    /** 동시에 띄우는 브라우저 수를 지킨다 — 자리가 없으면 BrowserSlots.Busy */
     @Override
     public byte[] capture(String url, int width, int height) {
+        return slots.run(SLOT_WAIT, () -> doCapture(url, width, height));
+    }
+
+    private byte[] doCapture(String url, int width, int height) {
         Playwright.CreateOptions create = new Playwright.CreateOptions().setEnv(Map.of("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1"));
         try (Playwright pw = Playwright.create(create);
              Browser browser = pw.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));

@@ -24,9 +24,14 @@ public class RecheckSuggestionController {
         this.currentMember = currentMember;
     }
 
+    /** 사용량 한도(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.service.UsageLimits limits;
+
     @PostMapping("/api/v1/projects/{projectId}/qa-issues/{issueId}/recheck-suggestions")
     public Map<String, Object> suggest(@PathVariable Long projectId, @PathVariable String issueId,
                                        @AuthenticationPrincipal OAuth2User principal) {
+        limits.hit(com.acjb.server.service.UsageLimits.Counter.SUGGESTION, projectId);
         return ApiResponses.ok(service.suggest(projectId, issueId, currentMember.require(principal)));
     }
 }

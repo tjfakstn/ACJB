@@ -52,6 +52,10 @@ public class AnalysisService {
         this.json = json;
     }
 
+    /** 사용량 한도(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private UsageLimits limits;
+
     @Transactional
     public ProjectRunView start(Long projectId, Member requester) {
         Project project = projects.findByIdForUpdate(projectId).orElseThrow(() -> ApiException.notFound("프로젝트를 찾을 수 없습니다."));
@@ -67,6 +71,7 @@ public class AnalysisService {
         if (runs.existsByProjectIdAndKindAndStatus(projectId, RunKind.ANALYSIS, RunStatus.SUCCEEDED)) {
             throw new ApiException(HttpStatus.CONFLICT, ErrorCodes.NOT_READY, "비교 분석이 이미 끝났어요.");
         }
+        limits.checkRunStart(projectId, RunKind.ANALYSIS);
         ProjectRun run = runs.save(new ProjectRun(project, RunKind.ANALYSIS, requester, clock.instant()));
         events.publishEvent(new AnalysisRequested(run.getId()));
         return ProjectRunView.of(run);

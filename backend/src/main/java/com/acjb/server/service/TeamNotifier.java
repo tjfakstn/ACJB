@@ -1,5 +1,6 @@
 package com.acjb.server.service;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import com.acjb.server.domain.Member;
@@ -24,10 +25,18 @@ public class TeamNotifier {
 
     private final ProjectMemberRepository projectMembers;
     private final NotificationRepository notifications;
+    private final ApplicationEventPublisher events;
 
-    public TeamNotifier(ProjectMemberRepository projectMembers, NotificationRepository notifications) {
+    public TeamNotifier(ProjectMemberRepository projectMembers, NotificationRepository notifications, ApplicationEventPublisher events) {
         this.projectMembers = projectMembers;
         this.notifications = notifications;
+        this.events = events;
+    }
+
+    /** 저장하고 실시간 스트림(AC37)에 알린다 — 실제 전송은 커밋 뒤 */
+    private void save(Notification n) {
+        Notification saved = notifications.save(n);
+        events.publishEvent(new NotificationCreated(saved.getProject().getId(), saved.getRecipient().getId(), saved.getId()));
     }
 
     public void notifyTeam(QAIssue issue, MemberRole team, NotificationEvent event, Member actor) {
@@ -39,17 +48,17 @@ public class TeamNotifier {
             return;
         }
         for (ProjectMember pm : projectMembers.findTeam(issue.getProject().getId(), team)) {
-            notifications.save(new Notification(issue, event, cause, pm.getMember(), actor, IN_APP));
+            save(new Notification(issue, event, cause, pm.getMember(), actor, IN_APP));
         }
     }
 
     /** AC4 — 등록자에게 1건 */
     public void notifyReporter(QAIssue issue, Member actor) {
-        notifications.save(new Notification(issue, NotificationEvent.FIXED, null, issue.getReportedBy(), actor, IN_APP));
+        save(new Notification(issue, NotificationEvent.FIXED, null, issue.getReportedBy(), actor, IN_APP));
     }
 
     /** 비교 분석·첫 QA·Re-QA가 실패하면 실행한 사람에게 1건(2026-11-11) */
     public void notifyRunFailed(ProjectRun run) {
-        notifications.save(Notification.runFailed(run, IN_APP));
+        save(Notification.runFailed(run, IN_APP));
     }
 }

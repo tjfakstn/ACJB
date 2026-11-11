@@ -141,6 +141,11 @@ app:
   # 서버 헤드리스 크로미움(배포 화면 캡처·scan)을 동시에 띄우는 수
   browser:
     max-concurrent: ${BROWSER_MAX_CONCURRENT:2}
+  # 실시간 알림 스트림(SSE, AC37) — 하트비트 간격, 서버가 닫는 시간(브라우저가 다시 연결), 한 사람·한 프로젝트 연결 상한
+  notifications:
+    heartbeat: 25s
+    stream-timeout: 30m
+    stream-max-per-member: 5
   # 프론트(client) 로컬 개발 origin — frontend/ 스캐폴딩 완료로 확정 (Vite 기본 포트 5173)
   cors:
     # 쉼표로 여러 개. 배포에서는 프론트와 API가 같은 도메인이라 그 주소 하나

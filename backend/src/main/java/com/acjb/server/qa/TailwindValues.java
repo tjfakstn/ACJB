@@ -36,7 +36,7 @@ final class TailwindValues {
         this(projectCss, projectCss);
     }
 
-    /** themeCss: Tailwind `@theme`이 있는 CSS, allCss: var()를 풀 저장소 CSS 전체(2026-11-12) */
+    /** themeCss: Tailwind `@theme`이 있는 CSS, allCss: var()를 풀 저장소 CSS 전체(2026-11-11) */
     TailwindValues(List<String> themeCss, List<String> allCss) {
         read(DEFAULT_THEME, vars);
         themeCss.forEach(css -> read(css, vars));
@@ -51,7 +51,7 @@ final class TailwindValues {
     }
 
     /**
-     * LLM이 고른 토큰의 값(2026-11-12) — CSS 선언(`border-radius: 8px`, `borderRadius: 8`)이면 CssValues로, 아니면 Tailwind 클래스로 읽는다.
+     * LLM이 고른 토큰의 값(2026-11-11) — CSS 선언(`border-radius: 8px`, `borderRadius: 8`)이면 CssValues로, 아니면 Tailwind 클래스로 읽는다.
      * 문구는 토큰 그대로. file·line은 단위 없는 숫자를 px로 읽을지(JS 객체 값) 가르는 데만 쓴다
      */
     Object value(Fact fact, String token, String file, String line) {

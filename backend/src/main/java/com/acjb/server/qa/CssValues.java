@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 import com.acjb.server.qa.FigmaFacts.Fact;
 
 /**
- * CSS 선언 한 줄 → 값(2026-11-12). Tailwind 클래스가 아닌 곳에 적힌 스타일을 읽는다 —
+ * CSS 선언 한 줄 → 값(2026-11-11). Tailwind 클래스가 아닌 곳에 적힌 스타일을 읽는다 —
  * 일반 CSS·SCSS·CSS modules 파일의 선언(`border-radius: 8px;`), styled-components·emotion 템플릿 줄,
  * 인라인 style·CSS-in-JS 객체(`borderRadius: 8`, `padding: '12px 16px'`).
  * LLM은 선언을 그대로 베껴 올 뿐이고, 값은 여기서 그 글자만 보고 읽는다(N17). 못 읽는 것은 null — 비교하지 않는다:

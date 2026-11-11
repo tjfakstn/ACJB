@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, getAnalysis, startAnalysis, type ProjectRun } from '../../lib/api'
+import { ApiError, getAnalysis, needsFigmaToken, startAnalysis, type ProjectRun } from '../../lib/api'
 import { Icon } from '../common/Icon'
 import { CloseButton } from './WizardParts'
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './wizardStyles'
@@ -28,8 +28,8 @@ interface AnalysisStepProps {
   /** 마법사 안이면 단계 표시를 보여 준다 */
   inWizard: boolean
   onClose: () => void
-  /** [연결 정보 확인] — 마법사면 연결 단계로, 작업공간이면 닫기 */
-  onCheckConnection: () => void
+  /** [연결 정보 확인]·[Figma 토큰 넣기] — 마법사면 연결 단계로, 작업공간이면 연결 관리로. needsToken이면 토큰 입력칸을 펼친다(2026-11-12) */
+  onCheckConnection: (needsToken: boolean) => void
   onDone: () => void
 }
 
@@ -112,6 +112,8 @@ export function AnalysisStep({ projectId, projectName, inWizard, onClose, onChec
 
   const failed = view.kind === 'failed'
   const secondFailure = failed && failures >= 2
+  // 서버 계정이 이 Figma 파일을 읽지 못해 실패했으면 다시 시도해도 같다 — 본인 토큰 넣기를 먼저 권한다
+  const tokenFix = failed && needsFigmaToken(view.message)
 
   return (
     <div className="flex flex-col gap-5">
@@ -182,9 +184,10 @@ export function AnalysisStep({ projectId, projectName, inWizard, onClose, onChec
             <div className="my-3 h-px bg-qa-border" />
             <div className="text-xs text-qa-text-sub">이렇게 해결해 보세요</div>
             <ol className="mt-2 flex flex-col gap-2 text-xs leading-4 text-black">
-              {['Figma 파일 보기 권한과 GitHub 저장소 공개 여부가 바뀌지 않았는지 확인해 주세요.',
+              {(tokenFix ? ['[Figma 토큰 넣기]를 눌러 연결 정보에서 본인 Figma 토큰(File content: Read only)을 넣어 주세요.',
+                '토큰을 저장한 뒤 다시 시도하면 이 프로젝트의 Figma는 그 토큰으로 읽어요.'] : ['Figma 파일 보기 권한과 GitHub 저장소 공개 여부가 바뀌지 않았는지 확인해 주세요.',
                 '링크나 분석할 브랜치가 바뀌었다면 연결 정보에서 수정해 주세요.',
-                '일시적인 문제일 수 있어요. 잠시 후 다시 시도해 주세요.'].map((t, i) => (
+                '일시적인 문제일 수 있어요. 잠시 후 다시 시도해 주세요.']).map((t, i) => (
                 <li key={t} className="flex items-start gap-2">
                   <span className="flex h-4 w-4 flex-none items-center justify-center rounded-full bg-qa-primary/10 text-[10px] font-medium text-qa-primary">{i + 1}</span>{t}
                 </li>
@@ -201,14 +204,19 @@ export function AnalysisStep({ projectId, projectName, inWizard, onClose, onChec
               {inWizard ? '프로젝트 목록으로' : '닫기'}
             </button>
             <div className="flex gap-2">
-              {secondFailure ? (
+              {tokenFix ? (
                 <>
                   <button type="button" onClick={retry} className={`${SECONDARY_BUTTON} inline-flex items-center gap-2`}><Icon name="refresh" className="h-4 w-4" />다시 시도</button>
-                  <button type="button" onClick={onCheckConnection} className={PRIMARY_BUTTON}>연결 정보 확인</button>
+                  <button type="button" onClick={() => onCheckConnection(true)} className={PRIMARY_BUTTON}>Figma 토큰 넣기</button>
+                </>
+              ) : secondFailure ? (
+                <>
+                  <button type="button" onClick={retry} className={`${SECONDARY_BUTTON} inline-flex items-center gap-2`}><Icon name="refresh" className="h-4 w-4" />다시 시도</button>
+                  <button type="button" onClick={() => onCheckConnection(false)} className={PRIMARY_BUTTON}>연결 정보 확인</button>
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={onCheckConnection} className={SECONDARY_BUTTON}>연결 정보 확인</button>
+                  <button type="button" onClick={() => onCheckConnection(false)} className={SECONDARY_BUTTON}>연결 정보 확인</button>
                   <button type="button" onClick={retry} className={PRIMARY_BUTTON}><Icon name="refresh" className="h-4 w-4" />다시 시도</button>
                 </>
               )}

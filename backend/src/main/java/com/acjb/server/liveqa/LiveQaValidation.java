@@ -34,6 +34,15 @@ final class LiveQaValidation {
         return path;
     }
 
+    /** 앱 화면 이름(위치 없이 등록, 플랫폼 aos·ios) — 경로 대신 사람이 부르는 화면 이름. 제어 문자 없이 PATH_MAX자 이하 */
+    static String appScreen(String raw) {
+        String name = raw.strip();
+        if (name.isEmpty() || name.length() > PATH_MAX || name.chars().anyMatch(Character::isISOControl)) {
+            throw ApiException.badRequest("page_path(앱 화면 이름)는 " + PATH_MAX + "자 이하로 적어 주세요.");
+        }
+        return name;
+    }
+
     static final int STEP_MAX = 500;
     static final int STEPS_MAX = 10;
 

@@ -288,7 +288,7 @@ public class AnalysisJob {
     private DesignCodeMapper.CodeBundle readCode(String owner, String repo, String sha, String fullName) {
         List<GithubClient.TreeFile> files = CodeSelector.select(github.tree(owner, repo, sha));
         if (files.isEmpty()) {
-            throw new MappingFailedException("저장소에서 UI 코드 파일(.tsx·.jsx·.ts·.js·.vue·.svelte)을 찾지 못했어요. 분석할 브랜치를 확인해 주세요.");
+            throw new MappingFailedException("저장소에서 UI 코드 파일(.tsx·.jsx·.ts·.js·.vue·.svelte·.dart)을 찾지 못했어요. 분석할 브랜치를 확인해 주세요.");
         }
         if (files.size() > CodeSelector.MAX_FILES) {
             throw new MappingFailedException("UI 코드 파일이 " + CodeSelector.MAX_FILES + "개를 넘어요. 지금은 이보다 작은 저장소만 분석할 수 있어요.");

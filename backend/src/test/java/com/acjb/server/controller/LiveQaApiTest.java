@@ -690,4 +690,33 @@ class LiveQaApiTest {
             .content(manualBody("live-steps", ",\"repro_steps\":[\"연다\"]"))).andExpect(status().isBadRequest());
         assertThat(pins.count()).isEqualTo(before);
     }
+
+    // ---------------------------------------------------------------- 앱 지원 — 발생 플랫폼(2026-11-11, 새 테스트)
+
+    @Test
+    void 앱_화면_문제는_발생_플랫폼과_적용_범위를_고를_수_있다() throws Exception {
+        mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON)
+                .content(noneBody("app-1", ",\"page_path\":\"홈 화면\",\"repro_steps\":[\"앱을 연다\"],\"platform\":\"aos\",\"platform_scope\":\"aos\"")))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.platform_scope").value("aos"))
+            .andExpect(jsonPath("$.data.screen_location").value("홈 화면"))
+            .andExpect(jsonPath("$.data.environment.platform").value("aos"));
+        mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON)
+                .content(noneBody("app-2", ",\"page_path\":\"홈 화면\",\"repro_steps\":[\"앱을 연다\"],\"platform\":\"ios\"")))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.platform_scope").value("common"))
+            .andExpect(jsonPath("$.data.environment.platform").value("ios"));
+    }
+
+    @Test
+    void 적용_범위와_발생_플랫폼이_어긋나면_등록하지_않는다() throws Exception {
+        long before = issues.count();
+        mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON)
+                .content(noneBody("app-3", ",\"page_path\":\"/home\",\"repro_steps\":[\"앱을 연다\"],\"platform\":\"web\",\"platform_scope\":\"ios\"")))
+            .andExpect(status().isBadRequest());
+        mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON)
+                .content(noneBody("app-4", ",\"page_path\":\"홈 화면\",\"repro_steps\":[\"앱을 연다\"],\"platform\":\"windows\"")))
+            .andExpect(status().isBadRequest());
+        assertThat(issues.count()).isEqualTo(before);
+    }
 }

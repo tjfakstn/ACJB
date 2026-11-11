@@ -88,9 +88,62 @@ public class ClaudeQaComparator implements QaComparator {
         Never compute or convert values and never guess. Do not pick a line because its value looks like the design — pick the line of the \
         element that actually renders that design element.""";
 
+    /** React Native 저장소(2026-11-11) — 웹 프롬프트는 정확도를 잰 그대로 두고 따로 둔다 */
+    static final String SYSTEM_RN = """
+        You locate, in React Native source code, the exact code that sets each style of the listed Figma design node(s).
+        Styles may be written in a StyleSheet.create object, an inline style object on the element, or styled-components/native.
+        For each listed element and each listed property, find the JSX element in the provided code that renders that design element \
+        (View, Text, Pressable, TouchableOpacity, Image, a custom component...) and the code that sets that property for it, and return:
+        - file: the file path exactly as given
+        - line: the 1-based line number where the value is written
+        - token: the exact substring on that line that sets the property — copy it verbatim from that line
+          - one style property and its value, as written (e.g. "borderRadius: 8", "padding: 16", "color: '#1a1a1a'", \
+        "fontWeight: '600'", "backgroundColor: '#ffffff'", "gap: 8"). For padding use only a `padding` property that sets all sides \
+        (not paddingHorizontal, paddingTop...); for border color a `borderColor` property
+          - text: the static string literal as written (without quotes)
+        Property meanings: color = text color, background = background color, border = border color, font_weight, font_size, \
+        radius = border radius, padding, gap. Numbers are unitless density-independent pixels.
+        Omit an element/property when: no code renders it; the value comes from a JS variable, theme object, prop, function call, \
+        Platform.select or template interpolation rather than a literal; it is set only conditionally (a pressed/disabled state, a condition \
+        inside a style array, a platform or screen-size branch); more than one style could set it for that element and you cannot tell which \
+        one applies (a later entry in a style array overrides an earlier one); or you are not sure which element renders it.
+        Never compute or convert values and never guess. Do not pick a line because its value looks like the design — pick the line of the \
+        element that actually renders that design element.""";
+
+    /** Flutter 저장소(2026-11-11) — 값은 위젯 생성자의 이름 있는 인자 하나(DartValues가 읽는다) */
+    static final String SYSTEM_FLUTTER = """
+        You locate, in Flutter (Dart) source code, the exact code that sets each style of the listed Figma design node(s).
+        For each listed element and each listed property, find the widget in the provided code that builds that design element and the \
+        named argument that sets that property for it, and return:
+        - file: the file path exactly as given
+        - line: the 1-based line number where the argument is written
+        - token: the exact substring on that line — one named argument and its value, copied verbatim (e.g. "color: Color(0xFF1A1A1A)", \
+        "fontWeight: FontWeight.w600", "fontSize: 14", "borderRadius: BorderRadius.circular(8)", \
+        "padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12)", "spacing: 8", "backgroundColor: AppColors.primary"). \
+        The whole argument must be on that single line
+          - text: the static string literal as written (without quotes)
+        Property meanings and where they are set: color = text color (TextStyle color); background = background color (Container or \
+        BoxDecoration color, Material/Card color, backgroundColor of a button style or Scaffold/AppBar); border = border color (the color \
+        inside Border.all / BorderSide, or a border/side argument containing exactly one color); font_weight = TextStyle fontWeight; \
+        font_size = TextStyle fontSize; radius = the element's BorderRadius (BorderRadius.circular / BorderRadius.all); padding = the \
+        EdgeInsets of a Padding widget or a padding argument; gap = the spacing argument of Row, Column or Wrap.
+        Omit an element/property when: no code builds it; the value comes from Theme.of(context), MediaQuery, a parameter, field, local \
+        variable, function call or computed expression rather than a literal (a reference to a named constant such as AppColors.primary or \
+        kSpacing is fine); it is set only for a state (pressed, hovered, selected, disabled, WidgetStateProperty / MaterialStateProperty) \
+        or under a platform or screen-size condition; more than one argument could set it for that element and you cannot tell which one \
+        applies; or you are not sure which widget builds it.
+        Never compute or convert values and never guess. Do not pick a line because its value looks like the design — pick the line of the \
+        widget that actually builds that design element.""";
+
     private static final String KEY_MISSING = "QA 비교용 LLM API 키(ANTHROPIC_API_KEY)가 설정되지 않았어요.";
     private static final Pattern IMPORT = Pattern.compile("(?:from|import)\\s+['\"](\\.{1,2}/[^'\"]+)['\"]");
-    private static final List<String> EXTENSIONS = List.of("", ".tsx", ".ts", ".jsx", ".js", "/index.tsx", "/index.ts", "/index.jsx", "/index.js");
+    /** Dart — `import 'package:app/x.dart';`, `import '../x.dart';`, `part 'x.g.dart';` */
+    private static final Pattern DART_IMPORT = Pattern.compile("^\\s*(?:import|export|part)\\s+['\"]([^'\"]+\\.dart)['\"]", Pattern.MULTILINE);
+    /** 상수를 찾아볼 Dart 파일 — 이름으로 고른다(색·테마·크기 상수 파일) */
+    private static final Pattern DART_CONSTANT_FILE = Pattern.compile("(?i).*(colou?r|theme|style|const|dimen|size|spacing|palette|token|design).*\\.dart$");
+    private static final List<String> EXTENSIONS = List.of("", ".tsx", ".ts", ".jsx", ".js", "/index.tsx", "/index.ts", "/index.jsx", "/index.js",
+        // React Native 플랫폼별 파일(2026-11-11) — './Button'이 Button.native.tsx·Button.ios.tsx일 수 있다
+        ".native.tsx", ".native.ts", ".native.js", ".ios.tsx", ".ios.ts", ".ios.js", ".android.tsx", ".android.ts", ".android.js");
     private static final long MAX_FILE_BYTES = 100_000;
     private static final int MAX_BUNDLE_CHARS = 150_000;
     private static final int MAX_CSS_FILES = 30;
@@ -158,7 +211,8 @@ public class ClaudeQaComparator implements QaComparator {
         List<List<Job>> perFile = new ArrayList<>();
         for (Map.Entry<String, List<Unit>> e : byFile.entrySet()) {
             Map<String, String> code = repo.bundle(e.getKey());
-            perFile.add(chunk(e.getValue()).stream().map(units -> new Job(units, code, theme)).toList());
+            String system = systemFor(e.getKey(), repo);
+            perFile.add(chunk(e.getValue()).stream().map(units -> new Job(units, code, theme, system)).toList());
         }
         List<Job> jobs = new ArrayList<>();
         for (int round = 0; ; round++) {
@@ -222,7 +276,7 @@ public class ClaudeQaComparator implements QaComparator {
     record Unit(Target target, List<Element> elements) {
     }
 
-    private record Job(List<Unit> units, Map<String, String> code, TailwindValues theme) {
+    private record Job(List<Unit> units, Map<String, String> code, TailwindValues theme, String system) {
 
         int size() {
             return units.stream().mapToInt(u -> u.elements().size()).sum();
@@ -241,7 +295,7 @@ public class ClaudeQaComparator implements QaComparator {
             List<Future<JobResult>> futures = new ArrayList<>();
             for (Job j : jobs) {
                 futures.add(pool.submit(() -> {
-                    JobResult r = judgeGroup(j, locate(j.units(), j.code()));
+                    JobResult r = judgeGroup(j, locate(j.units(), j.code(), j.system()));
                     progress.update(done.addAndGet(j.size()), total);
                     return r;
                 }));
@@ -364,7 +418,7 @@ public class ClaudeQaComparator implements QaComparator {
             }
             Map<String, String> code = repo.bundle(group.getKey());
             Target t = new Target(null, "", null, group.getValue().get(0).nodeId(), group.getKey(), null);
-            List<Binding> bindings = locate(t, List.copyOf(elements.values()), code);
+            List<Binding> bindings = locate(t, List.copyOf(elements.values()), code, systemFor(group.getKey(), repo));
             for (ReQaItem item : group.getValue()) {
                 Fact fact = facts.get(item.issueId());
                 Element e = fact == null ? null : elements.get(item.nodeId());
@@ -405,6 +459,18 @@ public class ClaudeQaComparator implements QaComparator {
     }
 
     // ------------------------------------------------------------------ 공통
+
+    /** 짝 파일이 Dart면 Flutter, 저장소가 React Native면 RN, 아니면 웹 프롬프트(2026-11-11) */
+    static String systemFor(String codePath, boolean reactNative) {
+        if (codePath != null && codePath.toLowerCase(java.util.Locale.ROOT).endsWith(".dart")) {
+            return SYSTEM_FLUTTER;
+        }
+        return reactNative ? SYSTEM_RN : SYSTEM;
+    }
+
+    private static String systemFor(String codePath, Repo repo) {
+        return systemFor(codePath, repo.reactNative());
+    }
 
     private void ready(String fileKey) {
         if (client == null) {
@@ -457,7 +523,7 @@ public class ClaudeQaComparator implements QaComparator {
     }
 
     /** 첫 QA — 같은 파일을 그리는 여러 노드의 요소를 한 번에 묻는다(2026-11-10). 요소 id는 Figma 전체에서 고유하다 */
-    private List<Binding> locate(List<Unit> units, Map<String, String> code) {
+    private List<Binding> locate(List<Unit> units, Map<String, String> code, String system) {
         List<Map<String, Object>> nodes = new ArrayList<>();
         for (Unit u : units) {
             Target t = u.target();
@@ -474,7 +540,7 @@ public class ClaudeQaComparator implements QaComparator {
         }
         String user = "These Figma nodes are implemented in " + units.get(0).target().codePath() + " (and the files it imports).\n"
             + "Nodes and their elements (top to bottom, depth-first):\n" + json.writeValueAsString(nodes);
-        return bindings(call(numbered(code), user));
+        return bindings(call(system, numbered(code), user));
     }
 
     private static List<Map<String, Object>> elementList(List<Element> elements) {
@@ -495,12 +561,12 @@ public class ClaudeQaComparator implements QaComparator {
     }
 
     /** LLM — 요소마다 줄·토큰. 응답은 스키마로 받고 여기서 다시 형태를 검사한다(AGENTS.md 5절) — 형태가 틀린 항목은 버린다 */
-    private List<Binding> locate(Target t, List<Element> elements, Map<String, String> code) {
+    private List<Binding> locate(Target t, List<Element> elements, Map<String, String> code, String system) {
         List<Map<String, Object>> list = elementList(elements);
         String user = "Figma node '" + t.nodeName() + "'" + (t.frameName() == null || t.frameName().isBlank() ? "" : " in frame '" + t.frameName() + "'")
             + " is implemented " + (t.codeSymbol() == null ? "in " : "by `" + t.codeSymbol() + "` in ") + t.codePath() + ".\n"
             + "Elements (top to bottom, depth-first):\n" + json.writeValueAsString(list);
-        return bindings(call(numbered(code), user));
+        return bindings(call(system, numbered(code), user));
     }
 
     private static List<Binding> bindings(JsonNode root) {
@@ -540,7 +606,7 @@ public class ClaudeQaComparator implements QaComparator {
         return sb.toString();
     }
 
-    private JsonNode call(String code, String user) {
+    private JsonNode call(String system, String code, String user) {
         Map<String, Object> binding = new LinkedHashMap<>();
         binding.put("type", "object");
         binding.put("additionalProperties", false);
@@ -560,7 +626,7 @@ public class ClaudeQaComparator implements QaComparator {
             .model(model)
             .maxTokens(MAX_TOKENS)
             // 코드 묶음은 같은 파일의 다음 묶음·Re-QA가 다시 읽는다 — 캐시로 입력 비용을 줄인다(2026-11-10)
-            .systemOfTextBlockParams(List.of(TextBlockParam.builder().text(SYSTEM).build(), TextBlockParam.builder().text(code)
+            .systemOfTextBlockParams(List.of(TextBlockParam.builder().text(system).build(), TextBlockParam.builder().text(code)
                 .cacheControl(CacheControlEphemeral.builder().build()).build()))
             .outputConfig(OutputConfig.builder()
                 .format(JsonOutputFormat.builder().schema(JsonOutputFormat.Schema.builder().putAllAdditionalProperties(schema).build()).build())
@@ -677,7 +743,32 @@ public class ClaudeQaComparator implements QaComparator {
                         theme.add(css);
                     }
                 });
-            return new TailwindValues(theme, all);
+            return new TailwindValues(theme, all).withDartConstants(dartConstants());
+        }
+
+        /** Flutter — 이름이 색·테마·크기 상수 파일 같은 Dart 파일(생성 코드 제외, 30개까지)의 const 값(2026-11-11) */
+        private Map<String, String> dartConstants() {
+            List<String> sources = sizes.entrySet().stream()
+                .filter(e -> DART_CONSTANT_FILE.matcher(e.getKey()).matches() && e.getValue() <= MAX_FILE_BYTES
+                    && !e.getKey().matches("(?i).*\\.(g|freezed|gr|mocks)\\.dart$")
+                    && !e.getKey().matches("(?i)(.*/)?(build|\\.dart_tool|test|integration_test)/.*"))
+                .limit(MAX_CSS_FILES)
+                .map(e -> read(e.getKey()))
+                .toList();
+            return sources.isEmpty() ? Map.of() : DartValues.constants(sources);
+        }
+
+        private Boolean reactNative;
+
+        /** 저장소의 package.json(node_modules 밖, 5개까지)에 react-native가 있으면 React Native 앱이다 */
+        synchronized boolean reactNative() {
+            if (reactNative == null) {
+                reactNative = sizes.entrySet().stream()
+                    .filter(e -> e.getKey().matches("(.*/)?package\\.json") && !e.getKey().contains("node_modules/") && e.getValue() <= MAX_FILE_BYTES)
+                    .limit(5)
+                    .anyMatch(e -> read(e.getKey()).contains("\"react-native\""));
+            }
+            return reactNative;
         }
 
         /**
@@ -717,6 +808,18 @@ public class ClaudeQaComparator implements QaComparator {
         private List<String> imports(String file, String src, boolean stylesheetsOnly) {
             String base = file.contains("/") ? file.substring(0, file.lastIndexOf('/')) : "";
             List<String> out = new ArrayList<>();
+            if (file.toLowerCase(java.util.Locale.ROOT).endsWith(".dart")) {
+                if (!stylesheetsOnly) {
+                    Matcher d = DART_IMPORT.matcher(src);
+                    while (d.find()) {
+                        String resolved = resolveDart(base, d.group(1));
+                        if (resolved != null) {
+                            out.add(resolved);
+                        }
+                    }
+                }
+                return out;
+            }
             Matcher m = IMPORT.matcher(src);
             while (m.find()) {
                 String resolved = resolve(base, m.group(1));
@@ -725,6 +828,35 @@ public class ClaudeQaComparator implements QaComparator {
                 }
             }
             return out;
+        }
+
+        /** Dart import — `package:이름/경로`는 저장소의 lib/경로(하나만 있을 때), 그 밖은 이 파일 기준 상대 경로. dart: 는 뺀다 */
+        String resolveDart(String base, String spec) {
+            if (spec.startsWith("dart:")) {
+                return null;
+            }
+            if (spec.startsWith("package:")) {
+                int slash = spec.indexOf('/');
+                if (slash < 0) {
+                    return null;
+                }
+                String rest = "lib/" + spec.substring(slash + 1);
+                List<String> found = sizes.keySet().stream().filter(p -> p.equals(rest) || p.endsWith("/" + rest)).toList();
+                return found.size() == 1 ? found.get(0) : null; // 외부 패키지거나 어느 앱인지 모르면 넣지 않는다
+            }
+            List<String> parts = new ArrayList<>(base.isEmpty() ? List.of() : List.of(base.split("/")));
+            for (String p : spec.split("/")) {
+                if (p.equals("..")) {
+                    if (parts.isEmpty()) {
+                        return null;
+                    }
+                    parts.remove(parts.size() - 1);
+                } else if (!p.equals(".") && !p.isEmpty()) {
+                    parts.add(p);
+                }
+            }
+            String path = String.join("/", parts);
+            return sizes.containsKey(path) ? path : null;
         }
 
         private static boolean isStylesheet(String path) {

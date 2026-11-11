@@ -5,6 +5,8 @@ import {
 } from '../../lib/api'
 import { Icon } from '../common/Icon'
 import { newRequestId } from './draft'
+import { PlatformField, platformInput } from './DraftFields'
+import type { AppPlatform } from '../../lib/api'
 
 const INPUT = 'w-full rounded-lg border border-qa-border bg-white px-3 py-2 text-sm text-black outline-none focus:border-qa-primary'
 const SEVERITIES: Severity[] = ['critical', 'high', 'medium', 'low']
@@ -30,6 +32,10 @@ export function NoLocationForm({ projectId, frames, links, nextPin, onCreated, o
   const [frameTouched, setFrameTouched] = useState(false)
   const [steps, setSteps] = useState('')
   const [severity, setSeverity] = useState<Severity | null>(null)
+  // 발생 환경(앱 지원, 2026-11-11) — 앱이면 화면을 경로 대신 이름("홈 화면")으로 적을 수 있다
+  const [platform, setPlatform] = useState<AppPlatform>('web')
+  const [platformOnly, setPlatformOnly] = useState(false)
+  const isApp = platform !== 'web'
   const [expected, setExpected] = useState('')
   const [actual, setActual] = useState('')
   const [capture, setCapture] = useState<QaCapture | null>(null)
@@ -39,8 +45,8 @@ export function NoLocationForm({ projectId, frames, links, nextPin, onCreated, o
   const [saveError, setSaveError] = useState<string | null>(null)
 
   // 경로에 연결된 프레임(AC33)이 하나뿐이면 사람이 고르기 전까지 미리 골라 둔다
-  const suggested = useMemo(() => (path.trim().startsWith('/')
-    ? linksForPath(links, path.trim()).filter((l) => frames.some((f) => f.frame_id === l.frame_id)) : []), [links, frames, path])
+  const suggested = useMemo(() => (!isApp && path.trim().startsWith('/')
+    ? linksForPath(links, path.trim()).filter((l) => frames.some((f) => f.frame_id === l.frame_id)) : []), [links, frames, path, isApp])
   const effectiveFrame = frameTouched ? frameId : (suggested.length === 1 ? suggested[0].frame_id : frameId)
 
   const attach = async (file: File) => {
@@ -60,8 +66,8 @@ export function NoLocationForm({ projectId, frames, links, nextPin, onCreated, o
     const next: Record<string, string> = {}
     if (!title.trim()) next.title = 'QA 제목을 입력해 주세요.'
     if (!description.trim()) next.description = '문제 설명을 입력해 주세요.'
-    if (path.trim() && !path.trim().startsWith('/')) next.screen = '경로는 /로 시작해야 해요.'
-    else if (!path.trim() && !effectiveFrame) next.screen = '화면 경로나 기준 Figma 프레임 중 하나는 알려 주세요.'
+    if (!isApp && path.trim() && !path.trim().startsWith('/')) next.screen = '경로는 /로 시작해야 해요.'
+    else if (!path.trim() && !effectiveFrame) next.screen = isApp ? '화면 이름이나 기준 Figma 프레임 중 하나는 알려 주세요.' : '화면 경로나 기준 Figma 프레임 중 하나는 알려 주세요.'
     if (stepList.length === 0) next.steps = '재현 절차를 한 줄 이상 적어 주세요.'
     setErrors(next)
     if (Object.keys(next).length > 0) return
@@ -80,6 +86,7 @@ export function NoLocationForm({ projectId, frames, links, nextPin, onCreated, o
         ...(severity ? { severity } : {}),
         ...(expected.trim() ? { expected_result: expected.trim() } : {}),
         ...(actual.trim() ? { actual_result: actual.trim() } : {}),
+        ...platformInput(platform, platformOnly),
       })
       onCreated(created)
     } catch (e) {
@@ -100,7 +107,7 @@ export function NoLocationForm({ projectId, frames, links, nextPin, onCreated, o
         </h2>
         <button type="button" onClick={onClose} aria-label="작성 닫기" className="rounded p-1 text-qa-text-sub hover:bg-qa-surface"><Icon name="x" className="h-4 w-4" /></button>
       </div>
-      <p className="mt-2 text-xs text-qa-text-sub">배포 화면 없이 등록해요. 위치를 찍지 않으니 어느 화면인지와 재현 절차를 직접 적어 주세요.</p>
+      <p className="mt-2 text-xs text-qa-text-sub">배포 화면 없이 등록해요. 위치를 찍지 않으니 어느 화면인지와 재현 절차를 직접 적어 주세요. 앱 화면이면 발생 환경을 Android·iOS로 고르고 스크린샷을 첨부해 주세요.</p>
       {saveError && <p role="alert" className="mt-3 rounded-lg bg-qa-warning/10 px-3 py-2 text-xs text-black">{saveError}</p>}
 
       <div className="mt-4 grid grid-cols-1 gap-5 2xl:grid-cols-2">
@@ -117,10 +124,12 @@ export function NoLocationForm({ projectId, frames, links, nextPin, onCreated, o
               placeholder="무엇이 어떻게 다른지 적어 주세요" className={`${INPUT} mt-1 resize-none`} />
             {err('description')}
           </label>
+          <PlatformField platform={platform} only={platformOnly} disabled={saving}
+            onChange={(p, only) => { setPlatform(p); setPlatformOnly(only) }} />
           <fieldset className="mt-3">
-            <legend className="text-xs font-medium text-black">화면 <span className="text-qa-warning">*</span> <span className="font-normal text-qa-text-sub">경로나 기준 프레임 중 하나 이상</span></legend>
-            <input value={path} maxLength={500} disabled={saving} onChange={(e) => setPath(e.target.value)} aria-label="화면 경로"
-              placeholder="/projects 또는 /app/projects/26" className={`${INPUT} mt-1 font-mono`} />
+            <legend className="text-xs font-medium text-black">화면 <span className="text-qa-warning">*</span> <span className="font-normal text-qa-text-sub">{isApp ? '화면 이름이나' : '경로나'} 기준 프레임 중 하나 이상</span></legend>
+            <input value={path} maxLength={500} disabled={saving} onChange={(e) => setPath(e.target.value)} aria-label={isApp ? '앱 화면 이름' : '화면 경로'}
+              placeholder={isApp ? '예: 홈 화면, 로그인 화면' : '/projects 또는 /app/projects/26'} className={`${INPUT} mt-1 ${isApp ? '' : 'font-mono'}`} />
             <select value={effectiveFrame} disabled={saving || frames.length === 0} aria-label="기준 Figma 프레임"
               onChange={(e) => { setFrameTouched(true); setFrameId(e.target.value) }} className={`${INPUT} mt-2`}>
               <option value="">{frames.length === 0 ? '비교 분석 매핑이 없어 고를 프레임이 없어요' : '기준 Figma 프레임 선택 안 함'}</option>

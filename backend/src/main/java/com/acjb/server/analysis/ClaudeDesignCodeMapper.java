@@ -50,6 +50,10 @@ public class ClaudeDesignCodeMapper implements DesignCodeMapper {
     static final String NODES_INSTRUCTION = "List the frame's main UI blocks (header, sidebar, page header, banners, cards/panels — "
         + "not individual texts, icons or rows) and for each give the file and the React component/function name that renders it, "
         + "or null/null if no code renders it.";
+    /** Flutter 저장소(2026-11-11) — React 컴포넌트 대신 위젯. 웹·React Native는 위 문구 그대로(정확도를 잰 문구를 바꾸지 않는다) */
+    static final String NODES_INSTRUCTION_FLUTTER = "List the frame's main UI blocks (app bar, bottom navigation, page header, banners, "
+        + "cards/panels — not individual texts, icons or rows) and for each give the file and the Flutter widget class or function name "
+        + "that builds it, or null/null if no code renders it.";
 
     /** 프레임 460개에 약 2.2만 토큰이 나왔다(스파이크) — 사고 여유분까지 */
     private static final long FRAMES_MAX_TOKENS = 64_000L;
@@ -95,7 +99,8 @@ public class ClaudeDesignCodeMapper implements DesignCodeMapper {
 
     @Override
     public List<NodeMatch> mapNodes(FrameDetail frame, CodeBundle code) {
-        String user = "# Figma frame '" + frame.name() + "' node tree (id, type, name)\n" + frame.tree() + "\n" + NODES_INSTRUCTION;
+        String user = "# Figma frame '" + frame.name() + "' node tree (id, type, name)\n" + frame.tree() + "\n"
+            + (isFlutter(code) ? NODES_INSTRUCTION_FLUTTER : NODES_INSTRUCTION);
         Map<String, Object> schema = object(Map.of("nodes", Map.of("type", "array", "items",
             object(Map.of("node_id", Map.of("type", "string"), "file", nullableString(), "symbol", nullableString())))));
         JsonNode root = call(code, user, schema, NODES_MAX_TOKENS);
@@ -201,5 +206,11 @@ public class ClaudeDesignCodeMapper implements DesignCodeMapper {
             throw new MappingFailedException("AI 분석 응답 형식이 올바르지 않아요.");
         }
         return v.asString().isBlank() ? null : v.asString();
+    }
+
+    /** UI 코드 파일의 절반 넘게 Dart면 Flutter 저장소로 본다(Flutter 웹 빌드용 .js가 조금 섞여 있을 수 있다) */
+    static boolean isFlutter(CodeBundle code) {
+        long dart = code.files().keySet().stream().filter(p -> p.toLowerCase(java.util.Locale.ROOT).endsWith(".dart")).count();
+        return dart * 2 > code.files().size();
     }
 }

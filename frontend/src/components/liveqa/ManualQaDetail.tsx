@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  captureImageUrl, formatDateTime, manualQaId, SEVERITY_LABELS, type ProjectMember, type QaIssue, type Team,
+  PLATFORM_LABELS, captureImageUrl, formatDateTime, manualQaId, SEVERITY_LABELS, type ProjectMember, type QaIssue, type Team,
 } from '../../lib/api'
 import { Icon } from '../common/Icon'
 import { TeamAssignSection } from '../qa/AssignPanel'
@@ -93,6 +93,8 @@ export function ManualQaDetail({ issue, projectId, members, onClose, onAssigned,
             { label: '문제 설명', value: <span className="whitespace-pre-wrap">{issue.description}</span> },
             ...(m.expected_result ? [{ label: '기대 결과', value: m.expected_result }] : []),
             ...(m.actual_result ? [{ label: '실제 결과', value: <span className="text-qa-warning">{m.actual_result}</span> }] : []),
+            ...(issue.environment?.platform && issue.environment.platform !== 'web' ? [{ label: '발생 환경', value:
+              `${PLATFORM_LABELS[issue.environment.platform]} · ${issue.platform_scope === 'common' ? '다른 플랫폼에도 있을 수 있음' : `${PLATFORM_LABELS[issue.environment.platform]}에서만`}` }] : []),
             { label: '연결 위치', value: m.anchor && m.viewport ? `x ${m.anchor.x_px}, y ${m.anchor.y_px} · 기준 ${m.viewport.width}×${m.viewport.height}` : '위치 없이 등록' },
           ]} />
           <p className="mt-3 rounded-lg bg-qa-surface px-3 py-2 text-xs text-qa-text-sub">

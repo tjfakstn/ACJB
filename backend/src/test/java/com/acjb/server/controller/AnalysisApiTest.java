@@ -430,4 +430,27 @@ class AnalysisApiTest {
     }
 
     @Autowired com.acjb.server.figma.FigmaTokenCipher cipher;
+
+    @Autowired com.acjb.server.repository.NotificationRepository notificationRepo;
+
+    @Test
+    void 비교_분석이_실패하면_실행한_소유자에게_run_failed_알림_1건() throws Exception {
+        connectBoth();
+        stubSources();
+        when(github.fileContent(anyString(), anyString(), anyString(), anyString())).thenReturn("x".repeat(400_001));
+        start(owner).andExpect(status().isAccepted());
+        Long runId = latestRunId();
+        job.run(runId);
+        assertThat(reloadRun(runId).getStatus()).isEqualTo(RunStatus.FAILED);
+        assertThat(notificationRepo.findAll()).filteredOn(n -> n.getProject().getId().equals(project.getId())).singleElement().satisfies(n -> {
+            assertThat(n.getEvent()).isEqualTo(com.acjb.server.domain.NotificationEvent.RUN_FAILED);
+            assertThat(n.getRecipient().getId()).isEqualTo(owner.getId());
+            assertThat(n.getRun().getId()).isEqualTo(runId);
+            assertThat(n.getIssue()).isNull();
+        });
+        getAs("/notifications", owner)
+            .andExpect(jsonPath("$.data.items[0].event").value("run_failed"))
+            .andExpect(jsonPath("$.data.items[0].run.kind").value("analysis"))
+            .andExpect(jsonPath("$.data.items[0].run.error_message", Matchers.containsString("너무 커요")));
+    }
 }

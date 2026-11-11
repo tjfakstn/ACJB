@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.acjb.server.recheck.EmbeddingSourcesChanged;
 import com.acjb.server.common.ApiException;
 import com.acjb.server.domain.DeployStage;
+import com.acjb.server.domain.NotificationCause;
 import com.acjb.server.domain.EnvPlatform;
 import com.acjb.server.domain.Environment;
 import com.acjb.server.domain.IssueSource;
@@ -151,7 +152,7 @@ public class QaIssueService {
         // 등록 시점의 needs_check도 이력 1건으로 남긴다(db-schema.md status_histories)
         StatusHistory first = histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
         // AC3: 담당 팀이 있으면 그 역할 멤버 각각에게 1건씩(없으면 만들지 않는다)
-        teamNotifier.notifyTeam(issue, team, NotificationEvent.ISSUE_CREATED);
+        teamNotifier.notifyTeam(issue, team, NotificationEvent.ISSUE_CREATED, NotificationCause.REGISTERED, reporter);
         issues.flush();
         // 이슈(와 함께 만든 스타일 차이)는 재검증 범위 제안(AC20)의 검색 문서가 된다 — 커밋 뒤 임베딩을 만든다
         events.publishEvent(new EmbeddingSourcesChanged(projectId));

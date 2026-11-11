@@ -26,10 +26,11 @@ public class ProjectDeletionService {
 
     /** 이 프로젝트 이슈에 딸린 표 — qa_issues보다 먼저 지운다 */
     private static final List<String> ISSUE_CHILDREN = List.of(
-        "notifications", "verifications", "status_histories", "qa_issue_repro_steps", "qa_issue_screenshots");
+        "verifications", "status_histories", "qa_issue_repro_steps", "qa_issue_screenshots");
     /** project_id로 바로 지우는 표 — 이 순서대로(style_mismatches는 style_scans를 참조) */
     private static final List<String> PROJECT_CHILDREN = List.of(
-        "manual_qa_pins", "qa_captures", "screen_frame_links", "qa_issues", "style_mismatches", "style_scans", "figma_syncs", "figma_frames", "embeddings", "design_code_mappings", "project_runs",
+        // 알림은 이슈 없이 실행만 가리키기도 해서(V18) project_id로 지운다 — qa_issues·project_runs보다 먼저
+        "notifications", "manual_qa_pins", "qa_captures", "screen_frame_links", "qa_issues", "style_mismatches", "style_scans", "figma_syncs", "figma_frames", "embeddings", "design_code_mappings", "project_runs",
         "invitations", "project_members");
 
     private final ProjectRepository projects;

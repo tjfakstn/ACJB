@@ -26,11 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.acjb.server.common.ApiException;
 import com.acjb.server.domain.Member;
-import com.acjb.server.domain.NotificationEvent;
 import com.acjb.server.dto.ItemsResponse;
 import com.acjb.server.dto.MemberResponse;
-import com.acjb.server.dto.NotificationListResponse;
-import com.acjb.server.dto.NotificationResponse;
 import com.acjb.server.repository.NotificationRepository;
 import com.acjb.server.repository.ProjectMemberRepository;
 
@@ -128,20 +125,4 @@ public class ProjectQueryService {
         return new ItemsResponse<>(projectMembers.findMembersOfProject(projectId).stream().map(MemberResponse::of).toList());
     }
 
-    /** AC14 — 요청자에게 온 이 프로젝트의 알림만. event는 정해진 3개 값만 받는다 */
-    public NotificationListResponse myNotifications(Long projectId, Member me, String event) {
-        NotificationEvent filter = event == null ? null : parseEvent(event);
-        List<NotificationResponse> items = notifications.findInbox(projectId, me.getId(), filter).stream()
-            .map(NotificationResponse::of).toList();
-        return new NotificationListResponse(items, items.size());
-    }
-
-    private static NotificationEvent parseEvent(String raw) {
-        for (NotificationEvent e : NotificationEvent.values()) {
-            if (e.name().toLowerCase(Locale.ROOT).equals(raw)) {
-                return e;
-            }
-        }
-        throw ApiException.badRequest("event 값이 올바르지 않습니다: " + raw + " (issue_created, fixed, recheck_failed)");
-    }
 }

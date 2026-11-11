@@ -159,7 +159,11 @@ class VerificationApiTest {
         QAIssue issue = issue(project, assignee, IssueStatus.FIXED);
         verifyAs(reporter, issue, "{\"result\":\"pass\"}").andExpect(status().isCreated());
         assertThat(notifications.countByIssueIdAndEvent(issue.getId(), NotificationEvent.RECHECK_FAILED)).isZero();
-        assertThat(notifications.count()).isZero();
+        // pass면 담당 팀에 resolved 1건(2026-11-11, 사용자 승인으로 단언 변경)
+        assertThat(notifications.findAll()).singleElement().satisfies(n -> {
+            assertThat(n.getEvent()).isEqualTo(NotificationEvent.RESOLVED);
+            assertThat(n.getRecipient().getId()).isEqualTo(assignee.getId());
+        });
     }
 
     // --- AC6 ---

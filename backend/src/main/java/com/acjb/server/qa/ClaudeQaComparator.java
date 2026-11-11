@@ -66,16 +66,25 @@ public class ClaudeQaComparator implements QaComparator {
     private static final Logger log = LoggerFactory.getLogger(ClaudeQaComparator.class);
 
     static final String SYSTEM = """
-        You locate, in React + Tailwind source code, the exact code that renders each element of the listed Figma design node(s).
-        For each listed element and each listed property, find the JSX element in the provided code that renders that design element, and return:
+        You locate, in React source code, the exact code that sets each style of the listed Figma design node(s).
+        Styles may be written as Tailwind classes, in a stylesheet the component imports (CSS, SCSS, LESS, CSS modules), in CSS-in-JS \
+        (styled-components / emotion template literals or style objects), or in an inline style object.
+        For each listed element and each listed property, find the JSX element in the provided code that renders that design element and \
+        the code that sets that property for it, and return:
         - file: the file path exactly as given
         - line: the 1-based line number where the value is written
         - token: the exact substring on that line that sets the property — copy it verbatim from that line
-          - color (text color), background, border (border color), font_weight, font_size, radius, padding, gap: the Tailwind class or classes, \
-        space-separated, that set it (e.g. "px-6 py-4"). All classes must be on that single line
+          - Tailwind: the class or classes, space-separated, that set it (e.g. "px-6 py-4"). All classes must be on that single line
+          - stylesheet, CSS-in-JS or inline style: one declaration, property name and value, as written (e.g. "border-radius: 8px", \
+        "padding: 12px 16px", "borderRadius: 8", "color: '#1a1a1a'"). For padding use only a `padding` shorthand declaration that \
+        sets all sides; for border color a `border` or `border-color` declaration
           - text: the static string literal as written (without quotes)
-        Omit an element/property when: no code renders it; the value comes from a variable, prop, function call or data (dynamic) rather than \
-        a literal on the line; it is set only through a responsive/state variant (hover:, md:); or you are not sure which JSX element renders it.
+        Property meanings: color = text color, background = background color, border = border color, font_weight, font_size, \
+        radius = border radius, padding, gap.
+        Omit an element/property when: no code renders it; the value comes from a JS variable, prop, function call, template \
+        interpolation (${...}), SCSS/LESS variable or data rather than a literal (CSS custom properties var(--name) are fine); it is set \
+        only through a responsive/state variant or rule (hover:, md:, :hover, @media); more than one rule could set it for that element and \
+        you cannot tell which one applies; or you are not sure which JSX element renders it.
         Never compute or convert values and never guess. Do not pick a line because its value looks like the design — pick the line of the \
         element that actually renders that design element.""";
 
@@ -123,7 +132,7 @@ public class ClaudeQaComparator implements QaComparator {
         ready(input.figmaFileKey());
         Set<Fact> allowed = factsOf(input.properties());
         Repo repo = Repo.open(github, input.repo(), input.commitSha());
-        TailwindValues theme = new TailwindValues(repo.themeCss());
+        TailwindValues theme = repo.styleValues();
         Map<String, JsonNode> frames = frames(input.figmaFileKey(), input.targets().stream().map(Target::frameId).toList());
 
         // 같은 코드 파일을 그리는 노드는 한 번에 묻는다(2026-11-10) — 노드마다 물으면 같은 파일 묶음을 수십 번 다시 보낸다.
@@ -290,7 +299,7 @@ public class ClaudeQaComparator implements QaComparator {
                 dropped++; // 그 줄에 토큰이 없다 — 지어낸 근거(N17)
                 continue;
             }
-            Object value = theme.resolve(fact.get(), b.token());
+            Object value = theme.value(fact.get(), b.token(), b.file(), line.get());
             Optional<Boolean> same = StyleRules.same(fact.get(), e, value, line.get());
             if (same.isEmpty() || same.get()) {
                 continue; // 읽을 수 없는 값(동적 값·투명도·변형)은 비교하지 않는다
@@ -325,7 +334,7 @@ public class ClaudeQaComparator implements QaComparator {
             throw new QaFailedException("GitHub 브랜치의 최신 커밋을 읽지 못했어요. 연결 상태를 확인해 주세요.");
         }
         Repo repo = Repo.open(github, input.repo(), sha);
-        TailwindValues theme = new TailwindValues(repo.themeCss());
+        TailwindValues theme = repo.styleValues();
         Map<String, JsonNode> frames = frames(input.figmaFileKey(), input.items().stream().map(ReQaItem::frameId).toList());
 
         // 파일마다 한 번 묻는다. 요소를 다시 못 찾거나 파일이 없어졌으면 판정하지 않는다(N18)
@@ -378,7 +387,7 @@ public class ClaudeQaComparator implements QaComparator {
             if (line.isEmpty()) {
                 return Optional.empty();
             }
-            Object value = theme.resolve(fact, b.token());
+            Object value = theme.value(fact, b.token(), b.file(), line.get());
             Optional<Boolean> same = StyleRules.same(fact, e, value, line.get());
             if (same.isEmpty()) {
                 return Optional.empty();
@@ -652,43 +661,76 @@ public class ClaudeQaComparator implements QaComparator {
             });
         }
 
-        /** Tailwind 4 `@theme`이 있는 CSS(node_modules·빌드 결과 제외, 크기 순 앞에서 30개까지 살펴봄) */
-        List<String> themeCss() {
-            List<String> out = new ArrayList<>();
+        /**
+         * 값 읽기 — Tailwind 4 `@theme`이 있는 CSS와, CSS 선언의 var()를 풀 저장소 CSS 전체
+         * (node_modules·빌드 결과 제외, 트리 순 앞에서 30개까지 살펴봄)
+         */
+        TailwindValues styleValues() {
+            List<String> theme = new ArrayList<>();
+            List<String> all = new ArrayList<>();
             sizes.entrySet().stream()
-                .filter(e -> e.getKey().endsWith(".css") && e.getValue() <= MAX_FILE_BYTES
+                .filter(e -> e.getKey().matches("(?i).*\\.(css|scss)$") && e.getValue() <= MAX_FILE_BYTES
                     && !e.getKey().matches("(?i).*(^|/)(node_modules|dist|build|out|coverage|public)/.*"))
                 .limit(MAX_CSS_FILES)
                 .forEach(e -> {
                     String css = read(e.getKey());
+                    all.add(css);
                     if (css.contains("@theme")) {
-                        out.add(css);
+                        theme.add(css);
                     }
                 });
-            return out;
+            return new TailwindValues(theme, all);
         }
 
-        /** 짝 파일과 그 파일이 상대 경로로 직접 import하는 저장소 파일(1단계) — 큰 파일·총량을 넘는 파일은 뺀다 */
+        /**
+         * 짝 파일과 그 파일이 상대 경로로 직접 import하는 저장소 파일(1단계), 그리고 그 파일들이 import하는 스타일시트
+         * (CSS·SCSS·LESS·CSS modules — 2026-11-12) — 큰 파일·총량을 넘는 파일은 뺀다
+         */
         Map<String, String> bundle(String main) {
             Map<String, String> out = new LinkedHashMap<>();
             String src = read(main);
             out.put(main, src);
-            int total = src.length();
-            String base = main.contains("/") ? main.substring(0, main.lastIndexOf('/')) : "";
+            int[] total = {src.length()};
+            List<String> scripts = new ArrayList<>();
+            for (String path : imports(main, src, false)) {
+                if (add(out, path, total) && !isStylesheet(path)) {
+                    scripts.add(path);
+                }
+            }
+            for (String script : scripts) {
+                imports(script, out.get(script), true).forEach(path -> add(out, path, total));
+            }
+            return out;
+        }
+
+        private boolean add(Map<String, String> out, String path, int[] total) {
+            if (out.containsKey(path) || sizes.getOrDefault(path, Long.MAX_VALUE) > MAX_FILE_BYTES) {
+                return false;
+            }
+            String text = read(path);
+            if (total[0] + text.length() > MAX_BUNDLE_CHARS) {
+                return false;
+            }
+            out.put(path, text);
+            total[0] += text.length();
+            return true;
+        }
+
+        private List<String> imports(String file, String src, boolean stylesheetsOnly) {
+            String base = file.contains("/") ? file.substring(0, file.lastIndexOf('/')) : "";
+            List<String> out = new ArrayList<>();
             Matcher m = IMPORT.matcher(src);
             while (m.find()) {
                 String resolved = resolve(base, m.group(1));
-                if (resolved == null || out.containsKey(resolved) || sizes.getOrDefault(resolved, Long.MAX_VALUE) > MAX_FILE_BYTES) {
-                    continue;
+                if (resolved != null && (!stylesheetsOnly || isStylesheet(resolved))) {
+                    out.add(resolved);
                 }
-                String text = read(resolved);
-                if (total + text.length() > MAX_BUNDLE_CHARS) {
-                    continue;
-                }
-                out.put(resolved, text);
-                total += text.length();
             }
             return out;
+        }
+
+        private static boolean isStylesheet(String path) {
+            return path.matches("(?i).*\\.(css|scss|sass|less)$");
         }
 
         private String resolve(String base, String rel) {
@@ -704,8 +746,11 @@ public class ClaudeQaComparator implements QaComparator {
                 }
             }
             String path = String.join("/", parts);
+            if (isStylesheet(path)) {
+                return sizes.containsKey(path) ? path : null; // 스타일시트는 확장자까지 적어 import한다
+            }
             for (String ext : EXTENSIONS) {
-                if (sizes.containsKey(path + ext) && !(path + ext).endsWith(".css")) {
+                if (sizes.containsKey(path + ext)) {
                     return path + ext;
                 }
             }

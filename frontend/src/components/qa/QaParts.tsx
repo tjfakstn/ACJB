@@ -149,7 +149,7 @@ export const PROGRESS: Record<IssueStatus, { label: string; tone: 'red' | 'blue'
   needs_check: { label: '미해결', tone: 'red' },
   in_progress: { label: '수정 중', tone: 'blue' },
   fixed: { label: '수정 완료 · 재검증 대기', tone: 'orange' },
-  needs_recheck: { label: '재확인 필요 · Re-QA 실패', tone: 'red' },
+  needs_recheck: { label: '재확인 필요 · 재검증 실패', tone: 'red' }, // 수동 재검증 실패도 같은 상태라 Re-QA로 한정하지 않는다
   resolved: { label: '해결됨 · 재검증 완료', tone: 'green' },
 }
 

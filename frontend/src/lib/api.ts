@@ -704,6 +704,36 @@ export async function listVerifications(projectId: string, issueId: string): Pro
   return data.items
 }
 
+/**
+ * 수동 재검증 등록(AC5·AC7·AC13) — 등록자만(등록자가 프로젝트에서 빠졌으면 소유자), fixed인 이슈만.
+ * pass→resolved, fail→needs_recheck. 재현 절차는 보내지 않는다 — 서버가 등록 때 절차를 그대로 돌려준다
+ */
+export function createVerification(projectId: string, issueId: string, result: 'pass' | 'fail', scope?: string): Promise<{
+  verification: Verification; issue_status: IssueStatus; repro_steps: string[]
+}> {
+  return request('POST', `/api/v1/projects/${projectId}/qa-issues/${issueId}/verifications`, scope ? { result, scope } : { result })
+}
+
+export interface RecheckSuggestion {
+  screen: string
+  reason: string
+  evidence: { type: 'qa_issue' | 'style_mismatch' | 'verification'; id: string }[]
+}
+
+export interface RecheckSuggestions {
+  issue_id: string
+  suggestions: RecheckSuggestion[]
+  /** 근거로 찾은 문서 수 — 0이면 LLM을 부르지 않았다 */
+  searched_count: number
+  /** 근거가 검색 결과에 없어 버린 제안 수(N16) */
+  dropped_count: number
+}
+
+/** 재검증 범위 제안(AC20) — 재검증 등록 권한자만, fixed인 이슈만. 결과는 저장하지 않아 부를 때마다 새로 계산한다 */
+export function getRecheckSuggestions(projectId: string, issueId: string): Promise<RecheckSuggestions> {
+  return request<RecheckSuggestions>('POST', `/api/v1/projects/${projectId}/qa-issues/${issueId}/recheck-suggestions`)
+}
+
 /** 연결한 Figma 파일에서 그 프레임을 여는 링크 */
 export function figmaFrameUrl(fileKey: string, frameId: string): string {
   return `https://www.figma.com/design/${fileKey}/?node-id=${encodeURIComponent(frameId.replace(':', '-'))}`

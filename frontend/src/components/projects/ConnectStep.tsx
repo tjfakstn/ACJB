@@ -10,6 +10,9 @@ import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './wizardStyles'
 // 공개 저장소로 바꾸라고 안내한다. [프로젝트 시작하기]를 누르면 비교 분석(CON-06)으로 넘어간다.
 // GitHub는 연결되면 분석할 브랜치를 고를 수 있다(처음엔 기본 브랜치, 2026-11-07).
 const GITHUB_PATTERN = /^(?:https?:\/\/)?(?:www\.)?github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+?(?:\.git)?\/?(?:[?#].*)?$/
+// 주소창에서 복사한 브랜치·파일 주소(/tree/…, /blob/…) — 저장소 주소만 넣으라고 안내한다. 브랜치는 연결한 뒤 고른다(2026-11-11)
+const GITHUB_SUBPATH = /^(?:https?:\/\/)?(?:www\.)?github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+\/(?:tree|blob)\//
+const GITHUB_SUBPATH_MESSAGE = '브랜치 주소가 아니라 저장소 주소만 넣어 주세요 (예: https://github.com/조직/저장소). 브랜치는 연결한 뒤 고를 수 있어요.'
 // Figma는 최종 시안만 담은 페이지([공유하기]) 또는 섹션([링크 복사]) 링크를 받는다(2026-11-07): figma.com/design/{key}/{이름}?node-id=…
 // 이 검사는 모양만 본다 — node-id가 실제로 페이지·섹션인지(프레임이 아닌지)는 서버가 Figma로 확인한다
 const FIGMA_PATTERN = /^(?:https?:\/\/)?(?:www\.)?figma\.com\/design\/[A-Za-z0-9]+(?:\/[^/?#]*)?\?(?:[^#]*&)?node-id=\d+(?:-|:|%3A)\d+/i
@@ -19,7 +22,8 @@ type State =
   | { kind: 'checking' }
   | { kind: 'connected'; detail: string }
   | { kind: 'format'; message?: string }
-  | { kind: 'forbidden' }
+  /** message: 서버가 알려 준 이유(Figma 내보내기 막힘처럼 보기 권한과 다른 경우) */
+  | { kind: 'forbidden'; message?: string }
   | { kind: 'failed'; message?: string }
 
 type Service = 'github' | 'figma'
@@ -59,7 +63,8 @@ export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepPr
     const url = cur.url.trim()
     if (!url || cur.state.kind === 'checking' || (!force && url === cur.checked)) return
     if (!(service === 'github' ? GITHUB_PATTERN : FIGMA_PATTERN).test(url)) {
-      set({ ...cur, checked: url, state: { kind: 'format' } })
+      const message = service === 'github' && GITHUB_SUBPATH.test(url) ? GITHUB_SUBPATH_MESSAGE : undefined
+      set({ ...cur, checked: url, state: { kind: 'format', message } })
       return
     }
     set({ ...cur, checked: url, state: { kind: 'checking' } })
@@ -74,7 +79,7 @@ export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepPr
         return
       }
       if (e instanceof ApiError && e.status === 422) {
-        set({ url, checked: url, state: { kind: 'forbidden' } })
+        set({ url, checked: url, state: { kind: 'forbidden', message: e.message } })
         return
       }
       // 503 = 서버 Figma 토큰 문제 — 사용자 링크·권한 문제가 아니므로 서버가 준 문구를 그대로 보여준다
@@ -99,7 +104,11 @@ export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepPr
   const reset = (service: Service) => (service === 'github' ? setGithub : setFigma)({ url: '', checked: '', state: { kind: 'idle' } })
 
   // 배너는 문제가 있는 쪽 하나만(시안 CON-E*) — Figma를 먼저 본다
-  const bannerOf = (service: Service, s: State) => BANNERS[service][s.kind]
+  // Figma 403에는 보기 권한 말고도 내보내기 막힘이 있다 — 서버가 준 이유를 본문으로 보여 준다(2026-11-11)
+  const bannerOf = (service: Service, s: State) => {
+    const b = BANNERS[service][s.kind]
+    return b && s.kind === 'forbidden' && s.message ? { ...b, body: s.message } : b
+  }
   const banner = bannerOf('figma', figma.state) ?? bannerOf('github', github.state)
   const bothConnected = github.state.kind === 'connected' && figma.state.kind === 'connected'
   const busy = github.state.kind === 'checking' || figma.state.kind === 'checking'
@@ -263,7 +272,7 @@ function StatusLine({ service, state, onRetry, onReset }: { service: Service; st
           <span className="text-xs font-medium text-[#a85a00]">{service === 'figma' ? '파일 접근 권한 필요' : '공개 저장소만 연결할 수 있어요'}</span>
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-qa-text-sub">
-              {service === 'figma' ? '파일 소유자에게 보기 권한을 요청한 뒤 다시 확인해 주세요.' : '저장소를 공개로 바꾸거나 링크를 확인한 뒤 다시 확인해 주세요.'}
+              {state.message ?? (service === 'figma' ? '파일 소유자에게 보기 권한을 요청한 뒤 다시 확인해 주세요.' : '저장소를 공개로 바꾸거나 링크를 확인한 뒤 다시 확인해 주세요.')}
             </span>
             {action('다시 확인', onRetry)}
           </div>

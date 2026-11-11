@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  ApiError, changeIssueStatus, deleteFixLink, formatDate, formatDateTime, getCodeTrace, getIssue, listVerifications, putFixLink,
+  ApiError, changeIssueStatus, deleteFixLink, formatDate, formatDateTime, getCodeTrace, getIssue, listMembers, listVerifications, putFixLink,
   roleLabel, TEAM_LABELS, type CodeTrace, type IssueStatus, type QaIssue, type Verification,
 } from '../lib/api'
 import { CodeLinkCard, GithubTraceCard, IssueKey, KvRows, PANEL } from '../components/qa/CodeTrace'
 import { Icon } from '../components/common/Icon'
+import { RecheckPanel } from '../components/qa/RecheckPanel'
 import { CARD, WorkflowStepper } from '../components/workspace/WorkspaceCards'
 import {
   ErrorCard, KeyValue, Loading, OUTLINE_BTN, PRIMARY_BTN, PROGRESS, ProgressChip, QaShell, TeamTag, Verdict, issueFrame, issueParts, issueTitle,
@@ -18,7 +19,7 @@ import {
 //  - "매핑 신뢰도"·"Props·관련 스타일 파일"·라인 범위는 서버가 주지 않아 뺐다. 코드 파일·커밋·PR은 코드 추적(AC34)으로 보여 준다
 //  - 처리 이력은 상태 변경과 재검증 기록만 남는다(담당 팀 지정은 서버가 이력으로 기록하지 않는다)
 //  - 시안의 [수정 시작]만 있는 ISS-02와 달리 스펙대로 수정 중을 건너뛰고 바로 수정 완료로 바꿀 수도 있다(AC6)
-//  - 사람이 직접 등록한 이슈의 재검증(AC5, 등록자가 재현 절차로 확인)은 이 화면에서 아직 하지 않는다
+//  - 사람이 직접 등록한 이슈는 수정 완료가 되면 등록자가 재현 절차로 PASS·FAIL을 남긴다(AC5·AC7, RecheckPanel)
 
 export function IssueDetailPage() {
   const { projectId = '', issueId = '' } = useParams()
@@ -30,6 +31,8 @@ export function IssueDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   /** 코드 추적(AC34) — GitHub를 읽어 늦게 올 수 있어 화면은 먼저 그린다 */
   const [trace, setTrace] = useState<CodeTrace | null>(null)
+  /** 등록자가 아직 프로젝트 멤버인지 — 빠졌으면 소유자가 대신 재검증한다(AC13). 소유자가 등록자가 아닐 때만 확인한다 */
+  const [reporterIsMember, setReporterIsMember] = useState<boolean | null>(null)
 
   const loadTrace = useCallback(() => {
     getCodeTrace(projectId, issueId).then(setTrace).catch(() => setTrace(null))
@@ -52,10 +55,18 @@ export function IssueDetailPage() {
     }
   }, [me, load, loadTrace])
 
+  const reportedBy = issue?.reported_by ?? null
+  const needsMemberCheck = !!me && !!detail && !!reportedBy && detail.owner_id === me.id && reportedBy !== me.id
+  useEffect(() => {
+    if (!needsMemberCheck) return
+    listMembers(projectId).then((ms) => setReporterIsMember(ms.some((m) => m.id === reportedBy))).catch(() => setReporterIsMember(true))
+  }, [needsMemberCheck, projectId, reportedBy])
+
   if (!me) return null
   const failMessage = error ?? loadError
   const isOwner = !!detail && detail.owner_id === me.id
   const canChange = !!detail && !!issue?.assigned_team && detail.my_role === issue.assigned_team
+  const canVerify = !!issue && (issue.reported_by === me.id || (isOwner && reporterIsMember === false))
 
   /** 수정 완료로 바꿀 때 수정 PR·커밋 링크를 함께 붙일 수 있다 — 링크가 틀리면 상태도 바꾸지 않는다 */
   const change = async (status: 'in_progress' | 'fixed', fixLink?: string) => {
@@ -122,6 +133,10 @@ export function IssueDetailPage() {
             </div>
 
             <div className="flex min-w-0 flex-col gap-6">
+              {issue.status === 'fixed' && issue.source === 'manual' && (
+                <RecheckPanel issue={issue} projectId={projectId} canVerify={canVerify}
+                  onVerified={() => { void load(); void reload(); loadTrace() }} />
+              )}
               <section className={PANEL}>
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-base font-bold leading-6 text-black">수정 담당 팀</h2>
@@ -210,7 +225,7 @@ function StatusActions({ issue, canChange, saving, isOwner, projectId, onChange,
         {isOwner && <Link to={`/app/projects/${projectId}/qa`} className={`${PRIMARY_BTN} mt-2 w-full`}><Icon name="refresh" className="h-4 w-4" />Re-QA 실행</Link>}
       </div>
     ) : (
-      <div className="mt-3 rounded-lg bg-[#f08c00]/10 px-3 py-2.5 text-xs text-black">수정 완료 · 등록자의 재검증을 기다리고 있어요.</div>
+      <div className="mt-3 rounded-lg bg-[#f08c00]/10 px-3 py-2.5 text-xs text-black">수정 완료 · 등록자의 재검증을 기다리고 있어요. 재검증 카드에서 결과를 남길 수 있어요.</div>
     )
   }
   return <div className="mt-3 rounded-lg bg-qa-success/10 px-3 py-2.5 text-xs text-black">재검증을 통과해 해결된 문제예요.</div>
@@ -387,7 +402,7 @@ function History({ issue, verifications }: { issue: QaIssue; verifications: Veri
     ...verifications.map((v) => ({
       at: v.verified_at,
       key: `v${v.id}`,
-      title: `${v.source === 're_qa' ? 'Re-QA' : '재검증'} ${v.result === 'pass' ? 'PASS' : 'FAIL'}${v.observed_value ? ` — 다시 읽은 구현값 ${v.observed_value}` : ''}`,
+      title: `${v.source === 're_qa' ? 'Re-QA' : '재검증'} ${v.result === 'pass' ? 'PASS' : 'FAIL'}${v.observed_value ? ` — 다시 읽은 구현값 ${v.observed_value}` : ''}${v.scope ? ` — 확인 범위: ${v.scope}` : ''}`,
       sub: v.source === 're_qa' ? '자동 Re-QA' : '등록자 재검증',
     })),
   ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : a.key < b.key ? 1 : -1))

@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,19 +25,53 @@ final class TailwindValues {
     private static final Pattern OKLCH = Pattern.compile("oklch\\(([\\d.]+)%\\s+([\\d.]+)\\s+([\\d.]+)\\)");
     private static final String DEFAULT_THEME = loadDefault();
 
+    private static final Pattern STYLESHEET = Pattern.compile("(?i).*\\.(css|scss|sass|less)$");
+
     private final Map<String, String> vars = new HashMap<>();
+    /** 저장소 CSS에 적힌 사용자 정의 속성 — CSS 선언의 var()를 풀 때만 쓴다(Tailwind 기본 테마는 넣지 않는다) */
+    private final Map<String, String> projectVars = new HashMap<>();
 
     /** 기본 테마 위에 저장소 CSS(여러 개면 순서대로 덮어씀)를 얹는다 */
     TailwindValues(List<String> projectCss) {
-        read(DEFAULT_THEME);
-        projectCss.forEach(this::read);
+        this(projectCss, projectCss);
     }
 
-    private void read(String css) {
+    /** themeCss: Tailwind `@theme`이 있는 CSS, allCss: var()를 풀 저장소 CSS 전체(2026-11-11) */
+    TailwindValues(List<String> themeCss, List<String> allCss) {
+        read(DEFAULT_THEME, vars);
+        themeCss.forEach(css -> read(css, vars));
+        allCss.forEach(css -> read(css, projectVars));
+    }
+
+    private static void read(String css, Map<String, String> into) {
         Matcher m = VAR.matcher(css);
         while (m.find()) {
-            vars.put(m.group(1), m.group(2).strip());
+            into.put(m.group(1), m.group(2).strip());
         }
+    }
+
+    /**
+     * LLM이 고른 토큰의 값(2026-11-11) — CSS 선언(`border-radius: 8px`, `borderRadius: 8`)이면 CssValues로, 아니면 Tailwind 클래스로 읽는다.
+     * 문구는 토큰 그대로. file·line은 단위 없는 숫자를 px로 읽을지(JS 객체 값) 가르는 데만 쓴다
+     */
+    Object value(Fact fact, String token, String file, String line) {
+        if (fact == Fact.TEXT) {
+            return token;
+        }
+        Optional<CssValues.Declaration> d = CssValues.parse(token);
+        if (d.isPresent()) {
+            return CssValues.resolve(fact, d.get(), projectVars, jsValue(file, line, token));
+        }
+        return resolve(fact, token);
+    }
+
+    /** 스타일시트 파일이 아니고, 줄에서 선언 뒤가 `;`로 끝나지 않으면(styled-components 템플릿이 아니면) JS 객체 값이다 */
+    static boolean jsValue(String file, String line, String token) {
+        if (file != null && STYLESHEET.matcher(file).matches()) {
+            return false;
+        }
+        int at = line == null ? -1 : line.indexOf(token);
+        return at < 0 || !line.substring(at + token.length()).stripLeading().startsWith(";");
     }
 
     /** token(클래스 하나 또는 공백으로 나뉜 여러 개) → 값. 형은 FigmaFacts.Element.values와 같다 */

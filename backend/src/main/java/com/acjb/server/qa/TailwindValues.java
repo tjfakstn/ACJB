@@ -31,6 +31,9 @@ final class TailwindValues {
     /** 저장소 CSS에 적힌 사용자 정의 속성 — CSS 선언의 var()를 풀 때만 쓴다(Tailwind 기본 테마는 넣지 않는다) */
     private final Map<String, String> projectVars = new HashMap<>();
 
+    /** 저장소 Dart 파일의 상수(`AppColors.primary` → `Color(0xFF...)`) — Flutter 코드의 값을 풀 때만 쓴다(2026-11-11) */
+    private Map<String, String> dartConstants = Map.of();
+
     /** 기본 테마 위에 저장소 CSS(여러 개면 순서대로 덮어씀)를 얹는다 */
     TailwindValues(List<String> projectCss) {
         this(projectCss, projectCss);
@@ -41,6 +44,11 @@ final class TailwindValues {
         read(DEFAULT_THEME, vars);
         themeCss.forEach(css -> read(css, vars));
         allCss.forEach(css -> read(css, projectVars));
+    }
+
+    TailwindValues withDartConstants(Map<String, String> constants) {
+        this.dartConstants = Map.copyOf(constants);
+        return this;
     }
 
     private static void read(String css, Map<String, String> into) {
@@ -57,6 +65,9 @@ final class TailwindValues {
     Object value(Fact fact, String token, String file, String line) {
         if (fact == Fact.TEXT) {
             return token;
+        }
+        if (file != null && file.toLowerCase(Locale.ROOT).endsWith(".dart")) {
+            return DartValues.value(fact, token, dartConstants); // Flutter — 위젯 인자(2026-11-11)
         }
         Optional<CssValues.Declaration> d = CssValues.parse(token);
         if (d.isPresent()) {

@@ -98,7 +98,10 @@ public class ManualQaService {
             if (req.anchor() != null || req.viewport() != null) {
                 throw ApiException.badRequest("위치 없이 등록(location_basis none)할 때는 anchor·viewport를 보내지 않습니다.");
             }
-            path = req.pagePath() == null || req.pagePath().isBlank() ? null : LiveQaValidation.pagePath(req.pagePath());
+            // 앱 화면(aos·ios)은 URL 경로가 없다 — 사람이 알려 준 화면 이름("홈 화면")을 그대로 받는다(2026-11-11)
+            boolean appScreen = req.platform() != null && List.of("aos", "ios").contains(req.platform().trim().toLowerCase(java.util.Locale.ROOT));
+            path = req.pagePath() == null || req.pagePath().isBlank() ? null
+                : appScreen && !req.pagePath().trim().startsWith("/") ? LiveQaValidation.appScreen(req.pagePath()) : LiveQaValidation.pagePath(req.pagePath());
             userSteps = LiveQaValidation.reproSteps(req.reproSteps());
         } else {
             if (req.reproSteps() != null && !req.reproSteps().isEmpty()) {
@@ -137,6 +140,15 @@ public class ManualQaService {
         }
         Severity severity = req.severity() == null || req.severity().isBlank() ? null
             : LiveQaValidation.parseEnum(Severity.class, req.severity(), "severity");
+        // 발생 환경(앱 지원, 2026-11-11) — 보내지 않으면 예전과 같이 웹·공통. 범위가 한 플랫폼이면 발생 환경도 그 플랫폼이어야 한다
+        EnvPlatform platform = req.platform() == null || req.platform().isBlank() ? EnvPlatform.WEB
+            : LiveQaValidation.parseEnum(EnvPlatform.class, req.platform(), "platform");
+        PlatformScope platformScope = req.platformScope() == null || req.platformScope().isBlank() ? PlatformScope.COMMON
+            : LiveQaValidation.parseEnum(PlatformScope.class, req.platformScope(), "platform_scope");
+        if (platformScope != PlatformScope.COMMON && !platformScope.name().equals(platform.name())) {
+            throw ApiException.badRequest("platform_scope가 " + platformScope.name().toLowerCase(java.util.Locale.ROOT)
+                + "이면 platform도 같은 플랫폼이어야 합니다.");
+        }
         String expected = LiveQaValidation.optional(req.expectedResult(), "expected_result", RESULT_MAX);
         String actual = LiveQaValidation.optional(req.actualResult(), "actual_result", RESULT_MAX);
         // 기준 프레임(AC33)은 사람이 확인해 보낸 값만 — 없으면 경로로 골라 넣지 않는다. 보냈다면 근거 있는(최근 분석이 짝지은) 프레임이어야 한다
@@ -207,8 +219,8 @@ public class ManualQaService {
             }
 
             String figmaLink = finalFrame == null ? null : figmaFrameUrl(project.getFigmaFileKey(), finalFrame.frameId());
-            QAIssue issue = issues.save(new QAIssue(project, description, screenLocation, steps, PlatformScope.COMMON,
-                new Environment(EnvPlatform.WEB, null, null, null), List.of(), figmaLink, null, null, reporter));
+            QAIssue issue = issues.save(new QAIssue(project, description, screenLocation, steps, platformScope,
+                new Environment(platform, null, null, null), List.of(), figmaLink, null, null, reporter));
             StatusHistory first = histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
             int pinNumber = pins.maxPinNumber(projectId) + 1;
             ManualQaPin pin = pins.save(new ManualQaPin(project, issue, pinNumber, requestId, title, finalPath, finalPageUrl, finalX, finalY,

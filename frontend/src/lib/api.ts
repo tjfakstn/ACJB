@@ -744,3 +744,51 @@ export function getRecheckSuggestions(projectId: string, issueId: string): Promi
 export function figmaFrameUrl(fileKey: string, frameId: string): string {
   return `https://www.figma.com/design/${fileKey}/?node-id=${encodeURIComponent(frameId.replace(':', '-'))}`
 }
+
+// ---------- 알림(AC14, 시안 NTF — 2026-11-11) ----------
+
+export type NotificationEvent = 'issue_created' | 'fixed' | 'recheck_failed' | 'resolved' | 'run_failed'
+
+/** 알림 패널이 이슈를 따로 조회하지 않고 문구를 만들 수 있게 서버가 함께 주는 요약 */
+export interface NotificationIssue {
+  id: string
+  status: IssueStatus
+  source: 'manual' | 'first_qa'
+  assigned_team: MemberRole | null
+  description: string
+  screen_location: string
+  mismatch_property: StyleProperty | null
+  manual_title: string | null
+  pin_number: number | null
+}
+
+export interface AppNotification {
+  id: string
+  project_id: string
+  qa_issue_id: string | null
+  event: NotificationEvent
+  /** issue_created일 때만 — 팀과 함께 등록(registered)인지 나중에 팀 지정(team_assigned)인지 */
+  cause: 'registered' | 'team_assigned' | null
+  channel: string
+  to_member_id: string
+  actor_id: string | null
+  actor_name: string | null
+  created_at: string
+  read_at: string | null
+  issue: NotificationIssue | null
+  run: { id: string; kind: 'analysis' | 'first_qa' | 're_qa'; error_message: string | null } | null
+}
+
+export interface NotificationInbox { items: AppNotification[]; total: number; unread_count: number }
+
+export function listNotifications(projectId: string): Promise<NotificationInbox> {
+  return request<NotificationInbox>('GET', `/api/v1/projects/${projectId}/notifications`)
+}
+
+export function markNotificationRead(projectId: string, notificationId: string): Promise<AppNotification> {
+  return request<AppNotification>('POST', `/api/v1/projects/${projectId}/notifications/${notificationId}/read`)
+}
+
+export function markAllNotificationsRead(projectId: string): Promise<{ updated: number }> {
+  return request<{ updated: number }>('POST', `/api/v1/projects/${projectId}/notifications/read-all`)
+}

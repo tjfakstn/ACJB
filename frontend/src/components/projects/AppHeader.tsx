@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { fetchMe, logoutUrl, type Me } from '../../lib/api'
 import { Icon } from '../common/Icon'
+import { NotificationBell } from '../notifications/NotificationBell'
 
 // 로그인 이후 공통 상단 헤더 (로고 + 알림/계정).
-// 계정 버튼은 이름·이메일과 로그아웃만 보여준다 — 알림 목록(AC14)은 시안이 정해지면 붙인다.
+// 알림(AC14, 시안 NTF)은 프로젝트 안에서만 — 알림이 프로젝트별이라 프로젝트 목록 화면에는 종 아이콘을 두지 않는다.
+// 계정 버튼은 이름·이메일과 로그아웃만 보여준다.
 export function AppHeader() {
+  const { projectId } = useParams()
   const [me, setMe] = useState<Me | null>(null)
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -29,13 +32,7 @@ export function AppHeader() {
         QAting
       </Link>
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          aria-label="알림"
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-900 transition-colors hover:bg-qa-surface"
-        >
-          <Icon name="bell" className="h-6 w-6" />
-        </button>
+        {projectId && <NotificationBell projectId={projectId} />}
         <div className="relative" ref={menuRef}>
           <button
             type="button"

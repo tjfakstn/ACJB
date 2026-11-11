@@ -194,8 +194,12 @@ public class FigmaRestClient implements FigmaClient {
             if (code == 429 && header != null && header.trim().matches("\\d{1,6}")) {
                 retryAfter = Long.parseLong(header.trim());
             }
-            throw new FigmaApiException(tokenProblem ? "서버 Figma 토큰이 만료됐거나 올바르지 않습니다." : describe(e.getStatusCode()),
+            FigmaApiException ex = new FigmaApiException(tokenProblem ? "서버 Figma 토큰이 만료됐거나 올바르지 않습니다." : describe(e.getStatusCode()),
                 code, tokenProblem, retryAfter, e);
+            if (code == 403 && errorBody != null && errorBody.toLowerCase(java.util.Locale.ROOT).contains("not exportable")) {
+                ex.markNotExportable();
+            }
+            throw ex;
         } catch (ResourceAccessException e) {
             throw new FigmaApiException("Figma에 연결하지 못했습니다(시간 초과 또는 네트워크 오류).", e);
         }

@@ -74,7 +74,7 @@ public class ReQaJob {
         this.clock = clock;
     }
 
-    @Async
+    @Async(com.acjb.server.config.AsyncConfig.HEAVY)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onRequested(ReQaRequested event) {
         run(event.runId());

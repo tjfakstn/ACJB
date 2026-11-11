@@ -16,4 +16,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Project p where p.id = :id")
     Optional<Project> findByIdForUpdate(Long id);
+
+    /** 사용자가 소유한 프로젝트 수 — 사용자당 프로젝트 상한(2026-11-11) */
+    long countByOwnerId(Long ownerId);
 }

@@ -43,6 +43,10 @@ public class QaIssueController {
         this.currentMember = currentMember;
     }
 
+    /** 사용량 한도(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.service.UsageLimits limits;
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> create(@PathVariable Long projectId, @RequestBody CreateQaIssueRequest request,
@@ -73,6 +77,7 @@ public class QaIssueController {
     /** 자유서술 텍스트 → IssueReportContext 초안(AC8). 이슈를 만들지 않는다(N9) */
     @PostMapping("/parse")
     public Map<String, Object> parse(@PathVariable Long projectId, @RequestBody ParseRequest request) {
+        limits.hit(com.acjb.server.service.UsageLimits.Counter.PARSE, projectId);
         return ApiResponses.ok(parseService.parse(request == null ? null : request.text()));
     }
 }

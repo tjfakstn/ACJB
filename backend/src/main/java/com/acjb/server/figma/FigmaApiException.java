@@ -12,6 +12,11 @@ public class FigmaApiException extends RuntimeException {
     private final boolean tokenProblem;
     /** 429일 때 Figma가 Retry-After로 알려 준 대기 초. 모르면 -1 */
     private final long retryAfterSeconds;
+    /**
+     * 파일 소유자가 "뷰어의 복사·공유·내보내기"를 꺼 둔 파일. 링크로 누구나 볼 수 있어도 Figma API는 403 "File not exportable"로 내용을 주지 않는다
+     * — 보기 권한 문제로 안내하면 사용자가 고칠 곳을 못 찾는다(2026-11-11)
+     */
+    private boolean notExportable;
 
     public FigmaApiException(String message) {
         this(message, 0, null);
@@ -34,6 +39,15 @@ public class FigmaApiException extends RuntimeException {
         this.status = status;
         this.tokenProblem = tokenProblem;
         this.retryAfterSeconds = retryAfterSeconds;
+    }
+
+    public FigmaApiException markNotExportable() {
+        this.notExportable = true;
+        return this;
+    }
+
+    public boolean notExportable() {
+        return notExportable;
     }
 
     public long retryAfterSeconds() {

@@ -47,6 +47,10 @@ public class ConnectionService {
     private static final Pattern NODE_ID_PARAM = Pattern.compile("(?:^|&)node-id=([0-9]+)(?:-|:|%3A|%3a)([0-9]+)(?:&|$)");
     private static final String PAGE_LINK_GUIDE = "최종 시안만 담은 페이지의 [공유하기] 링크나, 섹션을 우클릭해 [링크 복사]한 링크를 붙여 넣어 주세요.";
     private static final Pattern GITHUB_URL = Pattern.compile("^(?:https?://)?(?:www\\.)?github\\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\\.git)?/?(?:[?#].*)?$");
+    /** 주소창에서 복사한 브랜치·파일 주소(`/tree/…`, `/blob/…`) — 저장소 주소만 넣으라고 따로 안내한다. 브랜치는 연결 뒤 고른다(2026-11-11) */
+    private static final Pattern GITHUB_SUBPATH_URL = Pattern.compile("^(?:https?://)?(?:www\\.)?github\\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/(?:tree|blob)/.*$");
+    private static final String NOT_EXPORTABLE = "파일 소유자가 이 Figma 파일의 내보내기를 막아 두어서 QAting이 시안을 읽을 수 없어요. "
+        + "파일 소유자가 [공유] 창의 설정(톱니바퀴)에서 뷰어의 복사·공유·내보내기 허용을 켠 뒤 다시 확인해 주세요.";
     private static final int URL_MAX = 500;
     private static final HttpStatus UNPROCESSABLE = HttpStatus.valueOf(422);
 
@@ -88,6 +92,9 @@ public class ConnectionService {
                 // 사용자 파일 권한이 아니라 서버 설정 문제다 — 관리자가 FIGMA_ACCESS_TOKEN을 새로 넣어야 한다
                 throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.FIGMA_UNAVAILABLE,
                     "서버의 Figma 연동 토큰이 만료됐거나 올바르지 않아요. 관리자에게 알려 주세요.");
+            }
+            if (e.notExportable()) {
+                throw new ApiException(UNPROCESSABLE, ErrorCodes.CONNECTION_FORBIDDEN, NOT_EXPORTABLE);
             }
             if (e.status() == 403) {
                 throw new ApiException(UNPROCESSABLE, ErrorCodes.CONNECTION_FORBIDDEN,
@@ -136,6 +143,9 @@ public class ConnectionService {
         Project project = ownedProject(projectId, requester);
         String url = trimmed(rawUrl);
         Matcher m = url == null ? null : GITHUB_URL.matcher(url);
+        if (url != null && GITHUB_SUBPATH_URL.matcher(url).matches()) {
+            throw ApiException.badRequest("브랜치 주소가 아니라 저장소 주소만 넣어 주세요 (예: https://github.com/조직/저장소). 브랜치는 연결한 뒤 고를 수 있어요.");
+        }
         if (m == null || !m.matches()) {
             throw ApiException.badRequest("올바른 GitHub 저장소 링크가 아니에요 (예: https://github.com/조직/저장소)");
         }

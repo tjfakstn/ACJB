@@ -46,7 +46,7 @@ export interface ConnectionStatus {
 }
 
 function figmaDetail(c: FigmaConnection): string {
-  return `${c.file_name} › ${c.page_name}${c.scope === 'section' ? ' (섹션)' : ''}`
+  return `${c.file_name} › ${c.page_name}${c.scope === 'section' ? ' (섹션)' : ''}${c.uses_own_token ? ` · 본인 토큰 …${c.token_hint ?? ''}` : ''}`
 }
 
 /**
@@ -76,11 +76,11 @@ export function ConnectionCards({ projectId, initialFigma = null, initialGithub 
   const busy = github.state.kind === 'checking' || figma.state.kind === 'checking' || switching
   useEffect(() => { onStatus?.({ bothConnected, busy }) }, [bothConnected, busy, onStatus])
   /** force=[다시 시도]·[다시 확인] — 같은 링크도 다시 확인한다. 칸을 벗어날 때는 바뀐 링크만 확인한다 */
-  const check = async (service: Service, force = false) => {
+  const check = async (service: Service, force = false, token?: string) => {
     const cur = service === 'github' ? github : figma
     const set = service === 'github' ? setGithub : setFigma
     const url = cur.url.trim()
-    if (!url || cur.state.kind === 'checking' || (!force && url === cur.checked)) return
+    if (!url || cur.state.kind === 'checking' || (!force && !token && url === cur.checked)) return
     if (!(service === 'github' ? GITHUB_PATTERN : FIGMA_PATTERN).test(url)) {
       const message = service === 'github' && GITHUB_SUBPATH.test(url) ? GITHUB_SUBPATH_MESSAGE : undefined
       set({ ...cur, checked: url, state: { kind: 'format', message } })
@@ -90,7 +90,7 @@ export function ConnectionCards({ projectId, initialFigma = null, initialGithub 
     try {
       const detail = service === 'github'
         ? await connectGithub(projectId, url).then((c) => { setBranches(c.branches); setBranchError(null); return c.branch })
-        : await connectFigma(projectId, url).then(figmaDetail)
+        : await connectFigma(projectId, url, token).then(figmaDetail)
       set({ url, checked: url, state: { kind: 'connected', detail } })
       onConnected?.()
     } catch (e) {
@@ -194,10 +194,38 @@ export function ConnectionCards({ projectId, initialFigma = null, initialGithub 
           value={figma.url} state={figma.state}
           onChange={(url) => setFigma({ ...figma, url, state: figma.state.kind === 'connected' ? figma.state : { kind: 'idle' } })}
           onCheck={(force) => void check('figma', force)} onReset={() => reset('figma')}
+          extra={figma.state.kind === 'forbidden' && !locked && <OwnTokenForm onSubmit={(token) => void check('figma', true, token)} />}
         />
       </div>
 
     </>
+  )
+}
+
+/**
+ * 소유자 본인 Figma 토큰(2026-11-11) — QAting 서버 계정이 이 파일을 읽지 못할 때만(권한 없음·내보내기 막힘·Figma 한도) 보인다.
+ * 토큰은 서버가 암호화해 저장하고 다시 보여 주지 않는다. 읽기 권한만 있는 토큰을 만들게 안내한다
+ */
+function OwnTokenForm({ onSubmit }: { onSubmit: (token: string) => void }) {
+  const [token, setToken] = useState('')
+  return (
+    <form className="flex flex-col gap-2 rounded-lg bg-qa-surface p-3" onSubmit={(e) => { e.preventDefault(); if (token.trim()) onSubmit(token.trim()) }}>
+      <div className="text-xs font-medium text-black">본인 Figma 토큰으로 연결</div>
+      <ol className="list-decimal space-y-0.5 pl-4 text-xs leading-4 text-qa-text-sub">
+        <li>Figma 왼쪽 위 계정 메뉴 → <b>Settings</b> → <b>Security</b> → <b>Personal access tokens</b>에서 <b>Generate new token</b></li>
+        <li>권한은 <b>File content: Read only</b> 하나만 고르세요</li>
+        <li>이 파일을 볼 수 있는 계정의 토큰이어야 해요</li>
+      </ol>
+      <div className="flex gap-2">
+        <label htmlFor="connect-figma-token" className="sr-only">Figma 토큰</label>
+        <input id="connect-figma-token" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)}
+          placeholder="figd_…"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-qa-sub bg-white px-3 text-xs outline-none focus:border-qa-primary" />
+        <button type="submit" disabled={!token.trim()}
+          className="h-9 flex-none rounded-lg bg-qa-primary px-3 text-xs font-medium text-white hover:bg-qa-primary-hover disabled:opacity-40">토큰으로 연결</button>
+      </div>
+      <p className="text-xs leading-4 text-qa-text-sub">토큰은 암호화해 저장하고 다시 보여 주지 않아요. 이 프로젝트의 Figma 읽기에만 써요.</p>
+    </form>
   )
 }
 

@@ -114,7 +114,9 @@ export function InviteStep(props: InviteStepProps) {
         ok.push(email)
         onInvited?.()
       } catch (e) {
-        bad.push({ email, message: e instanceof ApiError && e.code === 'ALREADY_MEMBER' ? '이미 이 프로젝트의 멤버예요' : '일시적인 오류로 초대 메일을 보내지 못했어요' })
+        // 하루 초대 수 한도(429, 2026-11-11)는 서버 문구를 그대로 보여 준다
+        bad.push({ email, message: e instanceof ApiError && e.code === 'ALREADY_MEMBER' ? '이미 이 프로젝트의 멤버예요'
+          : e instanceof ApiError && e.code === 'RATE_LIMITED' ? e.message : '일시적인 오류로 초대 메일을 보내지 못했어요' })
       }
     }
     const allSent = [...sent, ...ok]

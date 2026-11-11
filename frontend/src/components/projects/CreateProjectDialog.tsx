@@ -45,6 +45,8 @@ function checkName(name: string) {
 export function CreateProjectDialog({ onClose, onCreated, onManageMembers, onStart }: CreateProjectDialogProps) {
   const [limitMessage, setLimitMessage] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('form')
+  /** 비교 분석이 Figma 한도로 실패해 [Figma 토큰 넣기]로 연결 단계에 돌아왔는지 */
+  const [openToken, setOpenToken] = useState(false)
   // 초대 완료 화면(INV-05)은 입력·확인(760)보다 좁은 600px 창이다
   const [inviteSent, setInviteSent] = useState(false)
   const [name, setName] = useState('')
@@ -90,12 +92,12 @@ export function CreateProjectDialog({ onClose, onCreated, onManageMembers, onSta
         {/* 비교 분석에서 [연결 정보 확인]으로 돌아왔을 때 입력한 링크가 남도록 연결 단계도 숨기기만 한다 */}
         {(phase === 'connect' || phase === 'analysis') && (
           <div hidden={phase !== 'connect'}>
-            <ConnectStep project={created} onClose={onClose} onBack={() => setPhase('invite')} onStart={() => setPhase('analysis')} />
+            <ConnectStep project={created} onClose={onClose} onBack={() => setPhase('invite')} onStart={() => { setOpenToken(false); setPhase('analysis') }} openToken={openToken} />
           </div>
         )}
         {phase === 'analysis' && (
           <AnalysisStep projectId={created.id} projectName={created.name} inWizard onClose={onClose}
-            onCheckConnection={() => setPhase('connect')} onDone={() => onStart(created)} />
+            onCheckConnection={(needsToken) => { setOpenToken(needsToken); setPhase('connect') }} onDone={() => onStart(created)} />
         )}
       </Overlay>
     )

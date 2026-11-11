@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  listNotifications, markAllNotificationsRead, markNotificationRead, type AppNotification,
+  listNotifications, markAllNotificationsRead, markNotificationRead, notificationStreamUrl, type AppNotification,
 } from '../../lib/api'
 import { Icon } from '../common/Icon'
 import { KIND_STYLE, describe, whenText } from './notificationText'
 
 // 헤더 종 아이콘 + 알림 패널(시안 NTF-00~05, 2026-11-11).
-// 지금 프로젝트에서 내게 온 알림만 보여 준다(AC14). 실시간 푸시는 없어 30초마다, 그리고 창으로 돌아올 때 다시 읽는다.
+// 지금 프로젝트에서 내게 온 알림만 보여 준다(AC14). 새 알림은 서버가 SSE로 신호를 보내면 바로 다시 읽고(AC37),
+// 스트림이 끊겼을 때를 대비해 30초마다·창으로 돌아올 때도 다시 읽는다.
 // 알림을 누르면 읽음 처리하고 관련 화면으로 간다
 
 const POLL_MS = 30_000
@@ -49,6 +50,26 @@ export function NotificationBell({ projectId }: { projectId: string }) {
       window.removeEventListener('focus', onFocus)
     }
   }, [refresh])
+
+  // 실시간 신호(AC37) — 신호에는 알림 id만 있으니 목록을 다시 읽는다. 끊겼다 다시 붙으면 그 사이 놓친 것도 따라잡는다.
+  // 브라우저가 알아서 다시 연결하고, 로그인이 풀려 닫히면(401) 위의 30초 재조회만 남는다
+  useEffect(() => {
+    if (typeof EventSource === 'undefined') return
+    const source = new EventSource(notificationStreamUrl(projectId))
+    let opened = false
+    const onSignal = () => refresh()
+    const onOpen = () => {
+      if (opened) refresh()
+      opened = true
+    }
+    source.addEventListener('notification', onSignal)
+    source.addEventListener('open', onOpen)
+    return () => {
+      source.removeEventListener('notification', onSignal)
+      source.removeEventListener('open', onOpen)
+      source.close()
+    }
+  }, [projectId, refresh])
 
   useEffect(() => {
     if (!open) return

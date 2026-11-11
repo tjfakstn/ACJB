@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.19.0
+  version: 0.21.0
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -160,6 +160,60 @@ paths:
           $ref: '#/components/responses/ConnectionForbidden'
         '502':
           $ref: '#/components/responses/ConnectionFailed'
+
+  /projects/{projectId}/connections/figma/token:
+    put:
+      tags: [Project]
+      summary: 소유자 Figma 토큰만 넣기·바꾸기 (SPEC AC21, 2026-11-12)
+      description: >-
+        소유자만(그 외 403). 연결된 링크는 그대로 두고 토큰만 바꾼다 — 그래서 비교 분석이 성공한 뒤에도 된다.
+        Figma가 연결되지 않았으면 409 NOT_READY. 넣은 토큰으로 연결된 파일·페이지를 읽을 수 있는지 확인한 뒤에만 암호화해 저장한다
+        (형식이 아니면 400, 그 토큰으로 못 읽으면 422, 응답 지연 502 — 저장하지 않는다). 응답에는 토큰 대신 uses_own_token·token_hint만 준다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, description: 'Figma 개인 액세스 토큰(File content: Read only)' }
+      responses:
+        '200':
+          description: 토큰 저장됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FigmaConnectionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ConnectionForbidden'
+        '502':
+          $ref: '#/components/responses/ConnectionFailed'
+    delete:
+      tags: [Project]
+      summary: 소유자 Figma 토큰 빼기 (SPEC AC21, 2026-11-12)
+      description: 소유자만. 저장된 토큰을 지우고 서버 계정으로 돌아간다. 저장된 토큰이 없어도 200. Figma가 연결되지 않았으면 409
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: 토큰 지움
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FigmaConnectionResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /projects/{projectId}/connections/github:
     put:
@@ -947,6 +1001,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /projects/{projectId}/notifications/stream:
+    get:
+      tags: [Notification]
+      summary: 새 알림 신호 스트림 (SPEC AC37, 2026-11-11)
+      description: >-
+        Server-Sent Events. 이 프로젝트에서 요청자에게 Notification이 저장(커밋)될 때마다 `event: notification`,
+        `data: {"notification_id": "..."}`를 한 번 보낸다. 알림 내용은 싣지 않으므로 받으면 GET .../notifications를 다시 읽는다.
+        25초마다 주석 하트비트(`:`), 30분 뒤 서버가 연결을 닫는다(EventSource가 다시 연결). 한 사람이 한 프로젝트에 연결 5개까지 — 넘으면 가장 오래된 것을 닫는다.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: 이벤트 스트림
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: "retry: 5000\n\nevent: notification\ndata: {\"notification_id\":\"42\"}\n\n"
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

@@ -125,7 +125,7 @@ export function WorkspacePage() {
         <Overlay width={640} onClose={() => { setAnalysisOpen(false); void load() }}>
           <AnalysisStep projectId={projectId} projectName={detail.name} inWizard={false}
             onClose={() => { setAnalysisOpen(false); void load() }}
-            onCheckConnection={() => { setAnalysisOpen(false); void load() }}
+            onCheckConnection={(needsToken) => navigate(`/app/projects/${projectId}/connections${needsToken ? '?figmaToken=1' : ''}`)}
             onDone={() => { setAnalysisOpen(false); void load() }} />
         </Overlay>
       )}
@@ -256,7 +256,7 @@ function Workspace({ detail, me, members, invitations, toast, run, mapping, onIn
           <MembersCard projectId={detail.id} me={me.id ?? ''} ownerId={detail.owner_id}
             members={members} invitations={invitations} onInvite={onInvite} />
           <ConnectionsCard detail={detail} />
-          <AnalysisCard run={run} mapping={mapping} connected={bothConnected} isOwner={isOwner} onOpen={onAnalysis} />
+          <AnalysisCard projectId={detail.id} run={run} mapping={mapping} connected={bothConnected} isOwner={isOwner} onOpen={onAnalysis} />
           {mapping && mapping.run && <MappingCard projectId={detail.id} mapping={mapping} />}
         </div>
       </div>

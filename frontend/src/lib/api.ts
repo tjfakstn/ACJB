@@ -800,6 +800,11 @@ export interface AppNotification {
 
 export interface NotificationInbox { items: AppNotification[]; total: number; unread_count: number }
 
+/** 새 알림 신호 스트림(SPEC AC37, SSE) 주소 — 신호만 오고 내용은 listNotifications로 다시 읽는다 */
+export function notificationStreamUrl(projectId: string): string {
+  return `/api/v1/projects/${projectId}/notifications/stream`
+}
+
 export function listNotifications(projectId: string): Promise<NotificationInbox> {
   return request<NotificationInbox>('GET', `/api/v1/projects/${projectId}/notifications`)
 }

@@ -14,9 +14,11 @@ interface ConnectStepProps {
   onBack: () => void
   /** 둘 다 연결된 뒤 [프로젝트 시작하기] */
   onStart: () => void
+  /** 비교 분석이 Figma 한도로 실패해 [Figma 토큰 넣기]로 돌아왔으면 토큰 입력칸을 펼친다 */
+  openToken?: boolean
 }
 
-export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepProps) {
+export function ConnectStep({ project, onClose, onBack, onStart, openToken = false }: ConnectStepProps) {
   const [status, setStatus] = useState<ConnectionStatus>({ bothConnected: false, busy: false })
   const { bothConnected, busy } = status
 
@@ -33,7 +35,7 @@ export function ConnectStep({ project, onClose, onBack, onStart }: ConnectStepPr
         </div>
       </div>
 
-      <ConnectionCards projectId={project.id} onStatus={setStatus} />
+      <ConnectionCards projectId={project.id} onStatus={setStatus} openToken={openToken} />
 
       <div className="h-px bg-qa-border" />
       <div className="flex items-center justify-between gap-3">

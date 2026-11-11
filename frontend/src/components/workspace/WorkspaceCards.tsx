@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Icon } from '../common/Icon'
 import { initialOf, ROLE_TAG } from '../common/roles'
 import {
-  formatDate, formatDateTime, type Invitation, type IssueStatus, type MappingList, type MemberRole, type ProjectDetail,
+  formatDate, formatDateTime, needsFigmaToken, type Invitation, type IssueStatus, type MappingList, type MemberRole, type ProjectDetail,
   type ProjectMember, type ProjectRun,
 } from '../../lib/api'
 
@@ -347,7 +347,8 @@ const RUN_CHIP: Record<string, { label: string; dot: string; bg: string }> = {
   failed: { label: '실패', dot: 'bg-qa-warning', bg: 'bg-qa-warning/10' },
 }
 
-export function AnalysisCard({ run, mapping, connected, isOwner, onOpen }: {
+export function AnalysisCard({ projectId, run, mapping, connected, isOwner, onOpen }: {
+  projectId: string
   run: ProjectRun | null
   mapping: MappingList | null
   connected: boolean
@@ -390,7 +391,13 @@ export function AnalysisCard({ run, mapping, connected, isOwner, onOpen }: {
         ))}
       </ul>
       {status === 'failed' && run?.error_message && (
-        <p className="mt-3 rounded-lg bg-qa-warning/10 px-3 py-2 text-xs leading-4 text-black">{run.error_message}</p>
+        <p className="mt-3 rounded-lg bg-qa-warning/10 px-3 py-2 text-xs leading-4 text-black">
+          {run.error_message}
+          {/* 서버 계정이 이 Figma 파일을 읽지 못한 실패 — 다시 시도보다 본인 토큰이 먼저다(2026-11-12) */}
+          {isOwner && needsFigmaToken(run.error_message) && (
+            <Link to={`/app/projects/${projectId}/connections?figmaToken=1`} className="ml-1 font-medium text-qa-primary-hover hover:underline">Figma 토큰 넣기</Link>
+          )}
+        </p>
       )}
       {status === 'succeeded' && run?.dropped_count ? (
         <p className="mt-3 text-xs leading-4 text-qa-text-sub">근거가 없어 버린 짝 {run.dropped_count}개</p>

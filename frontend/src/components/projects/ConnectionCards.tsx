@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { ApiError, connectFigma, connectGithub, type FigmaConnection, type GithubConnection } from '../../lib/api'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { ApiError, connectFigma, connectGithub, removeFigmaToken, saveFigmaToken, type FigmaConnection, type GithubConnection } from '../../lib/api'
 import { Icon } from '../common/Icon'
 
 // Figma·GitHub 연결 카드 — 새 프로젝트 마법사 3단계(ConnectStep)와 연결 관리 화면(ConnectionsPage, 2026-11-11)이 같이 쓴다.
@@ -46,18 +46,23 @@ export interface ConnectionStatus {
 }
 
 function figmaDetail(c: FigmaConnection): string {
-  return `${c.file_name} › ${c.page_name}${c.scope === 'section' ? ' (섹션)' : ''}${c.uses_own_token ? ` · 본인 토큰 …${c.token_hint ?? ''}` : ''}`
+  return `${c.file_name} › ${c.page_name}${c.scope === 'section' ? ' (섹션)' : ''}`
 }
 
 /**
  * 배너와 GitHub·Figma 카드. initial이 있으면 이미 연결된 상태로 시작한다(연결 관리 화면).
- * locked가 있으면 그 이유를 보여 주고 바꾸지 못하게 한다(소유자가 아님, 비교 분석이 끝남 — AC21)
+ * locked가 있으면 그 이유를 보여 주고 바꾸지 못하게 한다(소유자가 아님, 비교 분석이 끝남 — AC21).
+ * 본인 Figma 토큰은 링크가 잠겨도(비교 분석이 끝나도) 소유자면 넣고·바꾸고·뺄 수 있다(2026-11-12)
  */
-export function ConnectionCards({ projectId, initialFigma = null, initialGithub = null, locked = null, onStatus, onConnected }: {
+export function ConnectionCards({ projectId, initialFigma = null, initialGithub = null, locked = null, isOwner = true, openToken = false, onStatus, onConnected }: {
   projectId: string
   initialFigma?: FigmaConnection | null
   initialGithub?: GithubConnection | null
   locked?: string | null
+  /** 본인 Figma 토큰 칸은 소유자에게만 */
+  isOwner?: boolean
+  /** Figma 한도로 실패해 [Figma 토큰 넣기]로 들어왔으면 토큰 입력칸을 펼쳐 둔다 */
+  openToken?: boolean
   onStatus?: (s: ConnectionStatus) => void
   /** 연결·브랜치 변경이 저장될 때마다 — 화면이 프로젝트 정보를 다시 읽는다 */
   onConnected?: () => void
@@ -71,6 +76,10 @@ export function ConnectionCards({ projectId, initialFigma = null, initialGithub 
   const [figma, setFigma] = useState(() => initialFigma
     ? { url: initialFigma.url, checked: initialFigma.url, state: { kind: 'connected', detail: figmaDetail(initialFigma) } as State }
     : { url: '', checked: '', state: { kind: 'idle' } as State })
+
+  /** 본인 Figma 토큰을 쓰는지·끝 4자리 — 토큰 값은 서버가 돌려주지 않는다 */
+  const [ownToken, setOwnToken] = useState<{ uses: boolean; hint: string | null }>(
+    { uses: !!initialFigma?.uses_own_token, hint: initialFigma?.token_hint ?? null })
 
   const bothConnected = github.state.kind === 'connected' && figma.state.kind === 'connected'
   const busy = github.state.kind === 'checking' || figma.state.kind === 'checking' || switching
@@ -90,7 +99,7 @@ export function ConnectionCards({ projectId, initialFigma = null, initialGithub 
     try {
       const detail = service === 'github'
         ? await connectGithub(projectId, url).then((c) => { setBranches(c.branches); setBranchError(null); return c.branch })
-        : await connectFigma(projectId, url, token).then(figmaDetail)
+        : await connectFigma(projectId, url, token).then((c) => { setOwnToken({ uses: c.uses_own_token, hint: c.token_hint }); return figmaDetail(c) })
       set({ url, checked: url, state: { kind: 'connected', detail } })
       onConnected?.()
     } catch (e) {
@@ -194,7 +203,11 @@ export function ConnectionCards({ projectId, initialFigma = null, initialGithub 
           value={figma.url} state={figma.state}
           onChange={(url) => setFigma({ ...figma, url, state: figma.state.kind === 'connected' ? figma.state : { kind: 'idle' } })}
           onCheck={(force) => void check('figma', force)} onReset={() => reset('figma')}
-          extra={figma.state.kind === 'forbidden' && !locked && <OwnTokenForm onSubmit={(token) => void check('figma', true, token)} />}
+          extra={figma.state.kind === 'forbidden' && !locked ? <OwnTokenForm onSubmit={(token) => void check('figma', true, token)} />
+            : figma.state.kind === 'connected' && isOwner ? (
+              <OwnTokenPanel projectId={projectId} ownToken={ownToken} openToken={openToken}
+                onChange={(c) => { setOwnToken({ uses: c.uses_own_token, hint: c.token_hint }); onConnected?.() }} />
+            ) : null}
         />
       </div>
 
@@ -206,26 +219,107 @@ export function ConnectionCards({ projectId, initialFigma = null, initialGithub 
  * 소유자 본인 Figma 토큰(2026-11-11) — QAting 서버 계정이 이 파일을 읽지 못할 때만(권한 없음·내보내기 막힘·Figma 한도) 보인다.
  * 토큰은 서버가 암호화해 저장하고 다시 보여 주지 않는다. 읽기 권한만 있는 토큰을 만들게 안내한다
  */
-function OwnTokenForm({ onSubmit }: { onSubmit: (token: string) => void }) {
+function OwnTokenForm({ onSubmit, title = '본인 Figma 토큰으로 연결', submitLabel = '토큰으로 연결', busy = false, error = null, onCancel }: {
+  onSubmit: (token: string) => void
+  title?: string
+  submitLabel?: string
+  busy?: boolean
+  error?: string | null
+  onCancel?: () => void
+}) {
   const [token, setToken] = useState('')
   return (
-    <form className="flex flex-col gap-2 rounded-lg bg-qa-surface p-3" onSubmit={(e) => { e.preventDefault(); if (token.trim()) onSubmit(token.trim()) }}>
-      <div className="text-xs font-medium text-black">본인 Figma 토큰으로 연결</div>
+    <form className="flex flex-col gap-2 rounded-lg bg-qa-surface p-3" onSubmit={(e) => { e.preventDefault(); if (token.trim() && !busy) onSubmit(token.trim()) }}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-medium text-black">{title}</div>
+        {onCancel && <button type="button" onClick={onCancel} disabled={busy} className="text-xs text-qa-text-sub hover:underline">닫기</button>}
+      </div>
       <ol className="list-decimal space-y-0.5 pl-4 text-xs leading-4 text-qa-text-sub">
         <li>Figma 왼쪽 위 계정 메뉴 → <b>Settings</b> → <b>Security</b> → <b>Personal access tokens</b>에서 <b>Generate new token</b></li>
         <li>권한은 <b>File content: Read only</b> 하나만 고르세요</li>
         <li>이 파일을 볼 수 있는 계정의 토큰이어야 해요</li>
       </ol>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <label htmlFor="connect-figma-token" className="sr-only">Figma 토큰</label>
         <input id="connect-figma-token" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)}
           placeholder="figd_…"
-          className="h-9 min-w-0 flex-1 rounded-lg border border-qa-sub bg-white px-3 text-xs outline-none focus:border-qa-primary" />
-        <button type="submit" disabled={!token.trim()}
-          className="h-9 flex-none rounded-lg bg-qa-primary px-3 text-xs font-medium text-white hover:bg-qa-primary-hover disabled:opacity-40">토큰으로 연결</button>
+          className="h-9 min-w-[8rem] flex-1 rounded-lg border border-qa-sub bg-white px-3 text-xs outline-none focus:border-qa-primary" />
+        <button type="submit" disabled={!token.trim() || busy} aria-busy={busy}
+          className="h-9 flex-none rounded-lg bg-qa-primary px-3 text-xs font-medium text-white hover:bg-qa-primary-hover disabled:opacity-40">{busy ? '확인 중…' : submitLabel}</button>
       </div>
+      {error && <p role="alert" className="text-xs text-qa-warning">{error}</p>}
       <p className="text-xs leading-4 text-qa-text-sub">토큰은 암호화해 저장하고 다시 보여 주지 않아요. 이 프로젝트의 Figma 읽기에만 써요.</p>
     </form>
+  )
+}
+
+/**
+ * 연결된 Figma 카드의 본인 토큰 칸(2026-11-12) — 연결 확인은 QAting 서버 계정으로 통과해도 비교 분석·첫 QA처럼 Figma를 많이 읽을 때
+ * 서버 계정 한도에 걸릴 수 있다. 그때(또는 미리) 소유자가 본인 토큰을 넣으면 이 프로젝트의 Figma 읽기를 그 토큰으로 한다.
+ * 링크는 바뀌지 않으므로 비교 분석이 끝난 뒤에도 된다
+ */
+function OwnTokenPanel({ projectId, ownToken, openToken, onChange }: {
+  projectId: string
+  ownToken: { uses: boolean; hint: string | null }
+  openToken: boolean
+  onChange: (c: FigmaConnection) => void
+}) {
+  const [open, setOpen] = useState(openToken && !ownToken.uses)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  // 마법사는 연결 단계를 숨겨 두기만 하므로, 실패 창에서 [Figma 토큰 넣기]로 다시 오면 그때 펼친다
+  useEffect(() => {
+    if (!openToken) return
+    setOpen(true)
+    ref.current?.scrollIntoView({ block: 'nearest' })
+  }, [openToken])
+
+  const save = async (token: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      onChange(await saveFigmaToken(projectId, token))
+      setOpen(false)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '토큰을 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const remove = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      onChange(await removeFigmaToken(projectId))
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '토큰을 빼지 못했어요.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div ref={ref} className="flex flex-col gap-2">
+      {open ? (
+        <OwnTokenForm title={ownToken.uses ? '본인 Figma 토큰 바꾸기' : '본인 Figma 토큰으로 읽기'} submitLabel="토큰 저장"
+          busy={busy} error={error} onSubmit={(t) => void save(t)} onCancel={() => { setOpen(false); setError(null) }} />
+      ) : ownToken.uses ? (
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg bg-qa-surface px-3 py-2 text-xs">
+          <span className="flex min-w-[10rem] flex-1 items-center gap-1.5 text-black"><Icon name="lock" className="h-3.5 w-3.5 flex-none text-qa-text-sub" />본인 Figma 토큰 …{ownToken.hint}으로 읽어요</span>
+          <span className="flex flex-none gap-3">
+            <button type="button" disabled={busy} onClick={() => setOpen(true)} className="font-medium text-qa-primary-hover hover:underline disabled:opacity-40">바꾸기</button>
+            <button type="button" disabled={busy} onClick={() => void remove()} className="font-medium text-qa-text-sub hover:underline disabled:opacity-40">{busy ? '빼는 중…' : '빼기'}</button>
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
+          <span className="min-w-[12rem] flex-1 text-qa-text-sub">QAting 서버 계정으로 읽어요. Figma 한도에 걸리면 본인 토큰으로 읽을 수 있어요.</span>
+          <button type="button" onClick={() => setOpen(true)} className="flex-none font-medium text-qa-primary-hover hover:underline">본인 토큰 넣기</button>
+        </div>
+      )}
+      {!open && error && <p role="alert" className="text-xs text-qa-warning">{error}</p>}
+    </div>
   )
 }
 

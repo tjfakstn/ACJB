@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ConnectionCards, type ConnectionStatus } from '../components/projects/ConnectionCards'
 import { ErrorCard, Loading, PageTitle, QaShell, useProject } from '../components/qa/QaParts'
 
@@ -8,6 +8,9 @@ import { ErrorCard, Loading, PageTitle, QaShell, useProject } from '../component
 export function ConnectionsPage() {
   const { projectId = '' } = useParams()
   const { me, detail, error, reload } = useProject(projectId)
+  /** 비교 분석 실패 창의 [Figma 토큰 넣기]로 왔으면 본인 토큰 입력칸을 펼쳐 둔다(2026-11-12) */
+  const [params] = useSearchParams()
+  const openToken = params.get('figmaToken') === '1'
   /** 카드가 아는 연결 상태 — 연결할 때마다 다시 읽는 프로젝트 정보는 응답 순서가 뒤바뀔 수 있어 안내 문구는 이것을 따른다 */
   const [status, setStatus] = useState<ConnectionStatus | null>(null)
   if (!me) return null
@@ -30,7 +33,7 @@ export function ConnectionsPage() {
         <section className="mt-6 flex max-w-[960px] flex-col gap-5 rounded-2xl border border-qa-border bg-white p-6">
           {/* 소유자·분석 상태가 정해진 뒤 연결 정보로 카드를 처음부터 그린다 */}
           <ConnectionCards key={`${detail.id}-${locked ?? ''}`} projectId={projectId} initialFigma={detail.figma} initialGithub={detail.github}
-            locked={locked} onStatus={setStatus} onConnected={() => void reload()} />
+            locked={locked} isOwner={isOwner} openToken={openToken} onStatus={setStatus} onConnected={() => void reload()} />
           <div className="h-px bg-qa-border" />
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-qa-text-sub">
             <span>{ready ? '둘 다 연결됐어요. 프로젝트 홈에서 비교 분석을 시작할 수 있어요.' : 'QA를 실행하려면 Figma와 GitHub를 모두 연결해야 해요.'}</span>

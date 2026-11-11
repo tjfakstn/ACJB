@@ -164,6 +164,24 @@ export function connectFigma(projectId: string, url: string, token?: string): Pr
   return request<FigmaConnection>('PUT', `/api/v1/projects/${projectId}/connections/figma`, token ? { url, token } : { url })
 }
 
+/**
+ * 소유자만. 연결된 링크는 그대로 두고 본인 Figma 토큰만 넣거나 바꾼다(SPEC AC21, 2026-11-12) — 비교 분석이 끝난 뒤에도 된다.
+ * 그 토큰으로 연결된 파일을 읽을 수 있어야 저장된다(400 형식, 422 못 읽음, 409 Figma 미연결)
+ */
+export function saveFigmaToken(projectId: string, token: string): Promise<FigmaConnection> {
+  return request<FigmaConnection>('PUT', `/api/v1/projects/${projectId}/connections/figma/token`, { token })
+}
+
+/** 소유자만. 본인 Figma 토큰을 지우고 QAting 서버 계정으로 돌아간다 */
+export function removeFigmaToken(projectId: string): Promise<FigmaConnection> {
+  return request<FigmaConnection>('DELETE', `/api/v1/projects/${projectId}/connections/figma/token`)
+}
+
+/** 실행 실패 문구가 "본인 Figma 토큰을 넣으라"는 안내인지 — 서버 계정이 그 파일을 읽지 못한 경우(FigmaErrors) */
+export function needsFigmaToken(message: string | null | undefined): boolean {
+  return !!message && message.includes('본인 Figma 토큰')
+}
+
 /** 소유자만. 공개 저장소만 — GitHub 404(비공개·없는 저장소)는 422(SPEC AC21) */
 export function connectGithub(projectId: string, url: string, branch?: string): Promise<GithubConnectResult> {
   return request<GithubConnectResult>('PUT', `/api/v1/projects/${projectId}/connections/github`, branch ? { url, branch } : { url })

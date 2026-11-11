@@ -385,4 +385,49 @@ class AnalysisApiTest {
             .andExpect(jsonPath("$.data.unmapped_frames[0].section").value("최종 섹션"));
         assertThat(count("QAIssue")).isEqualTo(issuesBefore);
     }
+
+    @Test
+    void 며칠짜리_Figma_한도면_기다리지_않고_바로_실패하고_본인_토큰을_안내한다() throws Exception {
+        connectBoth();
+        stubSources();
+        // 우리 서버 계정이 속하지 않은 무료 플랜 파일 — Retry-After가 며칠로 온다(2026-11-11 실제 397192초)
+        when(figma.children("K", "1:1"))
+            .thenThrow(new com.acjb.server.figma.FigmaApiException("Figma 요청 한도를 넘었습니다.", 429, false, 397_192, null));
+        List<Long> waited = new java.util.ArrayList<>();
+        job.setSleeper(waited::add);
+        try {
+            start(owner).andExpect(status().isAccepted());
+            Long runId = latestRunId();
+            job.run(runId);
+            ProjectRun run = reloadRun(runId);
+            assertThat(run.getStatus()).isEqualTo(RunStatus.FAILED);
+            assertThat(run.getErrorMessage()).contains("약 5일").contains("본인 Figma 토큰");
+            assertThat(waited).isEmpty();
+        } finally {
+            job.setSleeper(s -> { });
+        }
+    }
+
+    @Test
+    void 소유자_토큰을_넣은_프로젝트는_비교_분석의_Figma_호출을_그_토큰으로_한다() throws Exception {
+        connectBoth();
+        stubSources();
+        project.changeFigmaToken(cipher.encrypt("figd_owner_token_value_1234"), "1234");
+        projects.saveAndFlush(project);
+        List<Boolean> usedOwnToken = new java.util.ArrayList<>();
+        when(figma.children("K", "1:1")).thenAnswer(inv -> {
+            usedOwnToken.add(com.acjb.server.figma.FigmaTokenScope.usingUserToken());
+            return Optional.of(List.of(new FigmaNode("S1", "최종 섹션", "SECTION")));
+        });
+        when(mapper.mapFrames(anyList(), any())).thenReturn(List.of(new DesignCodeMapper.FrameMatch("F1", "src/A.tsx")));
+        when(mapper.mapNodes(any(), any())).thenReturn(List.of());
+        start(owner).andExpect(status().isAccepted());
+        Long runId = latestRunId();
+        job.run(runId);
+        assertThat(reloadRun(runId).getStatus()).isEqualTo(RunStatus.SUCCEEDED);
+        assertThat(usedOwnToken).containsExactly(true);
+        assertThat(com.acjb.server.figma.FigmaTokenScope.usingUserToken()).isFalse(); // 작업이 끝나면 되돌린다
+    }
+
+    @Autowired com.acjb.server.figma.FigmaTokenCipher cipher;
 }

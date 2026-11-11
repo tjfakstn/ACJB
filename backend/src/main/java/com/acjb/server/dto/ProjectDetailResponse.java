@@ -33,7 +33,9 @@ public record ProjectDetailResponse(
 ) {
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record FigmaConnection(String url, String fileKey, String fileName, String pageId, String pageName, String scope, Instant connectedAt) {
+    /** usesOwnToken·tokenHint: 소유자 본인 Figma 토큰으로 읽는지와 그 끝 4자리(2026-11-11) — 토큰 값은 내려주지 않는다 */
+    public record FigmaConnection(String url, String fileKey, String fileName, String pageId, String pageName, String scope, Instant connectedAt,
+                                  boolean usesOwnToken, String tokenHint) {
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

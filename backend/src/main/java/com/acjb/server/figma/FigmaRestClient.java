@@ -44,9 +44,10 @@ public class FigmaRestClient implements FigmaClient {
             .defaultHeader("X-Figma-Token", configured ? token : "").build();
     }
 
+    /** 프로젝트 소유자가 넣은 토큰으로 부르는 중이면 서버 토큰이 없어도 부를 수 있다 */
     @Override
     public boolean isConfigured() {
-        return configured;
+        return configured || FigmaTokenScope.current() != null;
     }
 
     @Override
@@ -177,14 +178,17 @@ public class FigmaRestClient implements FigmaClient {
     }
 
     private JsonNode get(String path, String fileKey, String ids) {
-        if (!configured) {
+        String userToken = FigmaTokenScope.current();
+        if (!configured && userToken == null) {
             throw new FigmaApiException("Figma 토큰(FIGMA_ACCESS_TOKEN)이 설정되지 않았습니다.");
         }
         String body;
         try {
-            body = ids == null
-                ? http.get().uri(path, fileKey).retrieve().body(String.class)
-                : http.get().uri(path, fileKey, ids).retrieve().body(String.class);
+            RestClient.RequestHeadersSpec<?> req = ids == null ? http.get().uri(path, fileKey) : http.get().uri(path, fileKey, ids);
+            if (userToken != null) {
+                req = req.header("X-Figma-Token", userToken); // 요청 헤더가 기본 헤더(서버 토큰)를 덮어쓴다
+            }
+            body = req.retrieve().body(String.class);
         } catch (RestClientResponseException e) {
             String errorBody = e.getResponseBodyAsString();
             int code = e.getStatusCode().value();
@@ -198,6 +202,9 @@ public class FigmaRestClient implements FigmaClient {
                 code, tokenProblem, retryAfter, e);
             if (code == 403 && errorBody != null && errorBody.toLowerCase(java.util.Locale.ROOT).contains("not exportable")) {
                 ex.markNotExportable();
+            }
+            if (userToken != null) {
+                ex.markUserToken();
             }
             throw ex;
         } catch (ResourceAccessException e) {

@@ -285,4 +285,62 @@ class ConnectionApiTest {
             .andExpect(jsonPath("$.error.message").value(org.hamcrest.Matchers.containsString("내보내기")));
         assertThat(reload().getFigmaFileKey()).isNull();
     }
+
+    @Autowired com.acjb.server.figma.FigmaTokenCipher cipher;
+
+    private ResultActions connectWithToken(String url, String token) throws Exception {
+        return mvc.perform(put("/api/v1/projects/" + project.getId() + "/connections/figma")
+            .with(oauth2Login().attributes(a -> a.put("email", owner.getEmail())))
+            .cookie(new Cookie("XSRF-TOKEN", "t")).header("X-XSRF-TOKEN", "t")
+            .contentType(MediaType.APPLICATION_JSON).content("{\"url\":\"" + url + "\",\"token\":\"" + token + "\"}"));
+    }
+
+    @Test
+    void 서버_계정이_며칠짜리_한도에_막힌_파일은_422이고_본인_토큰을_안내한다() throws Exception {
+        when(figma.outline("AbC123")).thenThrow(new FigmaApiException("rate", 429, false, 397_192, null));
+        connect("figma", owner, FIGMA_URL)
+            .andExpect(status().is(422))
+            .andExpect(jsonPath("$.error.code").value("CONNECTION_FORBIDDEN"))
+            .andExpect(jsonPath("$.error.message").value(org.hamcrest.Matchers.containsString("본인 Figma 토큰")));
+        assertThat(reload().getFigmaFileKey()).isNull();
+    }
+
+    @Test
+    void 본인_토큰을_넣으면_그_토큰으로_확인하고_암호화해_저장하며_값은_돌려주지_않는다() throws Exception {
+        String token = "figd_abcdefghijklmnopqrstuvwxyz_9f3c";
+        java.util.List<Boolean> usedOwnToken = new java.util.ArrayList<>();
+        when(figma.outline("AbC123")).thenAnswer(inv -> {
+            usedOwnToken.add(com.acjb.server.figma.FigmaTokenScope.usingUserToken());
+            return OUTLINE;
+        });
+        connectWithToken(FIGMA_URL, token)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.uses_own_token").value(true))
+            .andExpect(jsonPath("$.data.token_hint").value("9f3c"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                .string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(token))));
+        assertThat(usedOwnToken).containsExactly(true);
+        Project saved = reload();
+        assertThat(saved.getFigmaTokenEnc()).isNotNull().doesNotContain(token);
+        assertThat(cipher.decrypt(saved.getFigmaTokenEnc())).isEqualTo(token);
+        // 프로젝트 정보에도 끝 4자리만
+        mvc.perform(get("/api/v1/projects/" + project.getId()).with(oauth2Login().attributes(a -> a.put("email", member.getEmail()))))
+            .andExpect(jsonPath("$.data.figma.uses_own_token").value(true))
+            .andExpect(jsonPath("$.data.figma.token_hint").value("9f3c"));
+    }
+
+    @Test
+    void 본인_토큰으로도_못_읽으면_422이고_토큰을_저장하지_않는다() throws Exception {
+        when(figma.outline("AbC123")).thenThrow(new FigmaApiException("forbidden", 403, null).markUserToken());
+        connectWithToken(FIGMA_URL, "figd_abcdefghijklmnopqrstuvwxyz_0000")
+            .andExpect(status().is(422))
+            .andExpect(jsonPath("$.error.message").value(org.hamcrest.Matchers.containsString("입력한 Figma 토큰")));
+        assertThat(reload().getFigmaTokenEnc()).isNull();
+    }
+
+    @Test
+    void 토큰_형식이_아니면_400이고_Figma를_부르지_않는다() throws Exception {
+        connectWithToken(FIGMA_URL, "not a token!").andExpect(status().isBadRequest());
+        verify(figma, never()).outline(any());
+    }
 }

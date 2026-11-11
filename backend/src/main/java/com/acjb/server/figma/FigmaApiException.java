@@ -17,6 +17,8 @@ public class FigmaApiException extends RuntimeException {
      * — 보기 권한 문제로 안내하면 사용자가 고칠 곳을 못 찾는다(2026-11-11)
      */
     private boolean notExportable;
+    /** 프로젝트 소유자가 넣은 토큰으로 부른 호출 — 토큰 문제는 서버 설정이 아니라 그 토큰 문제다 */
+    private boolean userToken;
 
     public FigmaApiException(String message) {
         this(message, 0, null);
@@ -49,6 +51,25 @@ public class FigmaApiException extends RuntimeException {
     public boolean notExportable() {
         return notExportable;
     }
+
+    public FigmaApiException markUserToken() {
+        this.userToken = true;
+        return this;
+    }
+
+    public boolean userToken() {
+        return userToken;
+    }
+
+    /**
+     * Figma가 몇 분 안에 풀리지 않는 한도를 걸었는지(2026-11-11). 우리 계정이 속하지 않은 무료(Starter) 플랜 파일은
+     * 몇 번만 불러도 Retry-After가 며칠로 온다 — 기다려 봐야 소용없어 바로 실패시키고 본인 토큰을 안내한다
+     */
+    public boolean longRateLimit() {
+        return status == 429 && retryAfterSeconds > LONG_WAIT_SECONDS;
+    }
+
+    public static final long LONG_WAIT_SECONDS = 300;
 
     public long retryAfterSeconds() {
         return retryAfterSeconds;

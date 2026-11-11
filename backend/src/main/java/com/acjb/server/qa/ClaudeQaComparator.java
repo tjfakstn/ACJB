@@ -436,9 +436,7 @@ public class ClaudeQaComparator implements QaComparator {
                 out.putAll(figma.nodeDocuments(fileKey, ids.subList(i, Math.min(ids.size(), i + FRAME_BATCH))));
             }
         } catch (FigmaApiException e) {
-            throw new QaFailedException(e.retryAfterSeconds() > 0
-                ? "Figma 요청 한도를 넘었어요. " + e.retryAfterSeconds() + "초 뒤 다시 시도해 주세요."
-                : "Figma 시안을 읽지 못했어요. 연결 상태를 확인한 뒤 다시 시도해 주세요.");
+            throw new QaFailedException(com.acjb.server.figma.FigmaErrors.message(e));
         }
         return out;
     }

@@ -2,6 +2,7 @@ package com.acjb.server.domain;
 
 import java.time.Instant;
 
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -24,7 +25,10 @@ import lombok.NoArgsConstructor;
 /**
  * QA 단위. 로그인한 사용자 누구나 만들고 만든 사람이 소유자다(AC16). 소유자 없는 프로젝트는 만들지 않는다(N15).
  * 이름은 사용자가 정하므로 UNIQUE가 아니다.
+ * 바뀐 칸만 UPDATE한다(2026-11-11) — Figma·GitHub 연결은 외부 확인을 기다리는 동안 따로 저장되는데, 행 전체를 쓰면
+ * 나중에 끝난 쪽이 먼저 저장된 다른 쪽 연결을 예전 값(null)으로 덮어썼다
  */
+@DynamicUpdate
 @Entity
 @Table(name = "projects")
 @Getter
@@ -71,6 +75,14 @@ public class Project {
 
     @Column(name = "figma_connected_at")
     private Instant figmaConnectedAt;
+
+    /** 소유자 본인 Figma 토큰 암호문(V17) — 우리 서버 계정이 읽지 못하는 파일일 때만 */
+    @Column(name = "figma_token_enc", length = 1024)
+    private String figmaTokenEnc;
+
+    /** 화면에 보여 줄 토큰 끝 4자리 */
+    @Column(name = "figma_token_hint", length = 16)
+    private String figmaTokenHint;
 
     @Column(name = "github_url", length = 500)
     private String githubUrl;
@@ -126,6 +138,12 @@ public class Project {
         this.githubDefaultBranch = defaultBranch;
         this.githubBranch = branch;
         this.githubConnectedAt = now;
+    }
+
+    /** 소유자 본인 Figma 토큰(암호문)과 화면에 보일 끝자리. 둘 다 null이면 서버 토큰으로 읽는다(2026-11-11) */
+    public void changeFigmaToken(String encrypted, String hint) {
+        this.figmaTokenEnc = encrypted;
+        this.figmaTokenHint = hint;
     }
 
     /** AC29 — 주소 제한 검사를 통과한 값만 넘긴다(서비스에서 확인). null이면 지운다 */

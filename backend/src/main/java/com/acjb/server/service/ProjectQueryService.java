@@ -76,7 +76,8 @@ public class ProjectQueryService {
         ProjectDetailResponse.FigmaConnection figma = p.getFigmaFileKey() == null ? null
             : new ProjectDetailResponse.FigmaConnection(p.getFigmaUrl(), p.getFigmaFileKey(), p.getFigmaFileName(),
                 p.getFigmaPageId(), p.getFigmaPageName(),
-                p.getFigmaScope() == null ? "page" : p.getFigmaScope().name().toLowerCase(java.util.Locale.ROOT), p.getFigmaConnectedAt());
+                p.getFigmaScope() == null ? "page" : p.getFigmaScope().name().toLowerCase(java.util.Locale.ROOT), p.getFigmaConnectedAt(),
+                p.getFigmaTokenEnc() != null, p.getFigmaTokenHint());
         ProjectDetailResponse.GithubConnection github = p.getGithubRepo() == null ? null
             : new ProjectDetailResponse.GithubConnection(p.getGithubUrl(), p.getGithubRepo(), p.getGithubDefaultBranch(),
                 p.getGithubBranch() == null ? p.getGithubDefaultBranch() : p.getGithubBranch(), p.getGithubConnectedAt());

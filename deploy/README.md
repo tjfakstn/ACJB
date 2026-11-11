@@ -25,7 +25,27 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 docker compose -f deploy/docker-compose.yml logs -f backend   # 기동 확인(Flyway 마이그레이션 포함)
 ```
 
+## 여러 팀이 같이 쓸 때 조정하는 값
+
+기본값으로 충분하면 비워 둔다. 바꾸려면 `deploy/.env`에서 주석을 풀고 값을 넣은 뒤 다시 띄운다(빈 값으로 두면 기동에 실패한다).
+
+| 변수 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `LIMIT_PROJECTS_PER_OWNER` | 3 | 한 사람이 소유할 수 있는 프로젝트 수 |
+| `LIMIT_ANALYSIS_PER_DAY` · `LIMIT_FIRST_QA_PER_DAY` · `LIMIT_RE_QA_PER_DAY` | 5 · 5 · 10 | 프로젝트마다 최근 24시간 시작 횟수(실패 포함, DB 기준이라 재시작해도 유지) |
+| `LIMIT_PARSE_PER_DAY` · `LIMIT_SUGGESTIONS_PER_DAY` · `LIMIT_INVITATIONS_PER_DAY` | 100 · 50 · 30 | 프로젝트마다 최근 24시간 호출 수(메모리 기준이라 재시작하면 초기화) |
+| `JOBS_HEAVY_CONCURRENCY` | 2 | 비교 분석·첫 QA·Re-QA 동시 실행 수. 넘으면 "대기 중"으로 줄을 선다 |
+| `BROWSER_MAX_CONCURRENT` | 2 | 서버 크로미움 동시 실행 수(scan·배포 화면 캡처). 넘으면 429 |
+| `BACKEND_MEM_LIMIT` | 5g | 백엔드 컨테이너 메모리 상한 |
+
+한도를 넘은 요청은 `429 RATE_LIMITED`와 "하루 n번까지" 안내로 거부된다. 컨테이너 로그는 서비스마다 10MB × 5개까지만 남는다.
+
 ## 주의
+
+- **갱신 전에 실행 중인 작업이 없는지 확인한다.** 재시작하면 대기·실행 중이던 비교 분석·첫 QA·Re-QA·scan·Figma 동기화는 "서버가 다시 시작돼 중단됐어요"로 실패 처리되고(알림이 간다) 로그인 세션도 풀린다. 확인:
+  ```bash
+  sudo docker exec deploy-mysql-1 sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -e "select count(*) from project_runs where status in (\"QUEUED\",\"RUNNING\")" "$MYSQL_DATABASE"'
+  ```
 
 - `deploy/.env`는 서버에만 둔다. 커밋·로그 출력 금지
 - MySQL 데이터는 도커 볼륨(`mysql-data`)에 있다 — Lightsail 자동 스냅샷으로 서버째 백업한다

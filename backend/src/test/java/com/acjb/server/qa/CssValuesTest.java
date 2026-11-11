@@ -16,7 +16,7 @@ import com.acjb.server.qa.FigmaFacts.Fact;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 첫 QA가 Tailwind 밖의 스타일을 읽는 규칙(2026-11-12) — CSS·SCSS·CSS modules 선언, styled-components 템플릿 줄, 인라인 style·CSS-in-JS 객체.
+ * 첫 QA가 Tailwind 밖의 스타일을 읽는 규칙(2026-11-11) — CSS·SCSS·CSS modules 선언, styled-components 템플릿 줄, 인라인 style·CSS-in-JS 객체.
  * 값은 선언 글자에서만 읽고, 못 읽는 값(보간·변수·저장소에 없는 var()·투명도·한 변 padding)은 비교하지 않는다(N17)
  */
 class CssValuesTest {

@@ -684,7 +684,7 @@ public class ClaudeQaComparator implements QaComparator {
 
         /**
          * 짝 파일과 그 파일이 상대 경로로 직접 import하는 저장소 파일(1단계), 그리고 그 파일들이 import하는 스타일시트
-         * (CSS·SCSS·LESS·CSS modules — 2026-11-12) — 큰 파일·총량을 넘는 파일은 뺀다
+         * (CSS·SCSS·LESS·CSS modules — 2026-11-11) — 큰 파일·총량을 넘는 파일은 뺀다
          */
         Map<String, String> bundle(String main) {
             Map<String, String> out = new LinkedHashMap<>();

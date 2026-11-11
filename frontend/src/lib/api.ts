@@ -148,14 +148,20 @@ export async function listMembers(projectId: string): Promise<ProjectMember[]> {
 }
 
 /** page_id·page_name은 페이지 또는 섹션 — scope가 어느 쪽인지 알려 준다(2026-11-07) */
-export interface FigmaConnection { url: string; file_key: string; file_name: string; page_id: string; page_name: string; scope: 'page' | 'section'; connected_at: string }
+export interface FigmaConnection {
+  url: string; file_key: string; file_name: string; page_id: string; page_name: string; scope: 'page' | 'section'; connected_at: string
+  /** 소유자 본인 Figma 토큰으로 읽는지와 그 끝 4자리(2026-11-11) — 토큰 값은 오지 않는다 */
+  uses_own_token: boolean
+  token_hint: string | null
+}
 export interface GithubConnection { url: string; repo: string; default_branch: string; branch: string; connected_at: string }
 /** 연결 응답에만 — 고를 수 있는 브랜치(이름순, 최대 100개) */
 export interface GithubConnectResult extends GithubConnection { branches: string[] }
 
 /** 소유자만. Figma 앱 페이지 [공유하기]로 복사한 페이지 링크만 받는다. 보기 권한 확인 후 저장 — 400 페이지 링크 아님, 422, 502(SPEC AC21) */
-export function connectFigma(projectId: string, url: string): Promise<FigmaConnection> {
-  return request<FigmaConnection>('PUT', `/api/v1/projects/${projectId}/connections/figma`, { url })
+export function connectFigma(projectId: string, url: string, token?: string): Promise<FigmaConnection> {
+  // token: QAting 서버 계정이 그 파일을 읽지 못할 때만(422) 소유자 본인 Figma 토큰을 함께 보낸다(2026-11-11)
+  return request<FigmaConnection>('PUT', `/api/v1/projects/${projectId}/connections/figma`, token ? { url, token } : { url })
 }
 
 /** 소유자만. 공개 저장소만 — GitHub 404(비공개·없는 저장소)는 422(SPEC AC21) */
@@ -737,4 +743,52 @@ export function getRecheckSuggestions(projectId: string, issueId: string): Promi
 /** 연결한 Figma 파일에서 그 프레임을 여는 링크 */
 export function figmaFrameUrl(fileKey: string, frameId: string): string {
   return `https://www.figma.com/design/${fileKey}/?node-id=${encodeURIComponent(frameId.replace(':', '-'))}`
+}
+
+// ---------- 알림(AC14, 시안 NTF — 2026-11-11) ----------
+
+export type NotificationEvent = 'issue_created' | 'fixed' | 'recheck_failed' | 'resolved' | 'run_failed'
+
+/** 알림 패널이 이슈를 따로 조회하지 않고 문구를 만들 수 있게 서버가 함께 주는 요약 */
+export interface NotificationIssue {
+  id: string
+  status: IssueStatus
+  source: 'manual' | 'first_qa'
+  assigned_team: MemberRole | null
+  description: string
+  screen_location: string
+  mismatch_property: StyleProperty | null
+  manual_title: string | null
+  pin_number: number | null
+}
+
+export interface AppNotification {
+  id: string
+  project_id: string
+  qa_issue_id: string | null
+  event: NotificationEvent
+  /** issue_created일 때만 — 팀과 함께 등록(registered)인지 나중에 팀 지정(team_assigned)인지 */
+  cause: 'registered' | 'team_assigned' | null
+  channel: string
+  to_member_id: string
+  actor_id: string | null
+  actor_name: string | null
+  created_at: string
+  read_at: string | null
+  issue: NotificationIssue | null
+  run: { id: string; kind: 'analysis' | 'first_qa' | 're_qa'; error_message: string | null } | null
+}
+
+export interface NotificationInbox { items: AppNotification[]; total: number; unread_count: number }
+
+export function listNotifications(projectId: string): Promise<NotificationInbox> {
+  return request<NotificationInbox>('GET', `/api/v1/projects/${projectId}/notifications`)
+}
+
+export function markNotificationRead(projectId: string, notificationId: string): Promise<AppNotification> {
+  return request<AppNotification>('POST', `/api/v1/projects/${projectId}/notifications/${notificationId}/read`)
+}
+
+export function markAllNotificationsRead(projectId: string): Promise<{ updated: number }> {
+  return request<{ updated: number }>('POST', `/api/v1/projects/${projectId}/notifications/read-all`)
 }

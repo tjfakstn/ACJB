@@ -6,7 +6,7 @@ info:
     QA 이슈를 재현 정보와 함께 등록하고, 조치 완료를 등록자에게 알리고, 같은 재현 절차로 재검증해 닫는
     서비스의 API 명세. v0.2 — 무엇을 만드는가의 정본은 docs/SPEC.md이며, 이 파일은 SPEC 5절을 따른다.
     DB/인증 스택이 아직 미확정이라 계속 바뀔 수 있음.
-  version: 0.15.0
+  version: 0.17.0
   contact:
     name: 안캡잘부
     url: https://github.com/tjfakstn/ACJB
@@ -930,14 +930,14 @@ paths:
       summary: 내게 온 알림 목록 (SPEC AC14)
       description: >-
         요청자 본인이 받는 알림(to_member_id = 요청자)만 반환한다. 다른 멤버의 알림은 담지 않는다.
-        정렬은 created_at desc, id desc로 고정한다. 읽음 처리·삭제는 v1에 없다.
+        정렬은 created_at desc, id desc로 고정한다. 읽지 않은 수(unread_count)를 함께 준다. 삭제는 v1에 없다.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - name: event
           in: query
           schema:
             type: string
-            enum: [issue_created, fixed, recheck_failed]
+            enum: [issue_created, fixed, recheck_failed, resolved, run_failed]
       responses:
         '200':
           description: OK
@@ -950,6 +950,56 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /projects/{projectId}/notifications/{notificationId}/read:
+    post:
+      tags: [Notification]
+      summary: 알림 한 건 읽음 (SPEC AC35, 2026-11-11)
+      description: 이 프로젝트에서 요청자가 받은 알림만. 이미 읽었으면 처음 읽은 시각을 그대로 둔다. 남의 알림·다른 프로젝트 알림·없는 id는 404
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: notificationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 읽음 처리된 알림
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Notification' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: 내 알림이 아니거나 없음
+  /projects/{projectId}/notifications/read-all:
+    post:
+      tags: [Notification]
+      summary: 이 프로젝트의 내 알림 모두 읽음 (SPEC AC35, 2026-11-11)
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: 바꾼 수
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      updated: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /auth/login/google:
     get:
       tags: [Auth]
@@ -2058,15 +2108,42 @@ components:
 
     Notification:
       type: object
-      description: 앱 내 알림 한 건 (정본 스키마는 src/qating/schemas/Notification.schema.json)
-      required: [id, qa_issue_id, event, to_member_id, created_at]
+      description: 앱 내 알림 한 건 (정본 스키마는 src/qating/schemas/Notification.schema.json). resolved·run_failed·읽음은 2026-11-11 추가(AC11·AC35)
+      required: [id, project_id, event, to_member_id, created_at]
       properties:
         id: { type: string }
-        qa_issue_id: { type: string }
-        event: { type: string, enum: [issue_created, fixed, recheck_failed] }
+        project_id: { type: string }
+        qa_issue_id: { type: string, nullable: true, description: run_failed면 null }
+        event: { type: string, enum: [issue_created, fixed, recheck_failed, resolved, run_failed] }
+        cause: { type: string, enum: [registered, team_assigned], nullable: true, description: 'issue_created일 때만 — 팀과 함께 등록 / 나중에 팀 지정' }
         channel: { type: string, example: in_app }
         to_member_id: { type: string }
+        actor_id: { type: string, nullable: true, description: 알림을 일으킨 사람 }
+        actor_name: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time, nullable: true, description: null이면 읽지 않음 }
+        issue:
+          type: object
+          nullable: true
+          description: 이슈 요약 — run_failed면 null
+          properties:
+            id: { type: string }
+            status: { type: string, enum: [needs_check, in_progress, fixed, needs_recheck, resolved] }
+            source: { type: string, enum: [manual, first_qa] }
+            assigned_team: { type: string, enum: [designer, frontend, backend, planner], nullable: true }
+            description: { type: string }
+            screen_location: { type: string }
+            mismatch_property: { type: string, nullable: true }
+            manual_title: { type: string, nullable: true }
+            pin_number: { type: integer, nullable: true }
+        run:
+          type: object
+          nullable: true
+          description: run_failed일 때만
+          properties:
+            id: { type: string }
+            kind: { type: string, enum: [analysis, first_qa, re_qa] }
+            error_message: { type: string, nullable: true }
 
     FigmaFrame:
       type: object
@@ -2095,6 +2172,11 @@ components:
       required: [url]
       properties:
         url: { type: string, maxLength: 500 }
+        token:
+          type: string
+          description: >-
+            Figma만, 선택(2026-11-11). 서버 계정이 그 파일을 읽지 못해 422를 받았을 때 소유자 본인 Figma 개인 액세스 토큰(읽기 전용).
+            이 토큰으로 확인에 성공해야 연결과 함께 암호화해 저장한다. 응답에는 돌려주지 않는다
 
     FigmaConnection:
       type: object
@@ -2107,6 +2189,8 @@ components:
         page_name: { type: string, description: 그 페이지·섹션 이름 }
         scope: { type: string, enum: [page, section], description: page_id가 가리키는 노드 종류(2026-11-07) }
         connected_at: { type: string, format: date-time }
+        uses_own_token: { type: boolean, description: 소유자 본인 Figma 토큰으로 읽는지(2026-11-11) }
+        token_hint: { type: string, nullable: true, description: 저장한 토큰의 끝 4자리 — 토큰 값은 주지 않는다 }
 
     GithubConnectRequest:
       type: object
@@ -2343,6 +2427,7 @@ components:
               items:
                 $ref: '#/components/schemas/Notification'
             total: { type: integer }
+            unread_count: { type: integer, description: 읽지 않은 알림 수(종 아이콘 배지, 2026-11-11) }
         error: { type: object, nullable: true, example: null }
 
     FigmaSyncResponse:

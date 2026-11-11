@@ -42,6 +42,10 @@ public class ProjectController {
     private final ProjectDeletionService deletion;
     private final CurrentMember currentMember;
 
+    /** 알림함(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.service.NotificationService notificationService;
+
     public ProjectController(ProjectQueryService service, ProjectCommandService commands, ConnectionService connections,
                              ProjectDeletionService deletion, CurrentMember currentMember) {
         this.service = service;
@@ -62,7 +66,8 @@ public class ProjectController {
     @PutMapping("/{projectId}/connections/figma")
     public Map<String, Object> connectFigma(@PathVariable Long projectId, @RequestBody(required = false) ConnectRequest request,
                                             @AuthenticationPrincipal OAuth2User principal) {
-        return ApiResponses.ok(connections.connectFigma(projectId, request == null ? null : request.url(), currentMember.require(principal)));
+        return ApiResponses.ok(connections.connectFigma(projectId, request == null ? null : request.url(),
+            request == null ? null : request.token(), currentMember.require(principal)));
     }
 
     /** AC21 — GitHub 공개 저장소 연결(소유자만, 읽기 확인 후 저장) */
@@ -115,6 +120,19 @@ public class ProjectController {
     @GetMapping("/{projectId}/notifications")
     public Map<String, Object> notifications(@PathVariable Long projectId, @RequestParam(required = false) String event,
                                              @AuthenticationPrincipal OAuth2User principal) {
-        return ApiResponses.ok(service.myNotifications(projectId, currentMember.require(principal), event));
+        return ApiResponses.ok(notificationService.inbox(projectId, currentMember.require(principal), event));
+    }
+
+    /** 알림 한 건 읽음(2026-11-11) — 본인 알림만, 아니면 404 */
+    @PostMapping("/{projectId}/notifications/{notificationId}/read")
+    public Map<String, Object> readNotification(@PathVariable Long projectId, @PathVariable String notificationId,
+                                                @AuthenticationPrincipal OAuth2User principal) {
+        return ApiResponses.ok(notificationService.markRead(projectId, notificationId, currentMember.require(principal)));
+    }
+
+    /** 이 프로젝트에서 내 알림 모두 읽음(2026-11-11) */
+    @PostMapping("/{projectId}/notifications/read-all")
+    public Map<String, Object> readAllNotifications(@PathVariable Long projectId, @AuthenticationPrincipal OAuth2User principal) {
+        return ApiResponses.ok(notificationService.markAllRead(projectId, currentMember.require(principal)));
     }
 }

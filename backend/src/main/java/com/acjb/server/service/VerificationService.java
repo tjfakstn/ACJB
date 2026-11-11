@@ -88,10 +88,9 @@ public class VerificationService {
         IssueStatus next = result == VerificationResult.PASS ? IssueStatus.RESOLVED : IssueStatus.NEEDS_RECHECK;
         issue.changeStatus(next);
         histories.save(new StatusHistory(issue, next, actor));
-        // AC11: fail이면 담당 팀 역할 멤버 각각에게 1건씩. 팀이 없거나 pass면 만들지 않는다
-        if (result == VerificationResult.FAIL) {
-            teamNotifier.notifyTeam(issue, issue.getAssignedTeam(), NotificationEvent.RECHECK_FAILED);
-        }
+        // AC11: fail이면 recheck_failed, pass면 resolved(2026-11-11)를 담당 팀 역할 멤버 각각에게 1건씩. 팀이 없으면 만들지 않는다
+        teamNotifier.notifyTeam(issue, issue.getAssignedTeam(),
+            result == VerificationResult.FAIL ? NotificationEvent.RECHECK_FAILED : NotificationEvent.RESOLVED, actor);
         // fail 재검증은 재검증 범위 제안(AC20)의 검색 문서가 된다 — 커밋 뒤 임베딩을 만든다
         if (result == VerificationResult.FAIL) {
             events.publishEvent(new EmbeddingSourcesChanged(projectId));

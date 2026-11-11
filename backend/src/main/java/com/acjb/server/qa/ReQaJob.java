@@ -84,7 +84,15 @@ public class ReQaJob {
     private record Prepared(QaComparator.ReQaInput recheck, QaComparator.FirstQaInput added) {
     }
 
+    /** 프로젝트에 소유자 Figma 토큰이 있으면 작업 전체를 그 토큰으로 부른다(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.figma.ProjectFigmaToken figmaTokens;
+
     public void run(Long runId) {
+        figmaTokens.withRun(runId, () -> execute(runId));
+    }
+
+    private void execute(Long runId) {
         Prepared prepared;
         try {
             prepared = tx.execute(s -> {
@@ -179,8 +187,10 @@ public class ReQaJob {
             IssueStatus next = verdict == VerificationResult.PASS ? IssueStatus.RESOLVED : IssueStatus.NEEDS_RECHECK;
             issue.changeStatus(next);
             histories.save(new StatusHistory(issue, next, run.getRequestedBy()));
+            // fail이면 recheck_failed, pass면 resolved(2026-11-11) — 담당 팀에게
+            teamNotifier.notifyTeam(issue, issue.getAssignedTeam(),
+                verdict == VerificationResult.FAIL ? NotificationEvent.RECHECK_FAILED : NotificationEvent.RESOLVED, run.getRequestedBy());
             if (verdict == VerificationResult.FAIL) {
-                teamNotifier.notifyTeam(issue, issue.getAssignedTeam(), NotificationEvent.RECHECK_FAILED);
                 failed++;
             } else {
                 passed++;
@@ -205,6 +215,9 @@ public class ReQaJob {
 
     private void fail(Long runId, String message) {
         Instant now = clock.instant();
-        tx.executeWithoutResult(s -> runs.findById(runId).ifPresent(r -> r.fail(message, now)));
+        tx.executeWithoutResult(s -> runs.findById(runId).ifPresent(r -> {
+            r.fail(message, now);
+            teamNotifier.notifyRunFailed(r);
+        }));
     }
 }

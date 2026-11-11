@@ -188,11 +188,16 @@ classes:
     description: 이슈 등록·조치 사실을 상대에게 알리는 일
     evidence: [로그 2, 로그 8, 로그 11, 로그 12, 관찰 1]
     attributes:
-      event: {type: enum, values: [issue_created, fixed, recheck_failed], evidence: [로그 2, 로그 8, 로그 11, 관찰 1]}
+      event: {type: enum, values: [issue_created, fixed, recheck_failed, resolved, run_failed], note: "resolved(재검증 pass → 담당 팀)·run_failed(실행 실패 → 실행한 사람)는 알림 시안 NTF 반영(2026-11-11)", evidence: [로그 2, 로그 8, 로그 11, 관찰 1, decision_log 2026-11-11]}
+      cause: {type: enum, values: [registered, team_assigned], note: "issue_created의 계기 — 화면 문구만 나눈다(2026-11-11)", evidence: [decision_log 2026-11-11]}
+      read_at: {type: datetime, note: "받는 사람이 읽은 시각. null이면 안읽음(2026-11-11)", evidence: [decision_log 2026-11-11]}
       channel: {type: string, examples: [email, discord, slack], evidence: [로그 8, 로그 12, 관찰 1]}
     relations:
       - about: QAIssue
         evidence: [로그 2, 로그 8]
+      - about: ProjectRun
+        note: run_failed만 — 이슈 대신 실패한 실행을 가리킨다(2026-11-11)
+        evidence: [decision_log 2026-11-11]
       - to: Member
         evidence: [로그 11, 관찰 1]
 

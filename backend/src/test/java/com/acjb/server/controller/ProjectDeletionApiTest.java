@@ -129,6 +129,21 @@ class ProjectDeletionApiTest {
     }
 
     @Test
+    void 이슈_없는_실행_실패_알림도_프로젝트와_함께_지운다() throws Exception {
+        com.acjb.server.domain.ProjectRun run = runs.save(new com.acjb.server.domain.ProjectRun(x, com.acjb.server.domain.RunKind.FIRST_QA, owner, Instant.now()));
+        run.fail("실패", Instant.now());
+        em.persist(com.acjb.server.domain.Notification.runFailed(run, "in_app"));
+        em.flush();
+        assertThat(rows("SELECT COUNT(*) FROM notifications WHERE project_id = " + x.getId())).isEqualTo(1);
+
+        mvc.perform(as(delete("/api/v1/projects/" + x.getId()), owner)).andExpect(status().isNoContent());
+
+        em.clear();
+        assertThat(rows("SELECT COUNT(*) FROM notifications WHERE project_id = " + x.getId())).isZero();
+        assertThat(rows("SELECT COUNT(*) FROM project_runs WHERE project_id = " + x.getId())).isZero();
+    }
+
+    @Test
     void pj010_소유자가_아니면_403이고_아무것도_지우지_않는다() throws Exception {
         issueWithEverything(x);
         long before = rowsForProject(x.getId());

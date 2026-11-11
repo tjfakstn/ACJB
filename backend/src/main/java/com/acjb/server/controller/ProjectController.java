@@ -78,6 +78,19 @@ public class ProjectController {
             request == null ? null : request.token(), currentMember.require(principal)));
     }
 
+    /** AC21 — 소유자 Figma 토큰만 넣기·바꾸기(2026-11-12). 링크는 그대로라 비교 분석 뒤에도 된다 */
+    @PutMapping("/{projectId}/connections/figma/token")
+    public Map<String, Object> changeFigmaToken(@PathVariable Long projectId, @RequestBody(required = false) ConnectRequest request,
+                                                @AuthenticationPrincipal OAuth2User principal) {
+        return ApiResponses.ok(connections.changeFigmaToken(projectId, request == null ? null : request.token(), currentMember.require(principal)));
+    }
+
+    /** AC21 — 소유자 Figma 토큰 빼기(2026-11-12) */
+    @DeleteMapping("/{projectId}/connections/figma/token")
+    public Map<String, Object> removeFigmaToken(@PathVariable Long projectId, @AuthenticationPrincipal OAuth2User principal) {
+        return ApiResponses.ok(connections.removeFigmaToken(projectId, currentMember.require(principal)));
+    }
+
     /** AC21 — GitHub 공개 저장소 연결(소유자만, 읽기 확인 후 저장) */
     @PutMapping("/{projectId}/connections/github")
     public Map<String, Object> connectGithub(@PathVariable Long projectId, @RequestBody(required = false) GithubConnectRequest request,

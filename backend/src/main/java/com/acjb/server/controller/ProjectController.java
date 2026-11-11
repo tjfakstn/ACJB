@@ -62,7 +62,8 @@ public class ProjectController {
     @PutMapping("/{projectId}/connections/figma")
     public Map<String, Object> connectFigma(@PathVariable Long projectId, @RequestBody(required = false) ConnectRequest request,
                                             @AuthenticationPrincipal OAuth2User principal) {
-        return ApiResponses.ok(connections.connectFigma(projectId, request == null ? null : request.url(), currentMember.require(principal)));
+        return ApiResponses.ok(connections.connectFigma(projectId, request == null ? null : request.url(),
+            request == null ? null : request.token(), currentMember.require(principal)));
     }
 
     /** AC21 — GitHub 공개 저장소 연결(소유자만, 읽기 확인 후 저장) */

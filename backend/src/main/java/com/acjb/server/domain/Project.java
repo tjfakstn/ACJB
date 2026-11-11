@@ -76,6 +76,14 @@ public class Project {
     @Column(name = "figma_connected_at")
     private Instant figmaConnectedAt;
 
+    /** 소유자 본인 Figma 토큰 암호문(V17) — 우리 서버 계정이 읽지 못하는 파일일 때만 */
+    @Column(name = "figma_token_enc", length = 1024)
+    private String figmaTokenEnc;
+
+    /** 화면에 보여 줄 토큰 끝 4자리 */
+    @Column(name = "figma_token_hint", length = 16)
+    private String figmaTokenHint;
+
     @Column(name = "github_url", length = 500)
     private String githubUrl;
 
@@ -130,6 +138,12 @@ public class Project {
         this.githubDefaultBranch = defaultBranch;
         this.githubBranch = branch;
         this.githubConnectedAt = now;
+    }
+
+    /** 소유자 본인 Figma 토큰(암호문)과 화면에 보일 끝자리. 둘 다 null이면 서버 토큰으로 읽는다(2026-11-11) */
+    public void changeFigmaToken(String encrypted, String hint) {
+        this.figmaTokenEnc = encrypted;
+        this.figmaTokenHint = hint;
     }
 
     /** AC29 — 주소 제한 검사를 통과한 값만 넘긴다(서비스에서 확인). null이면 지운다 */

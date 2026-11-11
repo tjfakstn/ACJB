@@ -76,6 +76,8 @@ app:
   # Figma 동기화 — 토큰은 backend/.env의 FIGMA_ACCESS_TOKEN(로그에 남기지 않는다)
   figma:
     access-token: ${FIGMA_ACCESS_TOKEN:}
+    # 프로젝트 소유자 Figma 토큰 암호화 키(Base64 32바이트, 2026-11-11) — 없으면 소유자 토큰을 받지 않는다
+    token-key: ${FIGMA_TOKEN_KEY:}
     base-url: https://api.figma.com
     timeout: 30s
   # GitHub 저장소 연결(AC21) — 공개 저장소만. 토큰은 선택(backend/.env의 GITHUB_TOKEN, 없으면 익명 — 호출 한도가 낮다)

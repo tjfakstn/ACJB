@@ -112,7 +112,15 @@ public class AnalysisJob {
     }
 
     /** 테스트에서도 직접 부른다. 결과는 run 행의 status·created_count·dropped_count로 남는다 */
+    /** 프로젝트에 소유자 Figma 토큰이 있으면 작업 전체를 그 토큰으로 부른다(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.figma.ProjectFigmaToken figmaTokens;
+
     public void run(Long runId) {
+        figmaTokens.withRun(runId, () -> execute(runId));
+    }
+
+    private void execute(Long runId) {
         Inputs in = tx.execute(s -> {
             ProjectRun run = runs.findById(runId).orElse(null);
             if (run == null) {
@@ -144,8 +152,7 @@ public class AnalysisJob {
             fail(runId, e.getMessage());
         } catch (FigmaApiException e) {
             log.warn("비교 분석 Figma 읽기 실패 run_id={}: {}", runId, e.getMessage());
-            fail(runId, e.tokenProblem() ? "서버의 Figma 연동 토큰이 만료됐거나 올바르지 않아요. 관리자에게 알려 주세요."
-                : "Figma 파일을 읽지 못했어요. 잠시 뒤 다시 시도해 주세요.");
+            fail(runId, com.acjb.server.figma.FigmaErrors.message(e));
         } catch (GithubApiException e) {
             log.warn("비교 분석 GitHub 읽기 실패 run_id={}: {}", runId, e.getMessage());
             fail(runId, "GitHub 저장소를 읽지 못했어요. 잠시 뒤 다시 시도해 주세요.");
@@ -298,7 +305,8 @@ public class AnalysisJob {
             try {
                 return call.get();
             } catch (FigmaApiException e) {
-                if (e.status() != 429 || attempt >= FIGMA_ATTEMPTS) {
+                // 며칠짜리 한도는 기다려도 풀리지 않는다 — 바로 실패시키고 소유자 토큰을 안내한다(2026-11-11)
+                if (e.status() != 429 || e.longRateLimit() || attempt >= FIGMA_ATTEMPTS) {
                     throw e;
                 }
                 long wait = Math.min(FIGMA_WAIT_CAP_SECONDS, e.retryAfterSeconds() > 0 ? e.retryAfterSeconds() : 20L * attempt);

@@ -110,6 +110,49 @@ public class ConnectionService {
             checked.scope().name().toLowerCase(java.util.Locale.ROOT), now, project.getFigmaTokenEnc() != null, project.getFigmaTokenHint());
     }
 
+    /**
+     * 소유자 Figma 토큰만 넣거나 바꾼다(AC21, 2026-11-12). 연결 확인은 서버 계정으로 통과했는데 비교 분석·첫 QA처럼 노드를 많이 읽을 때
+     * 한도에 걸리는 파일이 있어서, 연결된 뒤에도 넣을 수 있어야 한다. 링크가 바뀌지 않으므로 비교 분석이 끝난 뒤에도 된다.
+     * 연결된 파일·페이지를 그 토큰으로 확인한 뒤에만 저장한다
+     */
+    @Transactional
+    public ProjectDetailResponse.FigmaConnection changeFigmaToken(Long projectId, String rawToken, Member requester) {
+        Project project = ownedProject(projectId, requester);
+        String token = trimmed(rawToken);
+        if (token == null || !FIGMA_TOKEN.matcher(token).matches()) {
+            throw ApiException.badRequest("Figma 토큰 형식이 아니에요. Figma 설정 → Security → Personal access tokens에서 만든 토큰(figd_로 시작)을 붙여 넣어 주세요.");
+        }
+        requireFigma(project);
+        if (!cipher.enabled()) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.FIGMA_UNAVAILABLE, "서버에 Figma 토큰 저장 설정이 없어 본인 토큰을 받을 수 없어요. 관리자에게 알려 주세요.");
+        }
+        Checked checked = FigmaTokenScope.with(token, () -> check(project.getFigmaFileKey(), project.getFigmaPageId()));
+        project.changeFigmaToken(cipher.encrypt(token), token.substring(token.length() - 4));
+        log.info("소유자 Figma 토큰 저장: project={} scope={}", projectId, checked.scope());
+        return figmaView(project);
+    }
+
+    /** 저장된 소유자 토큰을 지우고 서버 계정으로 돌아간다 — 없어도 그대로 200 */
+    @Transactional
+    public ProjectDetailResponse.FigmaConnection removeFigmaToken(Long projectId, Member requester) {
+        Project project = ownedProject(projectId, requester);
+        requireFigma(project);
+        project.changeFigmaToken(null, null);
+        return figmaView(project);
+    }
+
+    private static void requireFigma(Project project) {
+        if (project.getFigmaFileKey() == null || project.getFigmaPageId() == null) {
+            throw new ApiException(HttpStatus.CONFLICT, ErrorCodes.NOT_READY, "먼저 Figma 페이지·섹션 링크를 연결해 주세요.");
+        }
+    }
+
+    private static ProjectDetailResponse.FigmaConnection figmaView(Project p) {
+        return new ProjectDetailResponse.FigmaConnection(p.getFigmaUrl(), p.getFigmaFileKey(), p.getFigmaFileName(), p.getFigmaPageId(),
+            p.getFigmaPageName(), p.getFigmaScope() == null ? "page" : p.getFigmaScope().name().toLowerCase(java.util.Locale.ROOT),
+            p.getFigmaConnectedAt(), p.getFigmaTokenEnc() != null, p.getFigmaTokenHint());
+    }
+
     private record Checked(FigmaClient.FileOutline outline, String scopeName, FigmaScope scope) {
     }
 
@@ -138,6 +181,11 @@ public class ConnectionService {
             }
             if (e.status() == 403 || e.longRateLimit()) {
                 throw new ApiException(UNPROCESSABLE, ErrorCodes.CONNECTION_FORBIDDEN, FigmaErrors.message(e));
+            }
+            if (e.status() == 429 && !e.userToken()) {
+                // 서버 계정 한도는 여러 팀이 나눠 쓴다 — 짧게 기다리면 풀리는 한도라도 본인 토큰을 넣을 수 있게 422로 안내한다(2026-11-12)
+                throw new ApiException(UNPROCESSABLE, ErrorCodes.CONNECTION_FORBIDDEN,
+                    "QAting 서버 계정이 Figma 요청 한도에 걸렸어요. 본인 Figma 토큰을 넣으면 바로 연결할 수 있어요.");
             }
             if (e.status() == 429) {
                 throw new ApiException(HttpStatus.BAD_GATEWAY, ErrorCodes.CONNECTION_FAILED, FigmaErrors.message(e));

@@ -125,12 +125,28 @@ AI 판단이 섞여 있어 이슈 개수는 실행할 때마다 조금씩 다를
 
 - **비용 문제로 화면 10개 안팎의 섹션으로 연결해 주세요.** 화면 수에 비례해 시간과 비용이 늘어납니다(화면 10개 기준 첫 QA 약 5~7분).
 - 배포 주소가 없어도 됩니다. 이때 실시간 QA 화면은 비어 있고, 수동 QA는 스크린샷 첨부나 위치 없이 등록하면 됩니다.
-- **앱 프로젝트**는 배포 주소 없이 쓰면 됩니다. 수동 QA는 [위치 없이 등록]에서 발생 환경을 Android·iOS로 고르고, 화면 이름(예: 홈 화면)과 스크린샷을 넣어 주세요.
+
+### 앱 프로젝트(React Native·Flutter)
+
+웹과 같은 순서(연결 → 비교 분석 → 첫 QA → Re-QA)로 씁니다. 다른 점은 아래와 같습니다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 알아보는 방법 | `package.json`에 `react-native`가 있으면 React Native, 코드 파일 절반 넘게 `.dart`면 Flutter로 보고 그에 맞게 비교합니다. 따로 설정할 것은 없습니다 |
+| 읽지 않는 폴더·파일 | `android`·`ios`·`macos`·`windows`·`linux`·`.dart_tool`·`integration_test`·`.expo` 폴더, 자동 생성된 Dart 파일(`*.g.dart`·`*.freezed.dart`·`*.gr.dart`·`*.mocks.dart`·`*.config.dart`) |
+| React Native에서 읽는 값 | `StyleSheet.create`·style 객체의 숫자·색 값(예: `borderRadius: 8`, `padding: 16`, `color: '#1A1A1A'`). `.ios.tsx`·`.android.tsx` 같은 플랫폼별 파일도 읽습니다 |
+| Flutter에서 읽는 값 | 위젯 인자 `color`·`backgroundColor`·`fontWeight`·`fontSize`·`borderRadius`·`padding`·`spacing`과 테두리 색. 값은 `Color(0xFF…)`·`Colors.white`/`black`·`Color.fromARGB(255, …)`·`FontWeight.w600`·`BorderRadius.circular(8)`·`EdgeInsets.all`/`symmetric`/`only`/`fromLTRB`. `static const`로 적은 저장소 상수(`AppColors.primary`)와 `package:` import도 따라갑니다 |
+| Flutter에서 읽지 않는 값 | `Theme.of(context)`·변수·상태에 따라 바뀌는 값, 반투명 색, `Colors.blue` 같은 Material 팔레트 색, 같은 이름이 두 번 정의된 상수 |
+| 수동 QA | 배포 주소 없이 [위치 없이 등록]에서 발생 환경을 Android·iOS로 고르고, 화면 이름(예: 홈 화면)과 스크린샷을 넣습니다. 그 플랫폼에서만 생기는 문제면 "Android에서만 생기는 문제예요"를 체크합니다 |
+
+- **색·크기는 상수 파일에 모아 두면 잘 비교됩니다.** 테마(`Theme.of`)나 변수로만 정한 값은 근거를 확정할 수 없어 이슈로 만들지 않습니다.
+- **앱 지원은 시험 단계입니다.** 실제 앱 프로젝트로 정확도를 재 보지 않았습니다. 이슈가 너무 적거나 이상하면 7절 Issues로 저장소 주소와 함께 알려 주세요.
 
 ## 6. 제한 사항과 알려진 문제
 
 **MVP에서 아직 안 되는 것**
 - **네이티브 앱 코드:** 앱은 React Native와 Flutter만 지원합니다. Kotlin·Swift로 만든 네이티브 앱은 코드 비교가 안 되고, 수동 QA(스크린샷)만 쓸 수 있습니다.
+- **앱 화면 점검:** 단일 컴포넌트 점검(배포 화면에서 요소를 골라 값을 읽는 기능)과 실시간 QA 배포 화면은 웹만 됩니다. 앱은 코드 비교(첫 QA·Re-QA)와 수동 QA를 씁니다.
 - **GitHub 이슈·PR 생성:** GitHub는 읽기만 합니다. 이슈를 GitHub로 내보내지 않습니다.
 - **첫 QA는 프로젝트당 성공 1번:** 다시 처음부터 비교하려면 새 프로젝트를 만듭니다.
 
@@ -156,6 +172,8 @@ AI 판단이 섞여 있어 이슈 개수는 실행할 때마다 조금씩 다를
 | 비교 분석이 "UI 코드가 너무 커요"로 실패 | 저장소가 크기 제한을 넘었습니다. 더 작은 저장소나 브랜치로 연결해 주세요 |
 | 자동 QA 이슈를 고르면 배포 화면 대신 Figma 시안이 보임 | 정상입니다. 자동 QA 이슈는 비교한 Figma 요소의 위치를 보여 줍니다. 배포 화면으로 돌아가려면 상단의 배포 화면 버튼을 누르세요 |
 | 초대 메일이 오지 않음 | 초대받은 구글 계정으로 로그인하면 프로젝트 목록 위 **받은 초대**에서 역할을 골라 참여할 수 있습니다 |
+| 앱 프로젝트 비교 분석이 "UI 코드 파일을 찾지 못했어요"로 실패 | 연결한 브랜치에 React Native(`.tsx`·`.jsx`·`.ts`·`.js`)나 Flutter(`.dart`) 화면 코드가 있는지 확인해 주세요. 네이티브 폴더(`android`·`ios`) 안의 Kotlin·Swift 코드만 있는 저장소는 비교할 수 없습니다 |
+| 앱 프로젝트 첫 QA 이슈가 거의 없음 | 색·크기를 `Theme.of`나 변수로만 정했으면 비교하지 않습니다(5절 앱 프로젝트). 상수로 적힌 값인데도 빠지면 Issues로 알려 주세요 |
 | [수정 시작]·[수정 완료] 버튼이 안 눌림 | 내 프로젝트 역할이 이슈의 담당 팀과 같아야 합니다. [멤버 관리]에서 확인해 주세요 |
 
 ## 7. 문의

@@ -187,8 +187,10 @@ public class ReQaJob {
             IssueStatus next = verdict == VerificationResult.PASS ? IssueStatus.RESOLVED : IssueStatus.NEEDS_RECHECK;
             issue.changeStatus(next);
             histories.save(new StatusHistory(issue, next, run.getRequestedBy()));
+            // fail이면 recheck_failed, pass면 resolved(2026-11-11) — 담당 팀에게
+            teamNotifier.notifyTeam(issue, issue.getAssignedTeam(),
+                verdict == VerificationResult.FAIL ? NotificationEvent.RECHECK_FAILED : NotificationEvent.RESOLVED, run.getRequestedBy());
             if (verdict == VerificationResult.FAIL) {
-                teamNotifier.notifyTeam(issue, issue.getAssignedTeam(), NotificationEvent.RECHECK_FAILED);
                 failed++;
             } else {
                 passed++;
@@ -213,6 +215,9 @@ public class ReQaJob {
 
     private void fail(Long runId, String message) {
         Instant now = clock.instant();
-        tx.executeWithoutResult(s -> runs.findById(runId).ifPresent(r -> r.fail(message, now)));
+        tx.executeWithoutResult(s -> runs.findById(runId).ifPresent(r -> {
+            r.fail(message, now);
+            teamNotifier.notifyRunFailed(r);
+        }));
     }
 }

@@ -315,8 +315,10 @@ class QaRunApiTest {
         assertThat(vb.getObservedValue()).isEqualTo("4px");
         assertThat(notifications.countByIssueIdAndEvent(b.getId(), NotificationEvent.RECHECK_FAILED)).isEqualTo(1);
         assertThat(notifications.countByIssueIdAndEvent(a.getId(), NotificationEvent.RECHECK_FAILED)).isZero();
-        assertThat(notifications.findAll()).singleElement()
-            .satisfies(n -> assertThat(n.getRecipient().getId()).isEqualTo(front.getId()));
+        // pass면 담당 팀에 resolved(2026-11-11, 사용자 승인으로 단언 변경) — 알림은 b의 recheck_failed와 a의 resolved 2건
+        assertThat(notifications.countByIssueIdAndEvent(a.getId(), NotificationEvent.RESOLVED)).isEqualTo(1);
+        assertThat(notifications.findAll()).hasSize(2)
+            .allSatisfy(n -> assertThat(n.getRecipient().getId()).isEqualTo(front.getId()));
         // 상태 변경은 status_history에 실행한 소유자로 남는다(AC6)
         assertThat(histories.findByIssueIdOrderByChangedAtAscIdAsc(a.getId()).getLast().getChangedBy().getId()).isEqualTo(owner.getId());
 
@@ -436,7 +438,11 @@ class QaRunApiTest {
         assertThat(found.getFirstQaRun().getId()).isEqualTo(runId);
         assertThat(found.getStyleMismatch().getExpectedValue()).isEqualTo("주문하기");
         assertThat(found.getStyleMismatch().getActualValue()).isEqualTo("주문");
-        assertThat(notifications.count()).isZero();
+        // 새 범위로 만든 이슈에는 알림이 없고, pass된 a의 resolved만 1건(2026-11-11, 사용자 승인으로 단언 변경)
+        assertThat(notifications.findAll()).singleElement().satisfies(n -> {
+            assertThat(n.getEvent()).isEqualTo(NotificationEvent.RESOLVED);
+            assertThat(n.getIssue().getId()).isEqualTo(a.getId());
+        });
 
         // 새 범위의 property만, 판정과 같은 커밋에서 비교한다
         ArgumentCaptor<QaComparator.FirstQaInput> input = ArgumentCaptor.forClass(QaComparator.FirstQaInput.class);

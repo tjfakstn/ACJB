@@ -57,6 +57,10 @@ public class FirstQaJob {
     @org.springframework.beans.factory.annotation.Autowired
     private com.acjb.server.figma.ProjectFigmaToken figmaTokens;
 
+    /** 실패하면 실행한 사람에게 알린다(2026-11-11) */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.service.TeamNotifier notifier;
+
     public void run(Long runId) {
         figmaTokens.withRun(runId, () -> execute(runId));
     }
@@ -122,7 +126,11 @@ public class FirstQaJob {
 
     private void fail(Long runId, String message) {
         Instant now = clock.instant();
-        tx.executeWithoutResult(s -> runs.findById(runId).ifPresent(r -> r.fail(message, now)));
+        tx.executeWithoutResult(s -> runs.findById(runId).ifPresent(r -> {
+            r.fail(message, now);
+            // 실행한 사람에게 알린다(2026-11-11)
+            notifier.notifyRunFailed(r);
+        }));
     }
 
     static Set<QaScope> parseScope(String csv) {

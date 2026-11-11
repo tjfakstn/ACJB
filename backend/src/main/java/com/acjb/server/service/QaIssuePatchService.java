@@ -12,7 +12,7 @@ import com.acjb.server.common.ApiException;
 import com.acjb.server.domain.IssueStatus;
 import com.acjb.server.domain.Member;
 import com.acjb.server.domain.MemberRole;
-import com.acjb.server.domain.Notification;
+import com.acjb.server.domain.NotificationCause;
 import com.acjb.server.domain.NotificationEvent;
 import com.acjb.server.domain.QAIssue;
 import com.acjb.server.domain.StatusHistory;
@@ -38,7 +38,6 @@ public class QaIssuePatchService {
     private static final Set<IssueStatus> STARTABLE_FROM = Set.of(IssueStatus.NEEDS_CHECK, IssueStatus.NEEDS_RECHECK);
     /** PATCH로 fixed가 될 수 있는 상태(AC6) — in_progress를 건너뛰는 것도 허용. fixed → resolved/needs_recheck는 재검증 등록으로만 */
     private static final Set<IssueStatus> FIXABLE_FROM = Set.of(IssueStatus.NEEDS_CHECK, IssueStatus.NEEDS_RECHECK, IssueStatus.IN_PROGRESS);
-    private static final String IN_APP = "in_app";
 
     private final QAIssueRepository issues;
     private final ProjectMemberRepository projectMembers;
@@ -110,14 +109,14 @@ public class QaIssuePatchService {
         if (requestedTeam != null && requestedTeam != issue.getAssignedTeam()) {
             issue.assignTeam(requestedTeam);
             // AC3: 새로 지정되거나 바뀐 팀의 역할 멤버 각각에게 1건씩. 같은 팀 재지정은 알림 없음(N5, 골든 케이스 ng-004)
-            teamNotifier.notifyTeam(issue, requestedTeam, NotificationEvent.ISSUE_CREATED);
+            teamNotifier.notifyTeam(issue, requestedTeam, NotificationEvent.ISSUE_CREATED, NotificationCause.TEAM_ASSIGNED, actor);
         }
         if (requestedStatus != null) {
             issue.changeStatus(requestedStatus);
             histories.save(new StatusHistory(issue, requestedStatus, actor));
             if (requestedStatus == IssueStatus.FIXED) {
-                // AC4: 등록자에게 1건. in_progress는 알림을 만들지 않는다(N5 — 알림 종류 3개 고정)
-                notifications.save(new Notification(issue, NotificationEvent.FIXED, issue.getReportedBy(), IN_APP));
+                // AC4: 등록자에게 1건. in_progress는 알림을 만들지 않는다(N5)
+                teamNotifier.notifyReporter(issue, actor);
             }
         }
         issues.flush();

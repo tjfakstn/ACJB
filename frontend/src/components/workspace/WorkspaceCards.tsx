@@ -4,7 +4,7 @@ import { Icon } from '../common/Icon'
 import { initialOf, ROLE_TAG } from '../common/roles'
 import {
   formatDate, formatDateTime, needsFigmaToken, type Invitation, type IssueStatus, type MappingList, type MemberRole, type ProjectDetail,
-  type ProjectMember, type ProjectRun,
+  type ProjectMember, type ProjectRun, type RunStatus,
 } from '../../lib/api'
 
 // 작업공간 홈(시안 WS-01·01N·01M·02) 조각들. 수치는 시안 노드 값을 그대로 옮겼다:
@@ -339,7 +339,8 @@ export function ConnectionsCard({ detail }: { detail: ProjectDetail }) {
 
 // ---------- 최근 AI 분석 (시안 WS-01 "AI Analysis") ----------
 
-const RUN_CHIP: Record<string, { label: string; dot: string; bg: string }> = {
+// 키를 RunStatus로 고정 — 상태가 늘면 여기서 컴파일 에러가 나서 칩 누락을 막는다
+const RUN_CHIP: Record<RunStatus, { label: string; dot: string; bg: string }> = {
   none: { label: '분석 전', dot: 'bg-qa-sub', bg: 'bg-qa-surface' },
   queued: { label: '대기 중', dot: 'bg-qa-primary', bg: 'bg-qa-primary/10' },
   running: { label: '진행 중', dot: 'bg-qa-primary', bg: 'bg-qa-primary/10' },

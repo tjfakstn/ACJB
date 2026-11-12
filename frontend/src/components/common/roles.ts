@@ -13,6 +13,7 @@ export const ROLE_TAG: Record<MemberRole, { label: string; dot: string; text: st
 /** 시안 아바타 이니셜: 한글 이름이면 성 다음 글자(김하늘→하), 아니면 첫 글자 */
 export function initialOf(name: string): string {
   const trimmed = name.trim()
-  if (/^[가-힣]{2,4}$/.test(trimmed)) return trimmed[1]
+  // 정규식이 2글자 이상을 보장하므로 charAt(1)은 항상 글자가 있다(charAt은 범위 밖이면 '' — undefined가 아님)
+  if (/^[가-힣]{2,4}$/.test(trimmed)) return trimmed.charAt(1)
   return (trimmed[0] ?? '?').toUpperCase()
 }

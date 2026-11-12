@@ -179,6 +179,7 @@ AI 판단이 섞여 있어 이슈 개수는 실행할 때마다 조금씩 다를
 ## 7. 문의
 
 - **오류 제보·질문:** 이 저장소의 [Issues](https://github.com/tjfakstn/ACJB/issues)에 남겨 주세요. 화면 캡처와 프로젝트 이름을 함께 적어 주시면 빨리 확인할 수 있습니다.
+- **메일 문의:** [tjfakstn04@ajou.ac.kr](mailto:tjfakstn04@ajou.ac.kr)
 - **팀원:** 오단비(기획) · 설만수(개발) · 최유정(디자인)
 
 ---

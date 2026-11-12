@@ -4,15 +4,30 @@
 
 ## 시작하기
 
-TODO: 개발 환경 세팅 명령어 확정되는 대로 채우기 (AGENTS.md 5장과 동기화)
+로컬 개발 명령의 정본은 이 절이다. [AGENTS.md 7.4](AGENTS.md)는 여기를 가리키기만 한다. 아래 명령은 2026-11-12에 실제로 실행해 확인했다(백엔드 테스트 398개 통과, `bootRun` 헬스체크 200, 프론트 `npm ci`·`npm run build`·`npm run dev` 200).
+
+준비물: Git, Docker Desktop, JDK, Node.js(버전 조건은 [README](README.md) 맨 아래 "개발자용" 참고)
+
+**백엔드** (`backend/`에서)
 
 ```bash
-# 설치
-TODO
-
-# 개발 서버
-TODO
+cp .env.example .env    # DB_PASSWORD·DB_ROOT_PASSWORD는 로컬용 임의 값. 나머지 키 설명은 .env.example 주석
+docker compose up -d    # MySQL 8.4 — 개발 스키마(qating)와 테스트 스키마(qating_test)를 만든다
+./gradlew test          # qating_test를 매번 비우고 Flyway로 다시 만든다 — 개발 데이터는 지우지 않는다
+./gradlew bootRun       # http://localhost:8080 (헬스체크: GET /api/v1/health)
 ```
+
+**프론트엔드** (`frontend/`에서)
+
+```bash
+npm ci                  # package-lock.json 그대로 설치
+npm run dev             # http://localhost:5173 — /api 요청은 vite 프록시가 :8080으로 넘긴다
+npm run build           # tsc -b + vite build (타입 검사 포함)
+npm run lint            # oxlint
+```
+
+- DB 스키마 규칙(Flyway): [backend/README.md](backend/README.md)
+- 운영 배포 구성과 절차: [deploy/README.md](deploy/README.md)
 
 ## 브랜치 & 커밋
 

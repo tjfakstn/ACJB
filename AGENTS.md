@@ -124,16 +124,11 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 
 ### 7.4 개발 환경 & 자주 쓰는 명령어
 
-```bash
-# 백엔드
-cd backend && cp .env.example .env   # Google OAuth Client ID/Secret 채우기
-./gradlew bootRun                    # http://localhost:8080
-./gradlew test
+설치·실행 명령의 정본은 [CONTRIBUTING.md "시작하기"](CONTRIBUTING.md#시작하기)다(MySQL 기동, `.env`, 개발 서버 포함). 여기에는 완료 확인(6장)에 쓰는 두 명령만 둔다.
 
-# 프론트엔드
-cd frontend && npm install
-npm run dev                          # http://localhost:5173
-npm run build
+```bash
+cd backend && ./gradlew test     # MySQL(docker compose)이 떠 있어야 한다
+cd frontend && npm run build
 ```
 
 **환경 변수**

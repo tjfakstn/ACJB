@@ -142,6 +142,11 @@ export function WorkspacePage() {
   )
 }
 
+/** 두 ISO 시각 중 나중 것 — 길이 2 배열을 정렬해 [1]로 꺼내던 것을 인덱스 접근 없이 */
+function laterOf(a: string, b: string): string {
+  return a > b ? a : b
+}
+
 function Workspace({ detail, me, members, invitations, toast, run, mapping, onInvite, onDelete, onAnalysis }: {
   detail: ProjectDetail
   me: Me
@@ -163,7 +168,7 @@ function Workspace({ detail, me, members, invitations, toast, run, mapping, onIn
   const alone = others <= 0 && invitations.length === 0
   const bothConnected = !!detail.figma && !!detail.github
   const readyAt = bothConnected
-    ? formatDate([detail.figma!.connected_at, detail.github!.connected_at].sort()[1])
+    ? formatDate(laterOf(detail.figma!.connected_at, detail.github!.connected_at))
     : null
 
   // 첫 QA 전에는 첫 QA 준비(QA-01), 이후에는 Re-QA 실행(RQA-01)으로 간다. 실행 버튼은 그 화면에서 소유자에게만 열린다

@@ -236,7 +236,7 @@ export function InviteStep(props: InviteStepProps) {
           : `‘${projectName}’ 프로젝트에 ${emails.length}명을 초대합니다. 초대받은 사용자가 수락해야 프로젝트에 참여합니다.`)}
         {retry && (
           <Banner tone="warn" title={sent.length > 0 ? `${failed.length}명에게 초대를 보내지 못했어요` : '초대를 보내지 못했어요'}
-            body={`${failed[0].message}${sent.length > 0 ? ` · ${sent.length}명은 보냈어요` : ''}. 입력한 내용은 유지되니 다시 시도해 주세요.`} />
+            body={`${failed[0]?.message ?? '초대를 보내지 못했어요'}${sent.length > 0 ? ` · ${sent.length}명은 보냈어요` : ''}. 입력한 내용은 유지되니 다시 시도해 주세요.`} />
         )}
         {existingNote}
         <ul className="divide-y divide-qa-border rounded-xl border border-qa-border">

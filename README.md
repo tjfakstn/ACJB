@@ -4,6 +4,10 @@
 > **서비스:** QAting — Figma 시안과 실제 코드를 비교해 디자인 QA 이슈를 찾고, 담당 팀 배정 → 수정 → 재검증까지 한곳에서 관리하는 QA 자동화 서비스
 > **접속:** **https://acjb-qating.com** (리뷰 기간 11/11(수) ~ 11/18(수) 동안 운영)
 
+**개발자·리뷰어용** — 이 문서는 서비스 사용 가이드입니다. 저장소의 개발 방식은 아래에서 보세요.
+- [docs/DEV_ENVIRONMENT.md](docs/DEV_ENVIRONMENT.md): 스펙 → 골든 케이스·테스트 → evals → 결정 기록이 이어지는 구조와 에이전트 규칙 설계
+- [AGENTS.md](AGENTS.md)(사람·AI 에이전트 공통 규칙) · [docs/SPEC.md](docs/SPEC.md)(수용 기준) · [evals/EVAL_DESIGN.md](evals/EVAL_DESIGN.md)(LLM 품질 측정)
+
 ## 1. 서비스 소개
 
 **대상 사용자**

@@ -55,7 +55,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 
 ## 5. 코딩 컨벤션
 
-- Frontend: TypeScript strict 모드, 컴포넌트 PascalCase, 함수/변수 camelCase
+- Frontend: TypeScript `strict` + `noUncheckedIndexedAccess`(설정은 `frontend/tsconfig.app.json`·`tsconfig.node.json` — 인덱스 접근은 `!`·`as` 대신 가드·기본값으로), 컴포넌트 PascalCase, 함수/변수 camelCase
 - Backend: Java, Spring Boot 컨벤션(Controller/Config 패키지 분리)
 - 상수: UPPER_SNAKE_CASE
 - 주석은 "무엇"보다 "왜"를 남긴다

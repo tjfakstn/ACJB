@@ -12,7 +12,7 @@
 
 | 표준 구조 | 이 저장소의 위치 | 실행·확인 |
 | --- | --- | --- |
-| MVP AC 표시 | [docs/SPEC.md](docs/SPEC.md) 6절 — AC1~AC37 모두 MVP, 각 AC 앞 `[MVP]` | |
+| MVP AC 표시 | [docs/SPEC.md](docs/SPEC.md) 6절 — **AC1~AC28이 MVP**(각 AC 앞 `[MVP]`), AC29~AC37은 MVP 발표 이후 추가 개발(`[MVP 이후]`, 모두 구현·테스트됨) | |
 | 골든 케이스 `tests/harness/golden_cases.yaml` | 같음 — 138케이스, 케이스마다 `ac`·`category`(normal 47·boundary 69·forbidden 22) | |
 | 테스트 하니스 `tests/test_<기능>_golden.py` | **[backend/src/test/java/com/acjb/server/golden/GoldenApiHarnessTest.java](backend/src/test/java/com/acjb/server/golden/GoldenApiHarnessTest.java)** — 백엔드가 Java(Spring)라 JUnit으로 작성. 케이스 파일을 읽어 실제 API를 호출하고 판정(QA 이슈 등록·알림·상태 전이·재검증·권한, 34케이스). 케이스 파일 자체 검사(AC 번호·범주·모든 케이스의 테스트 연결)는 **[GoldenCatalogTest.java](backend/src/test/java/com/acjb/server/golden/GoldenCatalogTest.java)** | `cd backend && ./gradlew test` (MySQL 필요, 아래 개발자용 로컬 실행) |
 | 결함 주입 기록 `docs/prompts/delegation_<기능>.md` | [docs/prompts/delegation_golden.md](docs/prompts/delegation_golden.md)(골든 하니스), [docs/prompts/delegation_evals.md](docs/prompts/delegation_evals.md)(evals 러너) | |
@@ -27,7 +27,7 @@ QA 전담 인력 없이 디자이너·프론트엔드·백엔드·기획이 QA�
 **해결하려는 문제**
 "시안이랑 색이 달라요", "여기 간격이 이상해요"를 메신저로 주고받다 보면 어느 화면·어느 요소인지 다시 묻고, 고쳤는지 목록을 직접 확인하고, 다시 확인할 때 재현 방법을 또 적는 왕복이 반복됩니다. 인터뷰 12건에서 이 왕복이 QA 라운드마다 되풀이된다는 것을 확인했습니다.
 
-**이번 MVP에서 쓸 수 있는 기능**
+**지금 쓸 수 있는 기능** (실시간 QA·코드 추적·알림 읽음은 MVP 발표 이후 추가)
 
 | 기능 | 하는 일 |
 | --- | --- |
@@ -161,7 +161,7 @@ AI 판단이 섞여 있어 이슈 개수는 실행할 때마다 조금씩 다를
 
 ## 6. 제한 사항과 알려진 문제
 
-**MVP에서 아직 안 되는 것**
+**아직 안 되는 것**
 - **네이티브 앱 코드:** 앱은 React Native와 Flutter만 지원합니다. Kotlin·Swift로 만든 네이티브 앱은 코드 비교가 안 되고, 수동 QA(스크린샷)만 쓸 수 있습니다.
 - **앱 화면 점검:** 단일 컴포넌트 점검(배포 화면에서 요소를 골라 값을 읽는 기능)과 실시간 QA 배포 화면은 웹만 됩니다. 앱은 코드 비교(첫 QA·Re-QA)와 수동 QA를 씁니다.
 - **GitHub 이슈·PR 생성:** GitHub는 읽기만 합니다. 이슈를 GitHub로 내보내지 않습니다.

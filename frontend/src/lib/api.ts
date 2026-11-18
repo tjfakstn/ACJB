@@ -48,7 +48,8 @@ export class ApiError extends Error {
 /** 서버가 XSRF-TOKEN 쿠키로 내려준 값 — POST·PATCH·DELETE는 X-XSRF-TOKEN 헤더에 실어야 한다(없으면 403) */
 function xsrfToken(): string {
   const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : ''
+  const value = match?.[1]
+  return value ? decodeURIComponent(value) : ''
 }
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -627,7 +628,8 @@ export async function deleteScreenLink(projectId: string, frameId: string): Prom
 }
 
 function pathSegments(path: string): string[] {
-  const clean = path.split(/[?#]/)[0].replace(/\/+$/, '')
+  // split은 항상 요소를 1개 이상 돌려준다 — ?? ''는 타입만을 위한 기본값
+  const clean = (path.split(/[?#]/)[0] ?? '').replace(/\/+$/, '')
   return clean === '' ? [] : clean.slice(1).split('/')
 }
 

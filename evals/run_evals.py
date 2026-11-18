@@ -23,7 +23,8 @@ RecheckSuggestionService.filter, ParseService)를 옮긴 것이다 — 서버를
     python3 evals/run_evals.py --mode stored --fixtures 사본.json --no-record   # 오답 주입 확인
     python3 evals/run_evals.py --case p01 --case ev-001             # 일부만
     python3 evals/run_evals.py --label-sheet 2026-11-10T2130        # judge 검증용 라벨 시트(judge 판정은 빼고)
-    python3 evals/run_evals.py --judge-agreement 2026-11-10T2130    # judge_labels.jsonl과 judge 일치율
+    python3 evals/run_evals.py --judge-agreement 2026-11-10T2130    # judge_labels.jsonl과 judge 일치율 → history.csv judge_agreement
+    python3 evals/label_judge.py 2026-11-10T2303 --labeler 이름     # 라벨 시트를 한 줄씩 보여 주고 사람 판정을 judge_labels.jsonl에 적는다
 """
 
 import argparse
@@ -85,7 +86,7 @@ TARGETS = {
     "recheck_relevant": (">=", 0.8),
 }
 HISTORY_COLUMNS = ["run_id", "commit", "change", "mode", "evalset_version", "judge_version", "golden_tests", "cases", "passed_cases",
-                   "errors", *TARGETS.keys()]
+                   "errors", *TARGETS.keys(), "judge_agreement"]
 
 # 구조화 출력 API가 받지 않는 제약(RecheckSuggestionSchema.UNSUPPORTED_KEYS와 같다)
 UNSUPPORTED_KEYS = {"maxItems", "minLength", "maxLength", "minimum", "maximum", "pattern"}
@@ -646,6 +647,31 @@ def judge_agreement(run_id):
               "by_criterion": {k: ratio(sum(h == jv for c, h, jv in pairs if c == k), sum(1 for c, *_ in pairs if c == k))
                                for k in sorted({c for c, *_ in pairs})}}
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    # 일치율을 결과 옆에 남기고 history.csv의 그 실행 줄에 적는다(사람 라벨 → judge 신뢰도, EVAL_DESIGN.md 3절)
+    (RESULTS / f"{run_id}.judge_agreement.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    rows = read_history()
+    hit = [r for r in rows if r["run_id"] == run_id]
+    if not hit:
+        raise SystemExit(f"history.csv에 run_id {run_id} 줄이 없습니다")
+    for r in hit:
+        r["judge_agreement"] = report["agreement"]
+    write_history(rows)
+    print(f"history.csv {run_id} 줄에 judge_agreement={report['agreement']}", file=sys.stderr)
+
+
+def read_history():
+    """history.csv를 읽는다. 예전 열 구성(judge_agreement 없음)도 읽고, 빠진 열은 빈 값으로 둔다"""
+    if not HISTORY.exists():
+        return []
+    with HISTORY.open(encoding="utf-8", newline="") as f:
+        return [{k: row.get(k, "") or "" for k in HISTORY_COLUMNS} for row in csv.DictReader(f)]
+
+
+def write_history(rows):
+    with HISTORY.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=HISTORY_COLUMNS)
+        w.writeheader()
+        w.writerows(rows)
 
 
 # ---------------------------------------------------------------- 실행
@@ -744,14 +770,13 @@ def main():
         if path.exists():
             raise SystemExit(f"{path.name}이 이미 있습니다 — 결과 파일은 고치지 않는다. 1분 뒤 다시 실행")
         path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-        new = not HISTORY.exists()
-        with HISTORY.open("a", encoding="utf-8", newline="") as f:
-            w = csv.writer(f)
-            if new:
-                w.writerow(HISTORY_COLUMNS)
-            w.writerow([run["run_id"], run["commit"], run["change"], run["mode"], run["evalset_version"], run["judge_version"],
-                        run["golden_tests"], len(cases), passed, len(errors)]
-                       + [(metrics[k]["value"] if "value" in metrics[k] else metrics[k]["count"]) if k in metrics else "" for k in TARGETS])
+        rows = read_history()
+        rows.append(dict(zip(HISTORY_COLUMNS,
+            [run["run_id"], run["commit"], run["change"], run["mode"], run["evalset_version"], run["judge_version"],
+             run["golden_tests"], len(cases), passed, len(errors)]
+            + [(metrics[k]["value"] if "value" in metrics[k] else metrics[k]["count"]) if k in metrics else "" for k in TARGETS]
+            + [""])))   # judge_agreement — 사람 라벨을 단 뒤 --judge-agreement RUN_ID가 채운다
+        write_history(rows)
         print(f"결과: {path.relative_to(ROOT)}", file=sys.stderr)
     return 0
 

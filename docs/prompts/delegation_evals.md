@@ -59,3 +59,17 @@ evals/run_evals.py 를 고쳐 줘. 평가 데이터셋을 읽어 채점하고 �
 **확인 결과: 넣은 오답 9건을 모두 실패로 판정했다.** 이 확인 뒤로 러너(`evals/run_evals.py`)는 에이전트가 임의로 고치지 않는다 — 새 expect 키나 task(예: `first_qa`)를 넣을 때만 사람이 범위를 정해 다시 위임하고, 그때 이 표를 다시 돌린다.
 
 확인한 사람: ____ (팀원이 위 표를 직접 재현하고 서명한다 — 지금은 에이전트가 실행한 결과)
+
+## 3. 러너 변경 (2026-11-18, 사람 지시 — judge 일치율 기록)
+
+평가 기준(「evals 실행과 결과」: judge를 쓰면 사람 라벨과의 일치율을 `history.csv`에 포함)에 맞추려고 사람이 범위를 정해 다시 맡겼다.
+
+```
+evals/run_evals.py에서 --judge-agreement RUN_ID가 일치율 보고를 evals/results/RUN_ID.judge_agreement.json에 남기고
+history.csv에 judge_agreement 열을 더해 그 실행 줄에 적게 해 줘. 예전 열 구성의 history.csv도 읽고, 새 실행 줄의 judge_agreement는 비워 둔다.
+사람이 라벨 시트를 한 줄씩 보며 y/n으로 매기는 evals/label_judge.py도 만들어 줘(judge 판정은 보여 주지 않는다).
+하지 말 것: 채점·집계 로직, 판정 기준 파일(EVAL_DESIGN.md 1~4절의 지표 정의·합격선, evalset.jsonl, judge_prompt.md), judge_labels.jsonl 내용 작성.
+```
+
+에이전트가 한 일: `run_evals.py`에 `read_history`·`write_history`와 `judge_agreement` 열, `label_judge.py` 추가, 기존 `history.csv` 3줄에 빈 `judge_agreement` 열 추가.
+확인: 채점·집계 코드는 바꾸지 않았다 — 바꾼 뒤 `python3 evals/run_evals.py --no-record`가 바꾸기 전과 같은 결과(케이스 통과 31/35, 지표 12개 같음). 일치율 경로는 저장소 사본에서 임시 라벨로 돌려 `history.csv`의 해당 줄만 채워지는 것을 보고 사본을 지웠다(실제 `judge_labels.jsonl`은 비어 있다). 그래서 1·2절의 오답 주입표는 다시 돌리지 않았다.

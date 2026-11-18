@@ -1,5 +1,7 @@
 # 골든 케이스 (데이터)
-# 구현 전 단계라 입출력 "형태"만 먼저 고정한 초안. 각 케이스는 docs/SPEC.md v0.2의 AC 번호와 대응한다.
+# 결정 층 기준 데이터 — 케이스 138개(2026-11-18). 각 케이스는 docs/SPEC.md의 AC 번호(ac)와 범주(category: normal·boundary·forbidden)를 가진다.
+# 하니스 backend/src/test/java/com/acjb/server/golden/GoldenApiHarnessTest가 이 파일을 직접 읽어 harness: api인 케이스를 실행·판정한다(given = 기계가 읽는 사전 조건).
+# 나머지 케이스는 메서드 이름 앞 id(예: qi001_)나 @GoldenCase("id")로 백엔드 테스트에 연결되고, GoldenCatalogTest가 연결 누락·AC 누락을 검사한다. 자세한 것은 tests/README.md.
 # 판정 규칙: expected에 명시된 키가 응답에 존재하고 조건을 만족하면 통과. 명시 안 된 키는 판정에 안 씀.
 # actor: 요청자. 생략하면 그 프로젝트 멤버로 로그인한 사용자. AC12·AC13 케이스는 actor를 명시한다.
 # ng-* 케이스는 SPEC.md 6.1절 금지 기준(N번호)에 대응한다.
@@ -7,6 +9,9 @@
 cases:
   - id: qi-001
     ac: AC1
+    category: boundary
+    harness: api
+    given: { as: member-1 }
     description: 재현 정보(screen_location) 없이 이슈를 등록하면 400과 빠진 항목 이름을 반환한다
     input:
       endpoint: POST /projects/{projectId}/qa-issues
@@ -20,6 +25,9 @@ cases:
 
   - id: qi-002
     ac: AC1
+    category: normal
+    harness: api
+    given: { as: member-1 }
     description: 필수 정보(description/screen_location/repro_steps/platform_scope)가 모두 있으면 등록되고 status는 needs_check
     input:
       endpoint: POST /projects/{projectId}/qa-issues
@@ -35,6 +43,9 @@ cases:
 
   - id: sm-001
     ac: AC2
+    category: boundary
+    harness: api
+    given: { as: member-1 }
     description: StyleMismatch는 expected_value와 actual_value가 둘 다 있어야 저장된다 — 하나만 있으면 거부
     input:
       endpoint: POST /projects/{projectId}/qa-issues
@@ -52,6 +63,9 @@ cases:
 
   - id: nt-001
     ac: AC3
+    category: normal
+    harness: api
+    given: { as: member-1 }
     description: 담당 팀을 지정해 이슈를 등록하면 그 팀 역할 멤버에게 Notification(issue_created)이 정확히 1건 생성된다
     input:
       endpoint: POST /projects/{projectId}/qa-issues
@@ -71,6 +85,9 @@ cases:
 
   - id: nt-002
     ac: AC4
+    category: normal
+    harness: api
+    given: { as: member-2, issue: { status: needs_check, assigned_team: frontend, reported_by: member-1 } }
     description: 이슈 상태를 fixed로 바꾸면 등록자에게 Notification(fixed)이 정확히 1건 생성된다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -86,6 +103,9 @@ cases:
 
   - id: vf-001
     ac: AC5
+    category: normal
+    harness: api
+    given: { as: member-1, issue: { status: fixed, assigned_team: frontend } }
     description: fixed 상태 이슈를 조회하면 최초 등록된 repro_steps·screen_location·environment가 그대로 반환된다
     input:
       endpoint: GET /projects/{projectId}/qa-issues/{issueId}
@@ -97,6 +117,9 @@ cases:
 
   - id: st-001
     ac: AC6
+    category: boundary
+    harness: api
+    given: { as: member-1, issue: { status: needs_check, assigned_team: frontend, reported_by: member-1 } }
     description: needs_check 상태에서 재검증(verifications)을 바로 등록하려 하면 거부된다 (fixed만 재검증 가능)
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
@@ -109,6 +132,9 @@ cases:
 
   - id: st-002
     ac: AC6
+    category: normal
+    harness: api
+    given: { as: member-2, issue: { status: needs_check, assigned_team: frontend } }
     description: 허용된 상태 전이(needs_check → fixed)는 성공하고 status_history에 남는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -122,6 +148,9 @@ cases:
 
   - id: vf-002
     ac: AC7
+    category: normal
+    harness: api
+    given: { as: member-1, issue: { status: fixed, assigned_team: frontend, reported_by: member-1 } }
     description: 재검증 result가 pass면 이슈 상태가 resolved로 바뀌고 Verification 기록이 남는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
@@ -135,6 +164,9 @@ cases:
 
   - id: vf-003
     ac: AC7
+    category: normal
+    harness: api
+    given: { as: member-1, issue: { status: fixed, assigned_team: frontend, reported_by: member-1 } }
     description: 재검증 result가 fail이면 이슈 상태가 needs_recheck로 바뀐다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
@@ -147,6 +179,7 @@ cases:
 
   - id: pc-001
     ac: AC8
+    category: boundary
     description: 자유서술 텍스트에 repro_steps에 해당하는 내용이 없으면 지어내지 않고 missing에 담아 되묻는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/parse
@@ -160,6 +193,9 @@ cases:
 
   - id: nt-003
     ac: AC3
+    category: normal
+    harness: api
+    given: { as: member-1, issue: { status: needs_check, assigned_team: null } }
     description: 담당 팀이 없던 이슈에 PATCH로 assigned_team을 새로 지정하면 그 팀 역할 멤버에게 Notification(issue_created)이 정확히 1건 생성된다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -175,6 +211,9 @@ cases:
 
   - id: nt-004
     ac: AC3
+    category: boundary
+    harness: api
+    given: { as: member-1 }
     description: 담당 팀을 지정하지 않고 이슈를 등록하면 Notification이 생성되지 않는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues
@@ -192,6 +231,9 @@ cases:
 
   - id: st-003
     ac: AC6
+    category: boundary
+    harness: api
+    given: { as: member-2, issue: { status: needs_check, assigned_team: frontend } }
     description: needs_check 상태에서 PATCH로 status를 resolved로 직접 바꾸려 하면 거부된다(resolved는 재검증 등록으로만 전이 가능)
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -203,6 +245,9 @@ cases:
 
   - id: health-001
     ac: AC9
+    category: normal
+    harness: api
+    given: { as: anonymous }
     description: 헬스체크는 항상 200 (구현됨 — backend/src/main/java/com/acjb/server/controller/HealthController.java)
     input:
       endpoint: GET /api/v1/health
@@ -212,6 +257,9 @@ cases:
 
   - id: auth-001
     ac: AC10
+    category: normal
+    harness: api
+    given: { as: anonymous }
     description: 미인증 상태에서도 /auth/me는 200으로 응답한다 (구현됨 — AuthController.java)
     input:
       endpoint: GET /api/v1/auth/me
@@ -223,6 +271,9 @@ cases:
   # --- AC11: 재검증 fail 알림 ---
   - id: nt-005
     ac: AC11
+    category: normal
+    harness: api
+    given: { as: member-1, issue: { status: fixed, assigned_team: frontend, reported_by: member-1 } }
     description: 재검증이 fail로 등록되면 담당 팀 역할 멤버에게 Notification(recheck_failed)이 정확히 1건 생성된다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
@@ -239,6 +290,9 @@ cases:
 
   - id: nt-006
     ac: AC11
+    category: boundary
+    harness: api
+    given: { as: member-1, issue: { status: fixed, assigned_team: frontend, reported_by: member-1 } }
     description: 재검증이 pass면 recheck_failed 알림은 생성되지 않는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
@@ -254,6 +308,9 @@ cases:
   # --- AC12: 프로젝트 접근 ---
   - id: au-001
     ac: AC12
+    category: boundary
+    harness: api
+    given: { as: anonymous }
     description: 미인증으로 프로젝트 하위 경로를 호출하면 401
     input:
       endpoint: GET /projects/{projectId}/qa-issues
@@ -264,6 +321,9 @@ cases:
 
   - id: au-002
     ac: AC12
+    category: boundary
+    harness: api
+    given: { as: member-9 }
     description: 로그인했지만 그 프로젝트 멤버가 아니면 403이고 이슈 데이터를 담지 않는다
     input:
       endpoint: GET /projects/{projectId}/qa-issues
@@ -276,6 +336,9 @@ cases:
   # --- AC13: 역할별 권한 ---
   - id: au-003
     ac: AC13
+    category: boundary
+    harness: api
+    given: { as: member-3, issue: { status: needs_check, assigned_team: frontend } }
     description: 담당 팀 역할이 아닌 멤버가 fixed로 바꾸려 하면 403이고 상태·이력·알림이 바뀌지 않는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -293,6 +356,9 @@ cases:
 
   - id: au-004
     ac: AC13
+    category: boundary
+    harness: api
+    given: { as: member-1, issue: { status: needs_check, assigned_team: null, reported_by: member-1 } }
     description: 담당 팀이 없는 이슈는 누구도 fixed로 바꿀 수 없다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -305,6 +371,9 @@ cases:
 
   - id: au-005
     ac: AC13
+    category: boundary
+    harness: api
+    given: { as: member-2, issue: { status: fixed, assigned_team: frontend, reported_by: member-1 } }
     description: 등록자가 아닌 멤버가 재검증을 등록하면 403이고 Verification이 생기지 않는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
@@ -321,6 +390,9 @@ cases:
 
   - id: au-006
     ac: AC13
+    category: boundary
+    harness: api
+    given: { as: member-3, issue: { status: needs_check, assigned_team: frontend } }
     description: 권한 검사가 전이 검사보다 먼저다 — 권한 없는 사람이 허용되지 않은 전이를 요청하면 409가 아니라 403
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -332,6 +404,9 @@ cases:
 
   - id: au-007
     ac: AC13
+    category: boundary
+    harness: api
+    given: { as: member-1, issue: { status: needs_check, assigned_team: null } }
     description: 정해진 4개 값이 아닌 담당 팀을 지정하면 400이고 알림이 생기지 않는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -346,6 +421,7 @@ cases:
   # --- SPEC 6.1 금지 기준 ---
   - id: ng-001
     ac: AC1
+    category: forbidden
     rule: N1
     description: 공백만 있는 description은 빈 값으로 보고 거부하며 이슈를 저장하지 않는다
     input:
@@ -359,6 +435,7 @@ cases:
 
   - id: ng-002
     ac: AC2
+    category: forbidden
     rule: N2
     description: style_mismatch가 잘못된 요청은 이슈도 저장하지 않는다(부분 저장 금지)
     input:
@@ -380,6 +457,7 @@ cases:
 
   - id: ng-003
     ac: AC2
+    category: forbidden
     rule: N4
     description: scan은 v1에 포함돼(2026-10-28 확정, 설만수 승인) 유효한 요청(frame_id·node_id·target_url·selector)이면 비동기 작업이 큐에 들어가 202와 scan_id를 반환한다. node_id·selector는 openapi 단일 컴포넌트 scan 요청 형식에 맞춰 2026-11-05 추가(설만수 승인, 기대값은 그대로)
     input:
@@ -392,6 +470,7 @@ cases:
 
   - id: ng-004
     ac: AC3
+    category: forbidden
     rule: N5
     description: 이미 같은 담당 팀인데 다시 지정하면 알림을 만들지 않는다
     input:
@@ -405,6 +484,7 @@ cases:
 
   - id: ng-005
     ac: AC5
+    category: forbidden
     rule: N6
     description: PATCH로 repro_steps를 바꾸려 하면 400이고 원본이 그대로다
     input:
@@ -417,6 +497,7 @@ cases:
 
   - id: ng-006
     ac: AC5
+    category: forbidden
     rule: N6
     description: 재검증 요청에 repro_steps가 들어와도 원본을 덮어쓰지 않고 원본을 반환한다
     input:
@@ -429,6 +510,7 @@ cases:
 
   - id: ng-007
     ac: AC6
+    category: forbidden
     rule: N7
     description: 같은 상태로의 전이(fixed → fixed)는 409이고 status_history가 늘지 않는다
     input:
@@ -444,6 +526,7 @@ cases:
 
   - id: ng-008
     ac: AC6
+    category: forbidden
     rule: N8
     description: body에 reported_by를 넣어도 무시하고 로그인 사용자로 기록한다
     input:
@@ -460,6 +543,7 @@ cases:
 
   - id: ng-009
     ac: AC8
+    category: forbidden
     rule: N9
     description: 파싱 API는 이슈를 만들지 않는다
     input:
@@ -472,6 +556,7 @@ cases:
 
   - id: ng-010
     ac: AC12
+    category: forbidden
     rule: N10
     description: 내 프로젝트 경로에 다른 프로젝트의 issueId를 넣어도 그 이슈 데이터를 반환하지 않는다
     input:
@@ -485,8 +570,9 @@ cases:
   # 근거: docs/SPEC.md AC13(11-05 수정)·AC14~AC19, 6.1절 N14·N15. N16은 2차 LLM·RAG 설계 확정 후 작성.
 
   # --- AC14: 내 알림 조회 ---
-  - id: nt-007
+  - id: nt-009
     ac: AC14
+    category: normal
     description: 알림 목록은 요청자가 받은 것만 created_at desc, id desc 순으로 반환하고 다른 멤버의 알림은 담지 않는다
     input:
       endpoint: GET /projects/{projectId}/notifications
@@ -501,6 +587,7 @@ cases:
   # --- AC15: 프로젝트·멤버 조회 ---
   - id: pj-001
     ac: AC15
+    category: normal
     description: 프로젝트 목록은 요청자가 멤버인 프로젝트만 name asc, id asc 순으로 반환한다
     input:
       endpoint: GET /projects
@@ -512,6 +599,7 @@ cases:
 
   - id: pj-002
     ac: AC15
+    category: normal
     description: 멤버 목록은 그 프로젝트 멤버에게만 반환하고 각 멤버의 프로젝트별 role을 담는다
     input:
       endpoint: GET /projects/{projectId}/members
@@ -525,6 +613,7 @@ cases:
   # --- AC16: 프로젝트 생성 ---
   - id: pj-003   # 2026-11-07 교체(설만수 결정): 만들 때 역할을 받지 않고 소유자는 역할 미지정으로 시작
     ac: AC16
+    category: normal
     description: 프로젝트를 만들면 요청자가 소유자이자 역할 미지정(role null)의 멤버가 되고 설명이 저장된다
     input:
       endpoint: POST /projects
@@ -539,6 +628,7 @@ cases:
 
   - id: pj-004   # 2026-11-07 교체(설만수 결정): role 대신 이름·설명 규칙
     ac: AC16
+    category: boundary
     description: 이름이 비었거나 2~40자·허용 문자 규칙을 어기거나 설명이 200자를 넘으면 400이고 프로젝트를 만들지 않는다
     input:
       endpoint: POST /projects
@@ -556,6 +646,7 @@ cases:
 
   - id: pj-007
     ac: AC15
+    category: normal
     description: 목록 카드에는 설명·연결 여부·분석 상태·전체/미해결 이슈 수·멤버 수와 이름순 앞 3명이 담긴다
     input:
       endpoint: GET /projects
@@ -576,6 +667,7 @@ cases:
 
   - id: pj-008
     ac: AC16
+    category: boundary
     description: 설명은 선택이다 — 빼고 만들면 description이 null이다
     input:
       endpoint: POST /projects
@@ -588,6 +680,7 @@ cases:
   # --- AC26: 프로젝트 삭제 (2026-11-07, 설만수 지시) ---
   - id: pj-009
     ac: AC26
+    category: normal
     description: 소유자가 삭제하면 그 프로젝트의 이슈·이력·재검증·알림·스타일 차이·초대·멤버십까지 모두 지워지고 다른 프로젝트와 멤버 계정은 남는다
     input:
       endpoint: DELETE /projects/{projectId}
@@ -603,6 +696,7 @@ cases:
 
   - id: pj-010
     ac: AC26
+    category: boundary
     description: 소유자가 아닌 멤버의 삭제 요청은 403이고 아무것도 지우지 않는다
     input:
       endpoint: DELETE /projects/{projectId}
@@ -614,6 +708,7 @@ cases:
 
   - id: pj-011
     ac: AC26
+    category: boundary
     description: 비교 분석·첫 QA가 실행 중이면 409 NOT_READY이고 지우지 않는다
     input:
       endpoint: DELETE /projects/{projectId}
@@ -626,6 +721,7 @@ cases:
   # --- AC17: 초대 ---
   - id: iv-001
     ac: AC17
+    category: normal
     description: 멤버가 이메일로 초대하면 7일 뒤 만료되는 pending 초대 1건이 생기고 초대 메일이 1통 나간다
     input:
       endpoint: POST /projects/{projectId}/invitations
@@ -639,6 +735,7 @@ cases:
 
   - id: iv-002
     ac: AC17
+    category: boundary
     description: 이미 그 프로젝트 멤버인 이메일을 초대하면 409이고 초대를 만들지 않는다
     input:
       endpoint: POST /projects/{projectId}/invitations
@@ -653,6 +750,7 @@ cases:
 
   - id: iv-003   # 2026-11-07 교체(설만수 승인): canceled + 새 초대 → 같은 초대 연장
     ac: AC17
+    category: boundary
     description: 같은 이메일에 pending 초대가 있으면 새 초대를 만들지 않고 그 초대의 만료를 지금부터 7일로 늘리며 이전 링크는 무효가 된다
     input:
       endpoint: POST /projects/{projectId}/invitations
@@ -671,6 +769,7 @@ cases:
   # --- AC18: 초대 수락 ---
   - id: iv-004
     ac: AC18
+    category: boundary
     description: 수락한 사람이 초대받은 이메일과 다른 계정이면 403이고 멤버를 만들지 않는다
     input:
       endpoint: POST /invitations/{token}/accept
@@ -685,6 +784,7 @@ cases:
 
   - id: iv-005
     ac: AC18
+    category: boundary
     description: 만료·취소·이미 수락된 초대를 수락하면 409이고 멤버를 만들지 않는다
     input:
       endpoint: POST /invitations/{token}/accept
@@ -699,6 +799,7 @@ cases:
 
   - id: iv-006
     ac: AC18
+    category: boundary
     description: role이 정해진 값이 아니면 400이고 멤버를 만들지 않으며 초대는 pending으로 남는다
     input:
       endpoint: POST /invitations/{token}/accept
@@ -712,6 +813,7 @@ cases:
 
   - id: iv-007
     ac: AC18
+    category: normal
     description: 초대받은 계정이 정해진 role로 수락하면 그 role의 멤버가 되고 초대는 accepted가 된다
     input:
       endpoint: POST /invitations/{token}/accept
@@ -727,6 +829,7 @@ cases:
   # --- AC19: 멤버 제거 ---
   - id: pj-005
     ac: AC19
+    category: normal
     description: 소유자가 멤버를 제거해도 이슈(담당 팀·상태·이력)·알림은 바뀌지 않는다 — 담당은 팀 단위다(2026-11-08)
     input:
       endpoint: DELETE /projects/{projectId}/members/{memberId}
@@ -742,6 +845,7 @@ cases:
 
   - id: pj-006
     ac: AC19
+    category: boundary
     description: 소유자가 아닌 멤버가 다른 멤버를 제거하면 403이고 아무것도 바뀌지 않는다
     input:
       endpoint: DELETE /projects/{projectId}/members/{memberId}
@@ -755,6 +859,9 @@ cases:
   # --- AC13 (2026-11-05 수정): 등록자가 제거된 이슈의 재검증 ---
   - id: au-008
     ac: AC13
+    category: normal
+    harness: api
+    given: { as: member-1, issue: { status: fixed, assigned_team: frontend, reported_by: member-3 }, removed: [member-3] }
     description: 등록자가 프로젝트에서 제거됐으면 소유자가 재검증을 등록할 수 있다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
@@ -767,6 +874,9 @@ cases:
 
   - id: au-009
     ac: AC13
+    category: boundary
+    harness: api
+    given: { as: member-1, issue: { status: fixed, assigned_team: frontend, reported_by: member-3 } }
     description: 등록자가 아직 멤버면 소유자라도 재검증을 등록할 수 없다(403, 상태·이력 그대로)
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/verifications
@@ -782,6 +892,7 @@ cases:
   # --- 6.1절 금지 기준 ---
   - id: ng-011
     ac: AC17
+    category: forbidden
     rule: N14
     description: 초대 응답·목록 어디에도 초대 토큰(원문·해시)을 담지 않는다
     input:
@@ -791,6 +902,7 @@ cases:
 
   - id: ng-012
     ac: AC19
+    category: forbidden
     rule: N15
     description: 소유자 자신은 제거할 수 없다(409) — 소유자 없는 프로젝트를 만들지 않는다
     input:
@@ -804,6 +916,7 @@ cases:
 
   - id: ng-013
     ac: AC19
+    category: forbidden
     rule: N15
     description: 멤버를 제거해도 그 멤버가 등록한 이슈·status_history·알림·재검증 기록은 지우지 않는다
     input:
@@ -826,6 +939,7 @@ cases:
   # --- AC20: 재검증 범위 제안 ---
   - id: rs-001
     ac: AC20
+    category: normal
     description: fixed 이슈의 등록자가 요청하면 검색된 문서를 근거로 단 제안을 그대로 돌려준다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
@@ -841,6 +955,7 @@ cases:
 
   - id: rs-002
     ac: AC20
+    category: boundary
     description: fixed가 아닌 이슈에 요청하면 409이고 임베딩·LLM을 부르지 않는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
@@ -854,6 +969,7 @@ cases:
 
   - id: rs-003
     ac: AC20
+    category: boundary
     description: 재검증 등록 권한이 없는 멤버(등록자가 아닌 담당 팀 멤버)가 요청하면 403이고 임베딩·LLM을 부르지 않는다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
@@ -866,6 +982,7 @@ cases:
 
   - id: rs-004
     ac: AC20
+    category: boundary
     description: 검색할 다른 문서가 하나도 없으면 LLM을 부르지 않고 빈 제안을 돌려준다
     input:
       endpoint: POST /projects/{projectId}/qa-issues/{issueId}/recheck-suggestions
@@ -879,6 +996,7 @@ cases:
   # --- 6.1절 금지 기준 N16 ---
   - id: ng-014
     ac: AC20
+    category: forbidden
     rule: N16
     description: 검색 결과에 없던 id를 근거로 단 제안은 통째로 버리고 dropped_count에 센다
     input:
@@ -898,6 +1016,7 @@ cases:
 
   - id: ng-015
     ac: AC20
+    category: forbidden
     rule: N16
     description: 다른 프로젝트의 문서는 내용이 아무리 비슷해도 검색·근거에 들어가지 않는다
     input:
@@ -913,6 +1032,7 @@ cases:
 
   - id: ng-016
     ac: AC20
+    category: forbidden
     rule: N16
     description: 제안을 요청해도 이슈·StyleMismatch·Verification·알림을 만들거나 바꾸지 않는다
     input:
@@ -933,6 +1053,9 @@ cases:
   # --- AC6·AC13 수정: in_progress(수정 중) ---
   - id: st-004
     ac: AC6
+    category: normal
+    harness: api
+    given: { as: member-2, issue: { status: needs_check, assigned_team: frontend } }
     description: 담당 팀 멤버가 needs_check 이슈를 in_progress로 바꾸면 성공하고 status_history에 남으며 알림은 생기지 않는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -948,6 +1071,9 @@ cases:
 
   - id: st-005
     ac: AC6
+    category: normal
+    harness: api
+    given: { as: member-2, issue: { status: in_progress, assigned_team: frontend, reported_by: member-1 } }
     description: in_progress → fixed는 성공하고 등록자에게 fixed 알림이 정확히 1건 생긴다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -962,6 +1088,9 @@ cases:
 
   - id: st-006
     ac: AC6
+    category: boundary
+    harness: api
+    given: { as: member-2, issue: { status: fixed, assigned_team: frontend } }
     description: fixed 이슈를 in_progress로 되돌리는 PATCH는 409이고 이력이 늘지 않는다 (fixed 이후는 재검증으로만)
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -976,6 +1105,9 @@ cases:
 
   - id: st-007
     ac: AC6
+    category: boundary
+    harness: api
+    given: { as: member-2, issue: { status: in_progress, assigned_team: frontend } }
     description: in_progress → in_progress(같은 상태)는 409 (N7)
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -987,6 +1119,9 @@ cases:
 
   - id: au-010
     ac: AC13
+    category: boundary
+    harness: api
+    given: { as: member-3, issue: { status: needs_check, assigned_team: frontend } }
     description: 역할이 담당 팀이 아닌 멤버의 in_progress 요청은 403이고 상태·이력이 그대로다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -1002,6 +1137,7 @@ cases:
   # --- AC17 수정: 재전송 = 만료 연장 (iv-003은 위 AC17 자리에서 교체) ---
   - id: iv-008
     ac: AC17
+    category: normal
     description: 재전송은 pending 초대의 만료를 7일 연장하고 메일을 1통 보낸다. 응답에 토큰이 없다(N14)
     input:
       endpoint: POST /projects/{projectId}/invitations/{invitationId}/resend
@@ -1017,6 +1153,7 @@ cases:
 
   - id: iv-009
     ac: AC17
+    category: boundary
     description: 대기 중이 아닌(accepted) 초대의 재전송은 409이고 메일을 보내지 않는다
     input:
       endpoint: POST /projects/{projectId}/invitations/{invitationId}/resend
@@ -1030,6 +1167,7 @@ cases:
   # --- AC21: Figma·GitHub 연결 ---
   - id: cn-001   # 2026-11-07 수정(설만수 지시): 페이지 공유 링크만 받고 페이지를 함께 저장
     ac: AC21
+    category: normal
     description: 소유자가 접근 가능한 Figma 페이지 공유 링크를 연결하면 파일 이름과 페이지 id·이름이 함께 저장된다
     input:
       endpoint: PUT /projects/{projectId}/connections/figma
@@ -1042,6 +1180,7 @@ cases:
 
   - id: cn-006   # 2026-11-07 수정(설만수 결정): 섹션 링크 허용 — 두 번째 body를 프레임 id로 바꿈
     ac: AC21
+    category: boundary
     description: 페이지·섹션 링크가 아니면 400이다 — node-id 없는 파일 링크(외부 호출 없음), 프레임을 가리키는 node-id, 프로토타입 링크
     input:
       endpoint: PUT /projects/{projectId}/connections/figma
@@ -1058,6 +1197,7 @@ cases:
 
   - id: cn-007
     ac: AC21
+    category: boundary
     description: GitHub 연결 때 브랜치를 고른다 — 빼면 기본 브랜치, 있는 브랜치는 저장되고 없는 브랜치는 400이며 기존 연결을 바꾸지 않는다
     input:
       endpoint: PUT /projects/{projectId}/connections/github
@@ -1076,6 +1216,7 @@ cases:
 
   - id: cn-008
     ac: AC21
+    category: normal
     description: 섹션 링크를 연결하면 섹션 id·이름과 scope section이 저장된다(페이지 링크는 scope page — cn-001)
     input:
       endpoint: PUT /projects/{projectId}/connections/figma
@@ -1088,6 +1229,7 @@ cases:
 
   - id: cn-002
     ac: AC21
+    category: boundary
     description: 형식이 틀린 링크는 400이고 외부 호출을 하지 않는다
     input:
       endpoint: PUT /projects/{projectId}/connections/github
@@ -1099,6 +1241,7 @@ cases:
 
   - id: cn-003
     ac: AC21
+    category: boundary
     description: 비공개이거나 없는 저장소(GitHub 404)는 422 CONNECTION_FORBIDDEN이고 기존 연결을 바꾸지 않는다
     input:
       endpoint: PUT /projects/{projectId}/connections/github
@@ -1114,6 +1257,7 @@ cases:
 
   - id: cn-004
     ac: AC21
+    category: boundary
     description: 소유자가 아닌 멤버의 연결 요청은 403이고 외부 호출을 하지 않는다
     input:
       endpoint: PUT /projects/{projectId}/connections/figma
@@ -1125,6 +1269,7 @@ cases:
 
   - id: cn-005
     ac: AC21
+    category: boundary
     description: 비교 분석이 성공한 뒤의 링크 변경은 409 NOT_READY
     input:
       endpoint: PUT /projects/{projectId}/connections/figma
@@ -1138,6 +1283,7 @@ cases:
   # --- AC22: 비교 분석 ---
   - id: an-001
     ac: AC22
+    category: boundary
     description: GitHub가 연결되지 않았으면 비교 분석을 시작할 수 없다(409 NOT_READY)
     input:
       endpoint: POST /projects/{projectId}/analysis
@@ -1149,6 +1295,7 @@ cases:
 
   - id: an-002
     ac: AC22
+    category: normal
     description: 둘 다 연결되면 202로 실행이 접수되고, 성공해도 이슈·StyleMismatch는 0건 늘어난다
     input:
       endpoint: POST /projects/{projectId}/analysis
@@ -1165,6 +1312,7 @@ cases:
 
   - id: an-003
     ac: AC22
+    category: boundary
     description: 실행 중에 다시 시작하면 409 NOT_READY이고 실행 기록이 늘지 않는다
     input:
       endpoint: POST /projects/{projectId}/analysis
@@ -1177,6 +1325,7 @@ cases:
 
   - id: an-004
     ac: AC22
+    category: boundary
     description: 섹션 안 프레임까지 읽어 LLM에 넘기고, 저장소에 없는 경로·입력에 없는 노드를 가리킨 짝은 버리고 센다
     input:
       endpoint: POST /projects/{projectId}/analysis
@@ -1196,6 +1345,7 @@ cases:
 
   - id: an-005
     ac: AC27
+    category: normal
     description: 매핑 조회는 최근 성공한 분석의 매핑을 프레임 이름순, 노드 이름순으로 준다
     input:
       endpoint: GET /projects/{projectId}/analysis/mappings
@@ -1211,6 +1361,7 @@ cases:
 
   - id: an-006
     ac: AC27
+    category: boundary
     description: 성공한 분석이 없으면 빈 목록이고, 비멤버는 403이다
     input:
       endpoint: GET /projects/{projectId}/analysis/mappings
@@ -1224,6 +1375,7 @@ cases:
   # --- AC23: 첫 QA ---
   - id: fq-001
     ac: AC23
+    category: normal
     description: 첫 QA는 근거가 둘 다 있는 차이만 이슈로 만들고 값은 근거에서만 채운다
     input:
       endpoint: POST /projects/{projectId}/first-qa
@@ -1251,6 +1403,7 @@ cases:
 
   - id: fq-002
     ac: AC23
+    category: boundary
     description: 첫 QA가 이미 성공했으면 다시 실행할 수 없다(409 NOT_READY)
     input:
       endpoint: POST /projects/{projectId}/first-qa
@@ -1263,6 +1416,7 @@ cases:
 
   - id: fq-003
     ac: AC23
+    category: boundary
     description: 소유자가 아닌 멤버는 첫 QA를 실행할 수 없다(403)
     input:
       endpoint: POST /projects/{projectId}/first-qa
@@ -1275,6 +1429,9 @@ cases:
 
   - id: fq-004
     ac: AC23
+    category: normal
+    harness: api
+    given: { as: member-1, members: { member-2: designer, member-3: backend }, issue: { status: needs_check, assigned_team: null, source: first_qa } }
     description: 자동 이슈에 담당 팀을 지정하면 그때 그 팀 역할 멤버에게 issue_created 알림이 1건 생긴다(AC3)
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -1288,6 +1445,7 @@ cases:
   # --- AC24: 역할 변경 ---
   - id: rl-001
     ac: AC24
+    category: normal
     description: 소유자가 멤버 역할을 바꾸면 그 프로젝트 역할만 바뀌고 알림은 생기지 않는다
     input:
       endpoint: PATCH /projects/{projectId}/members/{memberId}
@@ -1302,6 +1460,7 @@ cases:
 
   - id: rl-002
     ac: AC24
+    category: boundary
     description: 소유자가 아닌 멤버의 역할 변경은 403이고 역할이 그대로다
     input:
       endpoint: PATCH /projects/{projectId}/members/{memberId}
@@ -1314,6 +1473,7 @@ cases:
 
   - id: rl-003
     ac: AC24
+    category: boundary
     description: 정해진 값이 아닌 역할(developer)은 400
     input:
       endpoint: PATCH /projects/{projectId}/members/{memberId}
@@ -1325,6 +1485,7 @@ cases:
   # --- AC25: 작업공간 홈 ---
   - id: ws-001
     ac: AC25
+    category: normal
     description: 프로젝트 상세는 연결·실행 상태·멤버 수·대기 초대 수와 5개 상태의 이슈 수(0 포함)를 돌려준다
     input:
       endpoint: GET /projects/{projectId}
@@ -1343,6 +1504,7 @@ cases:
 
   - id: ws-002
     ac: AC25
+    category: boundary
     description: 비멤버가 프로젝트 상세를 요청하면 403이고 데이터를 담지 않는다(AC12, au-002와 같은 형태 — 2026-11-07 설만수 승인으로 data null → data 키 없음)
     input:
       endpoint: GET /projects/{projectId}
@@ -1355,6 +1517,7 @@ cases:
   # --- 6.1절 금지 기준 N17 ---
   - id: ng-017
     ac: AC23
+    category: forbidden
     rule: N17
     description: LLM이 인용한 파일·줄에 그 값이 없으면 이슈를 만들지 않고 dropped_count에 센다
     input:
@@ -1371,6 +1534,7 @@ cases:
 
   - id: ng-018
     ac: AC23
+    category: forbidden
     rule: N17
     description: 인용한 파일이 저장소에 없거나 매핑에 없는 노드를 가리키면 버린다
     input:
@@ -1388,6 +1552,7 @@ cases:
 
   - id: ng-019
     ac: AC23
+    category: forbidden
     rule: N17
     description: 실행 도중 실패하면 그 실행으로 만든 이슈를 하나도 남기지 않는다
     input:
@@ -1405,6 +1570,9 @@ cases:
 
   - id: nt-007
     ac: AC3
+    category: normal
+    harness: api
+    given: { as: member-1, members: { member-4: frontend }, issue: { status: needs_check, assigned_team: null } }
     description: 담당 팀에 역할 멤버가 여럿이면 각각에게 issue_created가 1건씩 생긴다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -1418,6 +1586,9 @@ cases:
 
   - id: nt-008
     ac: AC3
+    category: boundary
+    harness: api
+    given: { as: member-1, issue: { status: needs_check, assigned_team: null } }
     description: 담당 팀 역할을 가진 멤버가 없으면 지정은 되지만 알림은 만들지 않는다
     input:
       endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
@@ -1431,6 +1602,7 @@ cases:
 
   - id: fq-005
     ac: AC23
+    category: boundary
     description: 검증 범위(scope)가 비었으면 400이고 실행을 만들지 않는다
     input:
       endpoint: POST /projects/{projectId}/first-qa
@@ -1444,6 +1616,7 @@ cases:
 
   - id: rq-001
     ac: AC28
+    category: forbidden
     rule: N18
     description: Re-QA는 다시 읽은 코드 값이 같으면 pass(resolved), 다르면 fail(needs_recheck + 담당 팀 알림)로 판정한다
     input:
@@ -1464,6 +1637,7 @@ cases:
 
   - id: rq-002
     ac: AC28
+    category: boundary
     description: fixed인 첫 QA 이슈가 없으면 Re-QA는 409이고 실행을 만들지 않는다(사람이 등록한 fixed 이슈는 대상이 아니다)
     input:
       endpoint: POST /projects/{projectId}/re-qa
@@ -1477,6 +1651,7 @@ cases:
 
   - id: rq-003
     ac: AC28
+    category: boundary
     description: 소유자가 아닌 멤버는 Re-QA를 실행할 수 없다(403)
     input:
       endpoint: POST /projects/{projectId}/re-qa
@@ -1488,6 +1663,7 @@ cases:
 
   - id: rq-004
     ac: AC28
+    category: forbidden
     rule: N18
     description: 노드·파일을 다시 읽지 못한 이슈는 판정하지 않고 fixed로 둔다
     input:
@@ -1502,3 +1678,393 @@ cases:
         expected_issue_status: { C: "fixed" }
         expected_verification_count_delta: 0
         expected_notification_count_total_delta: 0
+
+  # --- AC29~AC37 (2026-11-18 추가) — 실시간 QA·코드 추적·알림 읽음·사용량 한도·실시간 알림 ---
+  # 이 케이스들은 백엔드 테스트 메서드에 @GoldenCase("id")로 연결된다(tests/README.md). 하니스가 직접 실행하지 않는다.
+
+  - id: dp-001
+    ac: AC29
+    category: normal
+    description: 소유자가 http(s) 배포 주소를 저장하면 저장하고 배포 대상을 source manual로 돌려준다
+    input:
+      endpoint: PUT /projects/{projectId}/deploy-url
+      actor: 소유자
+      body: { url: "https://app.example.com" }
+    expected:
+      status: 200
+      body: { data: { url: "https://app.example.com", source: "manual", manual_url: "https://app.example.com" } }
+
+  - id: dp-002
+    ac: AC29
+    category: boundary
+    description: 내부망·메타데이터 주소나 http(s)가 아닌 주소는 400이고 저장하지 않는다
+    input:
+      endpoint: PUT /projects/{projectId}/deploy-url
+      actor: 소유자
+      bodies:
+        - { url: "http://10.0.0.5/" }
+        - { url: "http://169.254.169.254/latest/" }
+        - { url: "file:///etc/passwd" }
+        - { url: "ftp://x.dev" }
+    expected:
+      status: 400
+      error_code: VALIDATION_FAILED
+      followup: { expected_deploy_url: null }
+
+  - id: dp-003
+    ac: AC29
+    category: boundary
+    description: 소유자가 아니면 배포 주소를 바꿀 수 없다(403, 저장 안 함)
+    input:
+      endpoint: PUT /projects/{projectId}/deploy-url
+      actor: 소유자가 아닌 멤버
+      body: { url: "https://app.example.com" }
+    expected:
+      status: 403
+      followup: { expected_deploy_url: null }
+
+  - id: dp-004
+    ac: AC29
+    category: normal
+    description: 저장된 주소가 없으면 연결된 GitHub 저장소의 최근 성공 배포 주소를 source github_deployment로 쓴다
+    input:
+      endpoint: GET /projects/{projectId}/deploy-target
+      precondition: 저장된 배포 주소 없음, GitHub 최근 성공 배포의 environment_url 있음
+    expected:
+      status: 200
+      body: { data: { source: "github_deployment" } }
+
+  - id: cp-001
+    ac: AC30
+    category: normal
+    description: 배포 주소에 경로를 붙여 요청한 크기로 찍고 kind auto 캡처로 저장한다
+    input:
+      endpoint: POST /projects/{projectId}/captures
+      precondition: 배포 주소 https://app.example.com 저장됨
+      body: { page_path: "/pricing", viewport: { width: 1280, height: 720 } }
+    expected:
+      status: 201
+      body: { data: { kind: "auto", page_url: "https://app.example.com/pricing", width: 1280 } }
+
+  - id: cp-002
+    ac: AC30
+    category: boundary
+    description: 배포 주소가 없으면 캡처는 409 NOT_READY이고 아무것도 저장하지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/captures
+      precondition: 배포 주소 없음
+      body: { page_path: "/", viewport: { width: 1280, height: 720 } }
+    expected:
+      status: 409
+      error_code: NOT_READY
+      followup: { expected_capture_count_delta: 0 }
+
+  - id: cp-003
+    ac: AC30
+    category: boundary
+    description: 서버 브라우저가 화면을 열지 못하면 502 CAPTURE_FAILED이고 저장하지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/captures
+      precondition: 배포 주소 있음, 캡처 실패
+      body: { page_path: "/", viewport: { width: 1280, height: 720 } }
+    expected:
+      status: 502
+      error_code: CAPTURE_FAILED
+      followup: { expected_capture_count_delta: 0 }
+
+  - id: cp-004
+    ac: AC30
+    category: boundary
+    description: 경로가 /로 시작하지 않거나 다른 호스트를 가리키거나 크기가 범위(320~3840×320~2160) 밖이면 400이고 브라우저를 열지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/captures
+      precondition: 배포 주소 있음
+      bodies:
+        - { page_path: "pricing", viewport: { width: 1280, height: 720 } }
+        - { page_path: "//evil.dev/x", viewport: { width: 1280, height: 720 } }
+        - { page_path: "/", viewport: { width: 100, height: 720 } }
+        - { page_path: "/" }
+    expected:
+      status: 400
+      followup: { expected_browser_calls: 0 }
+
+  - id: mq-001
+    ac: AC31
+    category: normal
+    description: 수동 QA를 등록하면 위치에서 재현 정보를 만들고 source manual·needs_check·담당 팀 없음·핀 1번으로 저장하며 알림을 만들지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/manual-qa
+      precondition: 배포 주소 있음
+      body:
+        client_request_id: "req-1"
+        title: "로그인 버튼 클릭 시 화면이 이동하지 않음"
+        description: "로그인 버튼을 눌러도 페이지가 바뀌지 않습니다."
+        page_path: "/"
+        location_basis: "live_overlay"
+        viewport: { width: 1280, height: 720 }
+        anchor: { x_px: 1058, y_px: 35 }
+        severity: "high"
+    expected:
+      status: 201
+      body:
+        data:
+          source: "manual"
+          status: "needs_check"
+          platform_scope: "common"
+          environment: { platform: "web" }
+          screen_location: "/ (x 1058, y 35 · 1280×720)"
+          manual_qa: { pin_number: 1, location_basis: "live_overlay", severity: "high" }
+      body_not_has: [data.assigned_team]
+      followup: { expected_notification_count_total_delta: 0 }
+
+  - id: mq-002
+    ac: AC31
+    category: boundary
+    description: 같은 client_request_id로 다시 보내면 새로 만들지 않고 200으로 처음 이슈를 돌려준다
+    input:
+      endpoint: POST /projects/{projectId}/manual-qa
+      precondition: 같은 client_request_id로 이미 등록됨
+    expected:
+      status: 200
+      body: { data: { manual_qa: { pin_number: 1 } } }
+      followup: { expected_pin_count: 1 }
+
+  - id: mq-003
+    ac: AC31
+    category: boundary
+    description: 제목·설명이 비었거나 제목 100자 초과, anchor가 화면 밖, page_path가 /로 시작하지 않음, 정해지지 않은 location_basis·severity면 400이고 아무것도 저장하지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/manual-qa
+      precondition: 배포 주소 있음
+    expected:
+      status: 400
+      error_code: VALIDATION_FAILED
+      followup: { expected_issue_count_delta: 0, expected_pin_count: 0 }
+
+  - id: mq-004
+    ac: AC31
+    category: boundary
+    description: 위치 없이(location_basis none) 등록할 때 화면이나 사람이 적은 재현 절차가 없으면 400이다 — 재현 절차를 지어내지 않는다(AC1·N1)
+    input:
+      endpoint: POST /projects/{projectId}/manual-qa
+      body: { location_basis: "none", page_path: "/login", repro_steps: [] }
+    expected:
+      status: 400
+
+  - id: mq-005
+    ac: AC31
+    category: normal
+    description: 앱 화면 문제는 platform·platform_scope를 고를 수 있고, 위치 없이 등록하면 /로 시작하지 않는 앱 화면 이름을 쓸 수 있다
+    input:
+      endpoint: POST /projects/{projectId}/manual-qa
+      body: { location_basis: "none", platform: "aos", platform_scope: "aos", page_path: "홈 화면", repro_steps: ["앱 실행", "홈 화면 확인"] }
+    expected:
+      status: 201
+      body: { data: { platform_scope: "aos", environment: { platform: "aos" }, screen_location: "홈 화면" } }
+
+  - id: fp-001
+    ac: AC32
+    category: normal
+    description: 프레임 미리보기는 Figma 이미지 주소·프레임 크기와 노드 상자를 프레임 기준 비율로 돌려준다
+    input:
+      endpoint: GET /projects/{projectId}/figma/frames/{frameId}/preview?node_id={nodeId}
+      precondition: Figma 연결됨, 프레임 1280×720
+    expected:
+      status: 200
+      body_has: [data.image_url, data.width, data.height, data.node_box.x_ratio, data.node_box.w_ratio]
+
+  - id: fp-002
+    ac: AC32
+    category: boundary
+    description: Figma가 연결되지 않았으면 409 NOT_READY, 프레임 id 형식이 틀리면 400, 프레임이 없으면 404, Figma 한도 초과면 502 CONNECTION_FAILED, 비멤버는 403
+    input:
+      endpoint: GET /projects/{projectId}/figma/frames/{frameId}/preview
+    expected:
+      statuses: { not_connected: 409, bad_id: 400, missing_frame: 404, figma_rate_limited: 502, outsider: 403 }
+
+  - id: sl-001
+    ac: AC33
+    category: normal
+    description: 소유자가 매핑에 있는 프레임에 경로를 연결하면 끝의 /를 떼고 프레임 이름과 함께 저장하고, 다시 넣으면 바꾼다
+    input:
+      endpoint: PUT /projects/{projectId}/screen-links/{frameId}
+      actor: 소유자
+      precondition: 최근 성공한 비교 분석 매핑에 프레임 10:1(LOGIN-01 로그인)
+      body: { page_path: "/login/" }
+    expected:
+      status: 200
+      body: { data: { frame_id: "10:1", frame_name: "LOGIN-01 로그인", page_path: "/login" } }
+
+  - id: sl-002
+    ac: AC33
+    category: boundary
+    description: 소유자가 아니면 403, 매핑에 없는 프레임이나 잘못된 경로(/로 시작 안 함·?·#·500자 초과)면 400이고 아무것도 바꾸지 않는다
+    input:
+      endpoint: PUT /projects/{projectId}/screen-links/{frameId}
+    expected:
+      statuses: { not_owner: 403, unmapped_frame: 400, bad_path: 400 }
+
+  - id: sl-003
+    ac: AC33
+    category: boundary
+    description: 연결을 지우면 204이고, 이미 없어도 204다
+    input:
+      endpoint: DELETE /projects/{projectId}/screen-links/{frameId}
+      actor: 소유자
+    expected:
+      status: 204
+
+  - id: ct-001
+    ac: AC34
+    category: normal
+    description: 첫 QA 이슈의 코드 추적은 이슈 키, 값을 읽은 파일·줄·커밋, 같은 요소의 다른 이슈, 문제 코드가 들어온 커밋과 PR을 준다
+    input:
+      endpoint: GET /projects/{projectId}/qa-issues/{issueId}/code-trace
+      precondition: 첫 QA 이슈(src/QaParts.tsx 141줄), 같은 노드의 다른 첫 QA 이슈 1건, GitHub 연결됨
+    expected:
+      status: 200
+      body: { data: { code: { basis: "element", path: "src/QaParts.tsx", line: 141 }, origin: { basis: "line" }, github: "ok" } }
+      body_has: [data.issue_key, data.related]
+
+  - id: ct-002
+    ac: AC34
+    category: boundary
+    description: GitHub를 읽지 못해도 저장된 값으로 200이고 github unavailable — origin은 비운다
+    input:
+      endpoint: GET /projects/{projectId}/qa-issues/{issueId}/code-trace
+      precondition: GitHub 호출 실패
+    expected:
+      status: 200
+      body: { data: { github: "unavailable", code: { path: "src/QaParts.tsx" } } }
+      body_not_has: [data.origin]
+
+  - id: ct-003
+    ac: AC34
+    category: boundary
+    description: 수정 링크는 담당 팀 역할 멤버만 연결된 저장소의 PR·커밋 주소로만 붙이고(아니면 403·400), 상태·알림·이력은 바꾸지 않는다
+    input:
+      endpoint: PUT /projects/{projectId}/qa-issues/{issueId}/fix-link
+    expected:
+      statuses: { not_team_member: 403, other_repo_or_bad_url: 400, valid_commit_url: 200 }
+
+  - id: nr-001
+    ac: AC35
+    category: normal
+    description: 내가 받은 알림을 읽음 처리하면 read_at을 채우고, 다시 읽어도 처음 시각을 바꾸지 않는다. 남의 알림·다른 프로젝트 알림·없는 id는 404
+    input:
+      endpoint: POST /projects/{projectId}/notifications/{notificationId}/read
+    expected:
+      status: 200
+      body_has: [data.read_at]
+      followup: { others_read_at_unchanged: true, not_mine_status: 404 }
+
+  - id: nr-002
+    ac: AC35
+    category: normal
+    description: 모두 읽음은 이 프로젝트에서 내가 받은 읽지 않은 알림만 바꾸고 바꾼 수를 돌려준다(두 번째는 0)
+    input:
+      endpoint: POST /projects/{projectId}/notifications/read-all
+      precondition: 이 프로젝트에서 나에게 온 읽지 않은 알림 2건, 남의 알림 1건, 다른 프로젝트의 내 알림 1건
+    expected:
+      status: 200
+      body: { data: { updated: 2 } }
+
+  - id: nr-003
+    ac: AC35
+    category: normal
+    description: 실행이 실패하면 요청한 사람에게 이슈 없이 실행을 가리키는 run_failed 알림이 1건 생긴다
+    input:
+      endpoint: GET /projects/{projectId}/notifications
+      precondition: 첫 QA 실행이 "GitHub 저장소 응답 시간 초과"로 실패
+    expected:
+      status: 200
+      body: { data: { total: 1 } }
+      items_0: { event: "run_failed", qa_issue_id: null, run: { kind: "first_qa" } }
+
+  - id: lm-001
+    ac: AC36
+    category: boundary
+    description: 소유한 프로젝트가 한도(3개)면 새 프로젝트를 만들지 않고 429 RATE_LIMITED
+    input:
+      endpoint: POST /projects
+      precondition: 요청자가 소유한 프로젝트가 한도만큼 있음
+      body: { name: "한도 초과" }
+    expected:
+      status: 429
+      error_code: RATE_LIMITED
+      followup: { expected_project_count_delta: 0 }
+
+  - id: lm-002
+    ac: AC36
+    category: boundary
+    description: 최근 24시간 비교 분석 시작 수가 한도면 실패한 실행이 있어도 다시 시작하지 못한다(429, 실행을 만들지 않음)
+    input:
+      endpoint: POST /projects/{projectId}/analysis
+      precondition: 최근 24시간에 한도만큼 비교 분석을 시작함(실패 포함)
+    expected:
+      status: 429
+      error_code: RATE_LIMITED
+      followup: { expected_run_count_delta: 0 }
+
+  - id: lm-003
+    ac: AC36
+    category: boundary
+    description: 하루 초대 메일 수가 한도면 초대를 만들지 않고 메일도 보내지 않는다(429)
+    input:
+      endpoint: POST /projects/{projectId}/invitations
+      precondition: 최근 24시간에 한도만큼 초대 메일을 보냄
+      body: { email: "lim-b@test.dev" }
+    expected:
+      status: 429
+      error_code: RATE_LIMITED
+      followup: { expected_invitation_count_delta: 0 }
+
+  - id: lm-004
+    ac: AC36
+    category: normal
+    description: 서버가 다시 시작되면 queued·running으로 남은 실행을 실패로 바꾸고 실행한 사람에게 run_failed 알림을 1건씩 만든다
+    input:
+      endpoint: (서버 시작 — ApplicationReadyEvent)
+      precondition: running 실행 1건, queued 실행 1건, 이미 실패한 실행 1건
+    expected:
+      followup: { interrupted_runs_status: failed, already_failed_unchanged: true, expected_run_failed_notifications: 2 }
+
+  - id: ns-001
+    ac: AC37
+    category: boundary
+    description: 알림 스트림은 미인증 401, 비멤버 403이다
+    input:
+      endpoint: GET /projects/{projectId}/notifications/stream
+    expected:
+      statuses: { anonymous: 401, outsider: 403 }
+
+  - id: ns-002
+    ac: AC37
+    category: normal
+    description: 담당 팀을 지정하면 그 팀 멤버의 이 프로젝트 스트림에만 notification 이벤트가 정확히 1번 가고, 알림 내용 대신 notification_id만 싣는다
+    input:
+      endpoint: PATCH /projects/{projectId}/qa-issues/{issueId}
+      precondition: frontend 멤버가 이 프로젝트와 다른 프로젝트 스트림을 열어 둠, 다른 멤버도 스트림을 열어 둠
+      body: { assigned_team: "frontend" }
+    expected:
+      status: 200
+      followup: { team_member_stream_events: 1, other_streams_events: 0, event_data_keys: [notification_id] }
+
+  - id: ns-003
+    ac: AC37
+    category: forbidden
+    description: 저장이 롤백된 알림은 스트림으로 보내지 않는다
+    input:
+      endpoint: (알림 저장 트랜잭션 롤백)
+    expected:
+      followup: { stream_events: 0 }
+
+  - id: ns-004
+    ac: AC37
+    category: boundary
+    description: 한 사람이 한 프로젝트에 연결을 6개 열면 가장 오래된 연결을 닫고 나머지 5개만 신호를 받는다
+    input:
+      endpoint: GET /projects/{projectId}/notifications/stream
+      precondition: 같은 사람이 같은 프로젝트에 연결 6개
+    expected:
+      followup: { open_streams: 5, oldest_closed: true }

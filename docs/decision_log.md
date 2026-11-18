@@ -547,3 +547,10 @@
 - **영향**: SPEC AC21·API 목록, openapi v0.21.0. DB 변경 없음(기존 `projects.figma_token_enc`·`figma_token_hint`)
 - **결정자**: 설만수. 스펙 추가라 오단비 확인 필요
 
+
+## 2026-11-18 골든 하니스가 케이스 파일을 직접 읽는다, AC29~AC37 케이스, MVP 표시
+
+- **결정**: 골든 케이스(`tests/harness/golden_cases.yaml`)를 직접 읽어 실제 API로 실행·판정하는 하니스(`backend/src/test/java/com/acjb/server/golden/GoldenApiHarnessTest`, 절대 규칙 1~7 케이스 34개)와 케이스 파일 검사(`GoldenCatalogTest`)를 둔다. 모든 케이스에 `category`(normal·boundary·forbidden)를 더하고, 하니스 대상에는 기계가 읽는 사전 조건 `given`을 더했다(기존 `input`·`expected`는 그대로). 두 번 쓰인 `nt-007`의 AC14 쪽을 `nt-009`로 바꾸고, 케이스가 없던 AC29~AC37에 기존 테스트와 같은 내용의 케이스 32개를 더했다(106 → 138). 연결 테스트가 없던 16개는 같은 동작을 검증하던 테스트에 `@GoldenCase`를 달고, 없던 `ng-013`·`ng-018`은 테스트를 새로 썼다. SPEC 6절의 AC1~AC37 모두 MVP로 `[MVP]` 표시. evals 러너는 judge 일치율을 `history.csv` `judge_agreement`에 적고, 사람 라벨 입력기 `evals/label_judge.py`를 둔다
+- **왜**: 중간평가 2(교수 평가, 11/19) 기준 — 테스트 하니스는 "케이스 파일을 읽어 구현 함수를 호출해 판정", 골든 케이스는 "케이스마다 AC 번호, 정상·경계·금지 행동", SPEC은 "MVP AC 표시", evals는 "judge 사용 시 사람 라벨 일치율". 그때까지는 케이스를 코드에 다시 적어 케이스 파일을 바꿔도 테스트가 바뀌지 않았다. 결함 주입 9건으로 하니스가 결함을 잡는 것을 확인했다(`docs/prompts/delegation_golden.md`)
+- **영향**: 테스트·골든 케이스 변경(AGENTS.md 4장 1항 — 설만수 지시). 구현 코드 변경 없음. judge 라벨은 아직 비어 있다 — 사람이 `label_judge.py`로 매겨야 일치율이 생긴다
+- **결정자**: 설만수(지시). AC29~AC37 케이스 내용·범주 분류·MVP 표시는 오단비 확인 필요

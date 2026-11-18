@@ -21,6 +21,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.transaction.annotation.Transactional;
 
 import com.acjb.server.domain.Invitation;
+import com.acjb.server.repository.VerificationRepository;
+import com.acjb.server.domain.VerificationResult;
+import com.acjb.server.domain.Verification;
+import com.acjb.server.domain.NotificationEvent;
+import com.acjb.server.domain.Notification;
 import com.acjb.server.domain.IssueStatus;
 import com.acjb.server.domain.Member;
 import com.acjb.server.domain.MemberRole;
@@ -35,6 +40,7 @@ import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRepository;
 import com.acjb.server.repository.QAIssueRepository;
 import com.acjb.server.repository.StatusHistoryRepository;
+import com.acjb.server.golden.GoldenCase;
 
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
@@ -55,6 +61,7 @@ class ProjectManagementApiTest {
     @Autowired QAIssueRepository issues;
     @Autowired StatusHistoryRepository histories;
     @Autowired NotificationRepository notifications;
+    @Autowired VerificationRepository verifications;
 
     private MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder r, String email) {
         return r.with(oauth2Login().attributes(a -> { a.put("email", email); a.put("name", "이름-" + email.substring(0, 3)); }))
@@ -71,6 +78,7 @@ class ProjectManagementApiTest {
 
     /** pj-003(2026-11-07 교체) — 만들 때 역할을 받지 않고 소유자는 역할 미지정으로 시작, 설명 저장 */
     @Test
+    @GoldenCase("pj-003")
     void ac16_처음_로그인한_사람도_프로젝트를_만들면_소유자이자_역할_미지정_멤버가_되고_설명이_저장된다() throws Exception {
         assertThat(members.findByEmail("new-user@test.dev")).isEmpty();
 
@@ -97,6 +105,7 @@ class ProjectManagementApiTest {
 
     /** pj-004(2026-11-07 교체) — 이름·설명 규칙 */
     @Test
+    @GoldenCase("pj-004")
     void ac16_이름이_비었거나_규칙을_어기거나_설명이_200자를_넘으면_400이고_아무것도_만들지_않는다() throws Exception {
         long before = projects.count();
         for (String body : List.of("{\"name\":\"  \"}", "{}", "{\"name\":\"가\"}", "{\"name\":\"프로젝트!\"}",
@@ -112,6 +121,7 @@ class ProjectManagementApiTest {
 
     /** pj-008 — 설명은 선택 */
     @Test
+    @GoldenCase("pj-008")
     void ac16_설명_없이_만들면_description은_null이다() throws Exception {
         mvc.perform(as(post("/api/v1/projects"), "nodesc@test.dev").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"설명 없는 프로젝트\"}"))
@@ -203,6 +213,34 @@ class ProjectManagementApiTest {
     }
 
     @Test
+    void ng013_제거된_멤버가_등록한_이슈의_이력_재검증_알림을_지우지_않는다() throws Exception {
+        Team t = team();
+        // 헬퍼의 등록자는 designer — 그 사람을 제거한다(ng-013: member-2가 등록한 이슈 1건, 재검증 1건, 알림 2건)
+        QAIssue issue = issue(t, t.dev(), IssueStatus.FIXED);
+        verifications.save(new Verification(issue, VerificationResult.FAIL, null, t.designer()));
+        notifications.save(new Notification(issue, NotificationEvent.ISSUE_CREATED, t.dev(), "in_app"));
+        notifications.save(new Notification(issue, NotificationEvent.FIXED, t.designer(), "in_app"));
+        em.flush();
+        long issuesBefore = issues.count();
+        long historyBefore = histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId()).size();
+        long verificationsBefore = verifications.count();
+        long notificationsBefore = notifications.count();
+
+        mvc.perform(as(delete("/api/v1/projects/" + t.project().getId() + "/members/" + t.designer().getId()), t.owner().getEmail()))
+            .andExpect(status().isNoContent());
+
+        em.flush();
+        em.clear();
+        assertThat(projectMembers.existsByProjectIdAndMemberId(t.project().getId(), t.designer().getId())).isFalse();
+        assertThat(issues.count()).isEqualTo(issuesBefore);
+        assertThat(issues.findById(issue.getId()).orElseThrow().getReportedBy().getId()).isEqualTo(t.designer().getId());
+        assertThat(histories.findByIssueIdOrderByChangedAtAscIdAsc(issue.getId())).hasSize((int) historyBefore);
+        assertThat(verifications.count()).isEqualTo(verificationsBefore);
+        assertThat(notifications.count()).isEqualTo(notificationsBefore);
+    }
+
+    @Test
+    @GoldenCase("pj-006")
     void ac19_소유자가_아니면_403이고_아무도_빠지지_않는다() throws Exception {
         Team t = team();
         mvc.perform(as(delete("/api/v1/projects/" + t.project().getId() + "/members/" + t.designer().getId()), t.dev().getEmail()))
@@ -211,6 +249,7 @@ class ProjectManagementApiTest {
     }
 
     @Test
+    @GoldenCase("ng-012")
     void ac19_소유자_자신은_제거할_수_없다_409_그리고_멤버가_아닌_id는_404() throws Exception {
         Team t = team();
         mvc.perform(as(delete("/api/v1/projects/" + t.project().getId() + "/members/" + t.owner().getId()), t.owner().getEmail()))

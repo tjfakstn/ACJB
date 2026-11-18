@@ -4,6 +4,21 @@
 > **서비스:** QAting — Figma 시안과 실제 코드를 비교해 디자인 QA 이슈를 찾고, 담당 팀 배정 → 수정 → 재검증까지 한곳에서 관리하는 QA 자동화 서비스
 > **접속:** **https://acjb-qating.com** (리뷰 기간 11/11(수) ~ 11/18(수) 동안 운영)
 
+**개발자·리뷰어용** — 이 문서는 서비스 사용 가이드입니다. 저장소의 개발 방식은 아래에서 보세요.
+- [docs/DEV_ENVIRONMENT.md](docs/DEV_ENVIRONMENT.md): 스펙 → 골든 케이스·테스트 → evals → 결정 기록이 이어지는 구조와 에이전트 규칙 설계
+- [AGENTS.md](AGENTS.md)(사람·AI 에이전트 공통 규칙) · [docs/SPEC.md](docs/SPEC.md)(수용 기준) · [evals/EVAL_DESIGN.md](evals/EVAL_DESIGN.md)(LLM 품질 측정)
+
+**평가 자료 위치** — 작성지침의 「저장소 표준 구조」와 다른 곳은 굵게 표시했습니다.
+
+| 표준 구조 | 이 저장소의 위치 | 실행·확인 |
+| --- | --- | --- |
+| MVP AC 표시 | [docs/SPEC.md](docs/SPEC.md) 6절 — AC1~AC37 모두 MVP, 각 AC 앞 `[MVP]` | |
+| 골든 케이스 `tests/harness/golden_cases.yaml` | 같음 — 138케이스, 케이스마다 `ac`·`category`(normal 47·boundary 69·forbidden 22) | |
+| 테스트 하니스 `tests/test_<기능>_golden.py` | **[backend/src/test/java/com/acjb/server/golden/GoldenApiHarnessTest.java](backend/src/test/java/com/acjb/server/golden/GoldenApiHarnessTest.java)** — 백엔드가 Java(Spring)라 JUnit으로 작성. 케이스 파일을 읽어 실제 API를 호출하고 판정(QA 이슈 등록·알림·상태 전이·재검증·권한, 34케이스). 케이스 파일 자체 검사(AC 번호·범주·모든 케이스의 테스트 연결)는 **[GoldenCatalogTest.java](backend/src/test/java/com/acjb/server/golden/GoldenCatalogTest.java)** | `cd backend && ./gradlew test` (MySQL 필요, 아래 개발자용 로컬 실행) |
+| 결함 주입 기록 `docs/prompts/delegation_<기능>.md` | [docs/prompts/delegation_golden.md](docs/prompts/delegation_golden.md)(골든 하니스), [docs/prompts/delegation_evals.md](docs/prompts/delegation_evals.md)(evals 러너) | |
+| evals 설계·데이터셋 | [evals/EVAL_DESIGN.md](evals/EVAL_DESIGN.md), [evals/evalset.jsonl](evals/evalset.jsonl)(35케이스, 10개 범주) | |
+| evals 러너·결과·이력 | [evals/run_evals.py](evals/run_evals.py), [evals/results/](evals/results/), [evals/results/history.csv](evals/results/history.csv), [evals/judge_labels.jsonl](evals/judge_labels.jsonl) | `python3 evals/run_evals.py` (저장된 출력으로 채점, API 키 불필요). judge 사람 라벨: `python3 evals/label_judge.py 2026-11-10T2303 --labeler 이름` → `python3 evals/run_evals.py --judge-agreement 2026-11-10T2303` |
+
 ## 1. 서비스 소개
 
 **대상 사용자**
@@ -95,14 +110,16 @@ https://acjb-qating.com 에서 [로그인하기]를 누르고 구글 계정을 �
 
 ## 4. 기대 결과와 확인 방법
 
-| 단계 | 정상일 때 보이는 것 |
-| --- | --- |
-| 연결 | 프로젝트 홈 "연결 상태"에 Figma·GitHub 둘 다 "연결됨" |
-| 비교 분석 | "최근 AI 분석: 완료". 샘플 기준 화면 10개, 요소 약 130개가 코드와 짝지어짐 |
-| 첫 QA | 샘플 기준 이슈 약 50개. 각 이슈에 Figma 값·코드 값·코드 위치가 모두 있음(근거가 하나라도 없는 차이는 이슈로 만들지 않음) |
-| 담당 팀·상태 | 이슈 상태가 확인 필요 → 수정 중 → 수정 완료로 바뀌고, 상태 이력에 변경자와 시각이 남음 |
-| Re-QA | 이슈 상세의 재검증 기록에 FAIL과 다시 읽은 코드 값이 남고, 상태가 "재확인 필요"로 바뀜 |
-| 수동 QA | 목록에 `QA-M###` 항목이 생기고 배포 화면 위에 핀이 표시됨 |
+| 단계 | 입력 예 | 정상일 때 보이는 것 | 관련 AC |
+| --- | --- | --- | --- |
+| 연결 | 3절 표의 Figma 링크·GitHub 저장소·브랜치 `main` | 프로젝트 홈 "연결 상태"에 Figma·GitHub 둘 다 "연결됨" | AC21 |
+| 비교 분석 | (연결 후 자동 시작) | "최근 AI 분석: 완료". 샘플 기준 화면 10개, 요소 약 130개가 코드와 짝지어짐 | AC22, AC27 |
+| 첫 QA | 검증 범위 4개 모두 체크 | 샘플 기준 이슈 약 50개. 각 이슈에 Figma 값·코드 값·코드 위치가 모두 있음(근거가 하나라도 없는 차이는 이슈로 만들지 않음) | AC23, AC2 |
+| 이슈 상세 | 이슈 하나 선택 | 디자인 기준값 vs 구현값, 코드 파일·줄, 그 줄이 들어온 커밋·PR | AC5, AC34 |
+| 담당 팀·상태 | 담당 팀 `프론트엔드` → [수정 시작] → [수정 완료로 변경] | 그 팀 멤버에게 알림 1건, 상태가 확인 필요 → 수정 중 → 수정 완료로 바뀌고 상태 이력에 변경자와 시각이 남음, 등록자에게 수정 완료 알림 1건. 담당 팀 역할이 아니면 상태를 바꿀 수 없음 | AC3, AC4, AC6, AC13, AC14 |
+| Re-QA | [Re-QA 실행] | 이슈 상세의 재검증 기록에 FAIL과 다시 읽은 코드 값이 남고, 상태가 "재확인 필요"로 바뀜, 담당 팀에 재실패 알림 | AC28, AC7, AC11 |
+| 수동 QA | 배포 주소 `https://acjb-qating.com`, 화면 위치 클릭, 제목·설명 입력 | 목록에 `QA-M###` 항목이 생기고 배포 화면 위에 핀이 표시됨. 제목이나 설명을 비우면 등록되지 않음 | AC29, AC31, AC1 |
+| 필수 정보 누락(경계) | 위치 없이 등록에서 재현 절차를 비우고 등록 시도 | 등록되지 않음 — 서버도 재현 절차 없는 등록을 400으로 거부하고 지어내 채우지 않음(골든 `mq-004`·`qi-001`) | AC1, AC31 |
 
 AI 판단이 섞여 있어 이슈 개수는 실행할 때마다 조금씩 다를 수 있습니다.
 

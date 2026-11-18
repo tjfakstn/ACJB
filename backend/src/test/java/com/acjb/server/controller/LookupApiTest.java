@@ -29,6 +29,7 @@ import com.acjb.server.repository.NotificationRepository;
 import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRepository;
 import com.acjb.server.repository.QAIssueRepository;
+import com.acjb.server.golden.GoldenCase;
 
 /**
  * AC15(GET /projects, GET /projects/{projectId}/members)와 AC14(GET /projects/{projectId}/notifications).
@@ -80,6 +81,7 @@ class LookupApiTest {
     // --- AC15: 프로젝트 목록 ---
 
     @Test
+    @GoldenCase("pj-001")
     void 내가_Member인_프로젝트만_name_asc로_반환한다() throws Exception {
         getAs(me.getEmail(), "/projects")
             .andExpect(status().isOk())
@@ -107,6 +109,7 @@ class LookupApiTest {
     // --- AC15: 멤버 목록 ---
 
     @Test
+    @GoldenCase("pj-002")
     void 멤버_목록은_그_프로젝트_멤버만_name_asc로_반환한다() throws Exception {
         getAs(me.getEmail(), "/projects/" + alpha.getId() + "/members")
             .andExpect(status().isOk())
@@ -128,6 +131,7 @@ class LookupApiTest {
     // --- AC14: 내 알림 ---
 
     @Test
+    @GoldenCase("nt-009")
     void 내게_온_알림만_created_at_desc_id_desc로_반환한다() throws Exception {
         QAIssue issue = issueIn(alpha);
         Notification first = notifications.save(new Notification(issue, NotificationEvent.ISSUE_CREATED, me, "in_app"));

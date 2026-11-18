@@ -36,6 +36,7 @@ import com.acjb.server.repository.NotificationRepository;
 import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRepository;
 import com.acjb.server.repository.ProjectRunRepository;
+import com.acjb.server.golden.GoldenCase;
 
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
@@ -94,6 +95,7 @@ class UsageLimitsApiTest {
     }
 
     @Test
+    @GoldenCase("lm-001")
     void 소유한_프로젝트가_한도면_새_프로젝트를_만들지_않는다() throws Exception {
         long before = projects.count();
         mvc.perform(as(post("/api/v1/projects")).content("{\"name\":\"두번째\"}"))
@@ -103,6 +105,7 @@ class UsageLimitsApiTest {
     }
 
     @Test
+    @GoldenCase("lm-002")
     void 하루_비교_분석_횟수를_넘으면_실패한_실행이어도_다시_시작하지_못한다() throws Exception {
         project.connectFigma("https://www.figma.com/design/K/x?node-id=1-1", "K", "시안", "1:1", "최종", FigmaScope.PAGE, Instant.now());
         project.connectGithub("https://github.com/o/r", "o/r", "main", "main", Instant.now());
@@ -124,6 +127,7 @@ class UsageLimitsApiTest {
     }
 
     @Test
+    @GoldenCase("lm-003")
     void 하루_초대_메일_수를_넘으면_초대를_만들지_않는다() throws Exception {
         String path = "/api/v1/projects/" + project.getId() + "/invitations";
         mvc.perform(as(post(path)).content("{\"email\":\"lim-a@test.dev\"}")).andExpect(status().isCreated());
@@ -136,6 +140,7 @@ class UsageLimitsApiTest {
     }
 
     @Test
+    @GoldenCase("lm-004")
     void 서버가_다시_시작되면_끝나지_못한_실행을_실패로_바꾸고_실행한_사람에게_알린다() {
         ProjectRun running = finishedRun(RunKind.FIRST_QA, RunStatus.RUNNING);
         ProjectRun queued = runs.save(new ProjectRun(project, RunKind.RE_QA, owner, Instant.now()));

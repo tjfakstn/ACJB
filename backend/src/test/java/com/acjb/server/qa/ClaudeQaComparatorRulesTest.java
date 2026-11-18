@@ -154,6 +154,19 @@ class ClaudeQaComparatorRulesTest {
     }
 
     @Test
+    void ng018_인용한_파일이_저장소에_없거나_묻지_않은_노드면_버린다() {
+        List<Element> elements = FigmaFacts.collect(json(NODE), EnumSet.allOf(Fact.class));
+        Map<String, String> code = Map.of("src/Card.tsx", "export function Card() {\n  return <div className=\"rounded-lg\" />\n}");
+        QaComparator.Target t = new QaComparator.Target("F", "홈", "1:1", "Card", "src/Card.tsx", "Card");
+        List<Binding> bindings = List.of(
+            new Binding("1:1", "radius", "src/NoSuch.tsx", 2, "rounded-lg"),   // 저장소에 없는 파일 → 버림
+            new Binding("12:99", "radius", "src/Card.tsx", 2, "rounded-lg"));  // 매핑(입력)에 없는 노드 → 버림
+        var r = ClaudeQaComparator.judgeWith(t, elements, code, bindings, new TailwindValues(List.of(THEME)));
+        assertThat(r.findings()).isEmpty();
+        assertThat(r.dropped()).isEqualTo(2);
+    }
+
+    @Test
     void 검증_범위는_측정할_수_있는_4개이고_예전_값은_건너뛴다() {
         assertThat(QaScope.values()).extracting(QaScope::value).containsExactly("size_spacing", "color_typography", "border_radius", "text");
         assertThat(QaScope.propertiesOf(Set.of(QaScope.COLOR_TYPOGRAPHY)))

@@ -173,7 +173,7 @@ export function LiveQaPage() {
     const linked = linksForPath(links, path).filter((l) => frames.some((f) => f.frame_id === l.frame_id))
     setDraft({
       requestId, basis, x, y, viewport, pagePath: path, title: '', description: '', severity: null, expected: '', actual: '',
-      frameId: linked.length === 1 ? linked[0].frame_id : null,
+      frameId: linked.length === 1 ? (linked[0]?.frame_id ?? null) : null,
       platform: 'web', platformOnly: false,
       capture: attachment ? { state: 'ok', capture: attachment } : { state: 'loading' },
       expanded: false, saving: false, errors: {}, saveError: null,

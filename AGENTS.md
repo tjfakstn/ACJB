@@ -55,7 +55,7 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 
 ## 5. 코딩 컨벤션
 
-- Frontend: TypeScript strict 모드, 컴포넌트 PascalCase, 함수/변수 camelCase
+- Frontend: TypeScript `strict` + `noUncheckedIndexedAccess`(설정은 `frontend/tsconfig.app.json`·`tsconfig.node.json` — 인덱스 접근은 `!`·`as` 대신 가드·기본값으로), 컴포넌트 PascalCase, 함수/변수 camelCase
 - Backend: Java, Spring Boot 컨벤션(Controller/Config 패키지 분리)
 - 상수: UPPER_SNAKE_CASE
 - 주석은 "무엇"보다 "왜"를 남긴다
@@ -124,16 +124,11 @@ QAting — QA 이슈를 재현 정보와 함께 등록하고, 조치가 끝나�
 
 ### 7.4 개발 환경 & 자주 쓰는 명령어
 
-```bash
-# 백엔드
-cd backend && cp .env.example .env   # Google OAuth Client ID/Secret 채우기
-./gradlew bootRun                    # http://localhost:8080
-./gradlew test
+설치·실행 명령의 정본은 [CONTRIBUTING.md "시작하기"](CONTRIBUTING.md#시작하기)다(MySQL 기동, `.env`, 개발 서버 포함). 여기에는 완료 확인(6장)에 쓰는 두 명령만 둔다.
 
-# 프론트엔드
-cd frontend && npm install
-npm run dev                          # http://localhost:5173
-npm run build
+```bash
+cd backend && ./gradlew test     # MySQL(docker compose)이 떠 있어야 한다
+cd frontend && npm run build
 ```
 
 **환경 변수**

@@ -47,7 +47,8 @@ export function NoLocationForm({ projectId, frames, links, nextPin, onCreated, o
   // 경로에 연결된 프레임(AC33)이 하나뿐이면 사람이 고르기 전까지 미리 골라 둔다
   const suggested = useMemo(() => (!isApp && path.trim().startsWith('/')
     ? linksForPath(links, path.trim()).filter((l) => frames.some((f) => f.frame_id === l.frame_id)) : []), [links, frames, path, isApp])
-  const effectiveFrame = frameTouched ? frameId : (suggested.length === 1 ? suggested[0].frame_id : frameId)
+  const onlySuggested = suggested.length === 1 ? suggested[0] : undefined
+  const effectiveFrame = frameTouched ? frameId : (onlySuggested ? onlySuggested.frame_id : frameId)
 
   const attach = async (file: File) => {
     setUploading(true)

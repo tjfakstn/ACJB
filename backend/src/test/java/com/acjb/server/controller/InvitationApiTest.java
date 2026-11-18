@@ -36,6 +36,7 @@ import com.acjb.server.repository.InvitationRepository;
 import com.acjb.server.repository.MemberRepository;
 import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRepository;
+import com.acjb.server.golden.GoldenCase;
 
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
@@ -94,6 +95,7 @@ class InvitationApiTest {
     // --- AC17 ---
 
     @Test
+    @GoldenCase({"iv-001", "ng-011"})
     void ac17_멤버가_초대하면_7일짜리_대기_초대_1건과_초대_메일_1통이_생기고_응답에_토큰이_없다() throws Exception {
         String body = invite(dev, "  New.Person@Gmail.com ")
             .andExpect(status().isCreated())
@@ -116,6 +118,7 @@ class InvitationApiTest {
     }
 
     @Test
+    @GoldenCase("iv-002")
     void ac17_이미_멤버인_이메일은_409이고_초대를_만들지_않는다() throws Exception {
         invite(owner, "INV-DEV@test.dev")
             .andExpect(status().isConflict())
@@ -126,6 +129,7 @@ class InvitationApiTest {
 
     /** iv-003(2026-11-07 교체, 설만수 승인) — 재초대는 새 초대 대신 같은 초대를 연장한다 */
     @Test
+    @GoldenCase("iv-003")
     void ac17_같은_이메일을_다시_초대하면_같은_초대가_7일_연장되고_이전_링크는_무효다() throws Exception {
         invite(dev, "again@test.dev").andExpect(status().isCreated());
         String first = lastToken();
@@ -159,6 +163,7 @@ class InvitationApiTest {
 
     /** iv-008 — 재전송은 초대하지 않은 멤버도 할 수 있고, 만료를 7일 늘리고 메일 1통. 응답에 토큰이 없다(N14) */
     @Test
+    @GoldenCase("iv-008")
     void ac17_재전송하면_만료가_7일_연장되고_새_링크로_메일_1통() throws Exception {
         Member designer = members.save(new Member("inv-des2@test.dev", "디자이너"));
         projectMembers.save(new ProjectMember(project, designer, MemberRole.DESIGNER));
@@ -184,6 +189,7 @@ class InvitationApiTest {
 
     /** iv-009 — 대기 중이 아닌 초대의 재전송은 409이고 메일을 보내지 않는다 */
     @Test
+    @GoldenCase("iv-009")
     void ac17_수락된_초대는_재전송할_수_없다() throws Exception {
         invite(dev, "done@test.dev").andExpect(status().isCreated());
         Long id = invitations.findAll().getFirst().getId();
@@ -222,6 +228,7 @@ class InvitationApiTest {
     }
 
     @Test
+    @GoldenCase("iv-007")
     void ac18_초대받은_계정으로_수락하면_고른_역할의_멤버가_되고_초대는_accepted() throws Exception {
         invite(dev, "joiner@test.dev").andExpect(status().isCreated());
         String token = lastToken();
@@ -247,6 +254,7 @@ class InvitationApiTest {
     }
 
     @Test
+    @GoldenCase("iv-004")
     void ac18_다른_구글_계정으로는_수락할_수_없다_403이고_멤버를_만들지_않는다() throws Exception {
         invite(dev, "real@test.dev").andExpect(status().isCreated());
         accept(lastToken(), "forwarded@test.dev", "backend")
@@ -258,6 +266,7 @@ class InvitationApiTest {
     }
 
     @Test
+    @GoldenCase("iv-005")
     void ac18_만료된_초대는_409이고_미리보기에서도_expired다() throws Exception {
         String token = InvitationTokens.newToken();
         invitations.save(new Invitation(project, "late@test.dev", InvitationTokens.hash(token), dev,
@@ -272,6 +281,7 @@ class InvitationApiTest {
     }
 
     @Test
+    @GoldenCase("iv-005")
     void ac18_이미_수락한_초대를_다시_수락하면_409() throws Exception {
         invite(dev, "twice@test.dev").andExpect(status().isCreated());
         String token = lastToken();
@@ -280,6 +290,7 @@ class InvitationApiTest {
     }
 
     @Test
+    @GoldenCase("iv-006")
     void ac18_역할이_정해진_값이_아니면_400이고_초대는_그대로다() throws Exception {
         invite(dev, "role@test.dev").andExpect(status().isCreated());
         String token = lastToken();
@@ -332,6 +343,7 @@ class InvitationApiTest {
     }
 
     @Test
+    @GoldenCase("ng-011")
     void 초대_목록에는_토큰이나_토큰_해시가_없다_N14() throws Exception {
         invite(dev, "list@test.dev").andExpect(status().isCreated());
         String token = lastToken();

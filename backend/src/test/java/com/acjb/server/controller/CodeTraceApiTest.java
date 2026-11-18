@@ -54,6 +54,7 @@ import com.acjb.server.repository.ProjectRunRepository;
 import com.acjb.server.repository.QAIssueRepository;
 import com.acjb.server.repository.StyleMismatchRepository;
 import com.acjb.server.repository.VerificationRepository;
+import com.acjb.server.golden.GoldenCase;
 
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
@@ -137,6 +138,7 @@ class CodeTraceApiTest {
     }
 
     @Test
+    @GoldenCase("ct-001")
     void 코드_위치와_같은_요소의_다른_이슈와_문제_코드가_들어온_커밋_PR을_준다() throws Exception {
         CommitInfo origin = commit("7c71f18aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "feat(client): QA 화면", Instant.parse("2026-11-08T10:10:30Z"));
         when(github.blameLine("o", "r", SHA, "src/QaParts.tsx", 141))
@@ -204,6 +206,7 @@ class CodeTraceApiTest {
     }
 
     @Test
+    @GoldenCase("ct-003")
     void 수정_링크는_담당_팀만_연결된_저장소의_PR_커밋_주소만_붙인다() throws Exception {
         mvc.perform(as(put(base() + "/fix-link"), designer).contentType(MediaType.APPLICATION_JSON)
             .content("{\"url\":\"https://github.com/o/r/pull/1\"}")).andExpect(status().isForbidden());
@@ -228,6 +231,7 @@ class CodeTraceApiTest {
     }
 
     @Test
+    @GoldenCase("ct-002")
     void GitHub를_읽지_못해도_저장된_값으로_200이고_unavailable() throws Exception {
         when(github.blameLine(anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenThrow(new GithubApiException("한도", 403, null));

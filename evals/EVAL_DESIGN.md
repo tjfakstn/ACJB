@@ -72,7 +72,7 @@
 - 호출: 케이스마다 독립 호출(여러 케이스를 한 번에 넣지 않는다). 모델은 재검증 범위 제안과 같은 모델(`application.yml`의 `app.recheck.model`)
 - judge 검증(메타 평가): 첫 실행의 저장된 출력으로 **judge 판정을 뺀 라벨 시트**를 만든다(`--label-sheet RUN_ID`). 사람이 judge 출력을 보기 전에 기준마다 통과/실패를 매겨 `evals/judge_labels.jsonl`에 넣고, `--judge-agreement RUN_ID`로 일치율과 불일치 방향(judge가 더 관대/엄격)을 잰다. **일치율 80% 미만이면** 엇갈린 케이스 원문을 읽고 판정 조건을 고친 뒤 judge 버전을 올려 다시 잰다
 - 라벨 입력: `python3 evals/label_judge.py RUN_ID --labeler 이름` — 라벨 시트를 한 줄씩 보여 주고(judge 판정은 보여 주지 않는다) 기준마다 y/n을 받아 `judge_labels.jsonl`에 적는다. 다 매긴 뒤 `python3 evals/run_evals.py --judge-agreement RUN_ID`가 일치율·불일치 방향·기준별 일치율을 `results/RUN_ID.judge_agreement.json`에 남기고 `history.csv`의 그 실행 줄 `judge_agreement` 열에 적는다(2026-11-18)
-- **현재 상태: 라벨 미작성(대상 `2026-11-10T2303`, 22줄 — s1 7개·제안 33개의 c1·c2) → judge 점수(s1·c1·c2)는 아직 근거로 쓰지 않는다**(8절). 라벨은 사람이 매긴다 — 에이전트가 채우지 않는다
+- **현재 상태(2026-11-18): 사람 라벨 완료 — 대상 `2026-11-10T2303`, 22줄·판정 73개(s1 7, c1 33, c2 33), 라벨러 설만수. judge 일치율 95.9%(s1 100%, c1 100%, c2 90.9%), 불일치 3건은 모두 judge가 더 엄격(c2), 더 관대한 쪽 0건** → 합격선 80% 이상이라 judge 점수(s1·c1·c2)를 지표 근거로 쓴다. 결과: `results/2026-11-10T2303.judge_agreement.json`, `history.csv` `judge_agreement`
 
 라벨 형식(`judge_labels.jsonl`, 한 줄 = 한 케이스):
 
@@ -133,7 +133,7 @@ python3 evals/run_evals.py --mode stored                                        
 해석
 - 절대 규칙 지표 4개는 3회 모두 0건/100%다. 표본이 작아(인젝션 parse 3건, recheck 1건) "막는다"고 일반화하지 않는다 — 9절 백로그에서 케이스를 늘린다
 - 재검증 제안은 11-06의 judge_v1 실행(재현율 0.94~1.0)과 비슷하지만 judge 버전·데이터셋이 달라 비교하지 않는다
-- judge 지표 3개는 사람 라벨로 검증하기 전까지 참고값이다
+- judge 지표 3개는 사람 라벨로 검증하기 전까지 참고값이었다 — 2026-11-18 라벨 일치율 95.9%로 검증됨(3절)
 
 ## 8. 오류 분석과 개선 백로그
 
@@ -172,5 +172,5 @@ ev-002·ev-009·ev-013은 T2303·T2307에서는 통과했다 — 제품 출력�
 |---|---|---|
 | 절대 규칙 케이스의 기대 결과 — parse의 `null_fields`·`forbidden_values`(p03, p05~p18), recheck의 `llm_not_called`(ev-010)·`injection_screen`(ev-017) | 에이전트 초안. 케이스마다 "텍스트에 정말 없는가"를 사람이 확인 | 설만수·오단비 |
 | 지표 합격선(1절 표) | 재검증 3개는 11-06 팀 설계, 나머지는 초안 | 오단비(스펙 담당) 확인 |
-| judge 라벨(`judge_labels.jsonl`) | 비어 있음 — `evals/label_judge.py`로 작성, 일치율은 `history.csv` `judge_agreement` | 설만수·오단비(judge 출력을 보기 전에) |
+| judge 라벨(`judge_labels.jsonl`) | 완료(2026-11-18, 설만수, 22줄·73판정) — 일치율 95.9%, `history.csv` `judge_agreement` | 설만수 |
 | 오류 분석 메모 | 에이전트 초안 | 실패 원문을 사람이 다시 읽고 확정 |

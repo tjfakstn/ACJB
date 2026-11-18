@@ -24,7 +24,7 @@ flowchart LR
 | 왜 | [`docs/PROBLEM.md`](PROBLEM.md) | 인터뷰 근거의 문제 정의 |
 | 무엇 | [`docs/SPEC.md`](SPEC.md) | 수용 기준(AC)과 6.1절 금지 기준(N1~N17). API 정본 |
 | 도메인 | [`docs/ontology.yaml`](ontology.yaml) | 엔티티·관계의 정본. [`AGENTS.md`](../AGENTS.md) 2장은 어휘만 발췌 |
-| 결정 층 | [`tests/harness/golden_cases.yaml`](../tests/harness/golden_cases.yaml) + 백엔드 테스트 | 케이스 106개, 테스트 메서드 이름 앞 id로 연결 — [`tests/README.md`](../tests/README.md) |
+| 결정 층 | [`tests/harness/golden_cases.yaml`](../tests/harness/golden_cases.yaml) + 백엔드 테스트 | 케이스 138개(AC1~AC37 전부, normal·boundary·forbidden). 하니스 `golden/GoldenApiHarnessTest`가 파일을 읽어 34개를 실행·판정하고, 나머지는 메서드 이름 앞 id나 `@GoldenCase`로 테스트에 연결(`GoldenCatalogTest`가 누락 검사) — [`tests/README.md`](../tests/README.md) |
 | 통계 층 | [`evals/EVAL_DESIGN.md`](../evals/EVAL_DESIGN.md), [`evals/run_evals.py`](../evals/run_evals.py) | LLM 기능(`parse`, `recheck`) 품질을 비율·합격선으로 측정 |
 | 변경 근거 | [`docs/decision_log.md`](decision_log.md) | 스펙·기준을 바꾼 날짜·이유·결정자 |
 

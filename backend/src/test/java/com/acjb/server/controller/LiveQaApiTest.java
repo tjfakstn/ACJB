@@ -66,6 +66,7 @@ import com.acjb.server.repository.QAIssueRepository;
 import com.acjb.server.repository.ProjectRunRepository;
 import com.acjb.server.repository.QaCaptureRepository;
 import com.acjb.server.repository.ScreenFrameLinkRepository;
+import com.acjb.server.golden.GoldenCase;
 
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
@@ -145,6 +146,7 @@ class LiveQaApiTest {
     // ---------------------------------------------------------------- AC29 배포 대상
 
     @Test
+    @GoldenCase("dp-001")
     void 소유자가_배포_주소를_저장하면_manual로_돌려준다() throws Exception {
         mvc.perform(as(put(base() + "/deploy-url"), owner).contentType(MediaType.APPLICATION_JSON).content("{\"url\":\"" + DEPLOY + "\"}"))
             .andExpect(status().isOk())
@@ -158,6 +160,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("dp-003")
     void 소유자가_아니면_배포_주소를_바꿀_수_없다() throws Exception {
         mvc.perform(as(put(base() + "/deploy-url"), front).contentType(MediaType.APPLICATION_JSON).content("{\"url\":\"" + DEPLOY + "\"}"))
             .andExpect(status().isForbidden());
@@ -166,6 +169,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("dp-002")
     void 내부망_주소나_http가_아닌_주소는_400이고_저장하지_않는다() throws Exception {
         for (String url : new String[] {"http://10.0.0.5/", "http://169.254.169.254/latest/", "file:///etc/passwd", "ftp://x.dev"}) {
             mvc.perform(as(put(base() + "/deploy-url"), owner).contentType(MediaType.APPLICATION_JSON).content("{\"url\":\"" + url + "\"}"))
@@ -177,6 +181,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("dp-004")
     void 저장된_주소가_없으면_GitHub_최근_성공_배포_주소를_쓴다() throws Exception {
         project.connectGithub("https://github.com/o/r", "o/r", "main", "main", Instant.now());
         em.flush();
@@ -238,6 +243,7 @@ class LiveQaApiTest {
     // ---------------------------------------------------------------- AC30 캡처·첨부
 
     @Test
+    @GoldenCase("cp-002")
     void 배포_주소가_없으면_캡처는_409_NOT_READY() throws Exception {
         mvc.perform(as(post(base() + "/captures"), front).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"page_path\":\"/\",\"viewport\":{\"width\":1280,\"height\":720}}"))
@@ -247,6 +253,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("cp-001")
     void 배포_주소에_경로를_붙여_같은_크기로_찍고_저장한다() throws Exception {
         deployed();
         byte[] shot = png(1280, 720);
@@ -266,6 +273,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("cp-003")
     void 캡처에_실패하면_502_CAPTURE_FAILED이고_저장하지_않는다() throws Exception {
         deployed();
         when(capturer.capture(anyString(), anyInt(), anyInt())).thenThrow(new CaptureFailedException("배포 화면이 시간 안에 열리지 않았어요."));
@@ -278,6 +286,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("cp-004")
     void 캡처_요청의_경로나_크기가_잘못되면_400() throws Exception {
         deployed();
         for (String body : new String[] {
@@ -317,6 +326,7 @@ class LiveQaApiTest {
     // ---------------------------------------------------------------- AC31 수동 QA 등록
 
     @Test
+    @GoldenCase("mq-001")
     void 수동_QA를_등록하면_위치에서_재현_정보를_만들고_핀_1번을_발급한다() throws Exception {
         deployed();
         long notificationsBefore = notifications.count();
@@ -350,6 +360,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("mq-002")
     void 같은_요청_id로_다시_보내면_새로_만들지_않고_200으로_처음_것을_준다() throws Exception {
         deployed();
         String first = mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON).content(manualBody("same", "")))
@@ -363,6 +374,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("mq-003")
     void 필수값이_비거나_값이_잘못되면_400이고_아무것도_저장하지_않는다() throws Exception {
         deployed();
         long before = issues.count();
@@ -480,6 +492,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("fp-001")
     void 프레임_이미지와_노드_상자를_프레임_기준_비율로_주고_잠시_기억한다() throws Exception {
         figmaConnected();
         when(figma.bounds("KEY", List.of("10:1", "10:5"))).thenReturn(Map.of(
@@ -502,6 +515,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("fp-002")
     void Figma가_없거나_id가_잘못되거나_프레임이_없으면_거부한다() throws Exception {
         mvc.perform(as(get(base() + "/figma/frames/10:1/preview"), front))
             .andExpect(status().isConflict()).andExpect(jsonPath("$.error.code").value("NOT_READY"));
@@ -544,6 +558,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("sl-001")
     void 소유자가_프레임에_경로를_연결하면_끝의_슬래시를_떼고_저장하고_다시_넣으면_바꾼다() throws Exception {
         analyzed("10:1", "LOGIN-01 로그인", "10:2", "LOGIN-02 로그인 실패", "10:3", "WS-01 작업공간");
         mvc.perform(as(put(base() + "/screen-links/10:1"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/login/")))
@@ -568,6 +583,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("sl-002")
     void 소유자가_아니거나_매핑에_없는_프레임이거나_경로가_잘못되면_거부하고_바꾸지_않는다() throws Exception {
         analyzed("10:1", "LOGIN-01 로그인");
         mvc.perform(as(put(base() + "/screen-links/10:1"), front).contentType(MediaType.APPLICATION_JSON).content(linkBody("/login")))
@@ -586,6 +602,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("sl-003")
     void 연결을_지우면_204이고_없어도_204다() throws Exception {
         analyzed("10:1", "LOGIN-01 로그인");
         mvc.perform(as(put(base() + "/screen-links/10:1"), owner).contentType(MediaType.APPLICATION_JSON).content(linkBody("/login")))
@@ -673,6 +690,7 @@ class LiveQaApiTest {
     }
 
     @Test
+    @GoldenCase("mq-004")
     void 위치_없이_등록은_화면과_재현_절차가_있어야_하고_좌표를_섞으면_400() throws Exception {
         deployed();
         long before = pins.count();
@@ -694,6 +712,7 @@ class LiveQaApiTest {
     // ---------------------------------------------------------------- 앱 지원 — 발생 플랫폼(2026-11-11, 새 테스트)
 
     @Test
+    @GoldenCase("mq-005")
     void 앱_화면_문제는_발생_플랫폼과_적용_범위를_고를_수_있다() throws Exception {
         mvc.perform(as(post(base() + "/manual-qa"), front).contentType(MediaType.APPLICATION_JSON)
                 .content(noneBody("app-1", ",\"page_path\":\"홈 화면\",\"repro_steps\":[\"앱을 연다\"],\"platform\":\"aos\",\"platform_scope\":\"aos\"")))

@@ -39,6 +39,7 @@ import com.acjb.server.repository.ProjectMemberRepository;
 import com.acjb.server.repository.ProjectRepository;
 import com.acjb.server.repository.ProjectRunRepository;
 import com.acjb.server.repository.QAIssueRepository;
+import com.acjb.server.golden.GoldenCase;
 
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
@@ -149,6 +150,7 @@ class NotificationApiTest {
     }
 
     @Test
+    @GoldenCase("nr-003")
     void 실행_실패_알림은_이슈_없이_실행_종류와_오류_문구를_담는다() throws Exception {
         ProjectRun run = runs.save(new ProjectRun(project, RunKind.FIRST_QA, owner, Instant.now()));
         run.fail("GitHub 저장소 응답 시간 초과", Instant.now());
@@ -167,6 +169,7 @@ class NotificationApiTest {
     }
 
     @Test
+    @GoldenCase("nr-001")
     void 읽음은_본인_알림만_처음_읽은_시각을_남기고_남의_알림이나_다른_프로젝트_알림은_404() throws Exception {
         QAIssue issue = issueIn(project, MemberRole.FRONTEND);
         Notification mine = notifications.save(new Notification(issue, NotificationEvent.ISSUE_CREATED, NotificationCause.REGISTERED, front, reporter, "in_app"));
@@ -194,6 +197,7 @@ class NotificationApiTest {
     }
 
     @Test
+    @GoldenCase("nr-002")
     void 모두_읽음은_이_프로젝트의_내_알림만_바꾸고_바꾼_수를_돌려준다() throws Exception {
         QAIssue issue = issueIn(project, MemberRole.FRONTEND);
         notifications.save(new Notification(issue, NotificationEvent.ISSUE_CREATED, front, "in_app"));

@@ -36,6 +36,7 @@ import com.acjb.server.repository.ProjectRepository;
 import com.acjb.server.repository.QAIssueRepository;
 import com.acjb.server.service.ProjectDeletionService;
 import com.acjb.server.service.TeamNotifier;
+import com.acjb.server.golden.GoldenCase;
 
 import jakarta.servlet.http.Cookie;
 
@@ -109,6 +110,7 @@ class NotificationStreamApiTest {
     }
 
     @Test
+    @GoldenCase("ns-001")
     void 미인증은_401_비멤버는_403() throws Exception {
         mvc.perform(get("/api/v1/projects/" + project.getId() + "/notifications/stream")).andExpect(status().isUnauthorized());
         mvc.perform(as(outsider, get("/api/v1/projects/" + project.getId() + "/notifications/stream"))).andExpect(status().isForbidden());
@@ -125,6 +127,7 @@ class NotificationStreamApiTest {
     }
 
     @Test
+    @GoldenCase("ns-002")
     void 팀을_지정하면_그_팀_멤버의_이_프로젝트_스트림에만_신호가_1번_간다() throws Exception {
         MvcResult frontHere = open(front, project);
         MvcResult frontOther = open(front, other);
@@ -146,6 +149,7 @@ class NotificationStreamApiTest {
     }
 
     @Test
+    @GoldenCase("ns-003")
     void 저장이_롤백된_알림은_보내지_않는다() throws Exception {
         MvcResult frontHere = open(front, project);
         QAIssue issue = issueWithoutTeam();
@@ -160,6 +164,7 @@ class NotificationStreamApiTest {
     }
 
     @Test
+    @GoldenCase("ns-004")
     void 한_사람이_한_프로젝트에_연결을_6개_열면_가장_오래된_것이_닫히고_나머지_5개만_신호를_받는다() throws Exception {
         MvcResult first = open(front, project);
         List<MvcResult> rest = new java.util.ArrayList<>();

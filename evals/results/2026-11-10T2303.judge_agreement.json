@@ -1,0 +1,14 @@
+{
+  "run_id": "2026-11-10T2303",
+  "judge_version": "judge_v2",
+  "label_rows": 22,
+  "judgments": 73,
+  "agreement": 0.959,
+  "judge_more_lenient": 0,
+  "judge_more_strict": 3,
+  "by_criterion": {
+    "c1": 1.0,
+    "c2": 0.909,
+    "s1": 1.0
+  }
+}

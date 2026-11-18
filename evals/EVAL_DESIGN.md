@@ -71,7 +71,8 @@
 - 출력: 기준마다 `{reason, pass}` — **근거를 먼저 쓰고 판정**한다
 - 호출: 케이스마다 독립 호출(여러 케이스를 한 번에 넣지 않는다). 모델은 재검증 범위 제안과 같은 모델(`application.yml`의 `app.recheck.model`)
 - judge 검증(메타 평가): 첫 실행의 저장된 출력으로 **judge 판정을 뺀 라벨 시트**를 만든다(`--label-sheet RUN_ID`). 사람이 judge 출력을 보기 전에 기준마다 통과/실패를 매겨 `evals/judge_labels.jsonl`에 넣고, `--judge-agreement RUN_ID`로 일치율과 불일치 방향(judge가 더 관대/엄격)을 잰다. **일치율 80% 미만이면** 엇갈린 케이스 원문을 읽고 판정 조건을 고친 뒤 judge 버전을 올려 다시 잰다
-- **현재 상태: 라벨 미작성 → judge 점수(s1·c1·c2)는 아직 근거로 쓰지 않는다**(8절)
+- 라벨 입력: `python3 evals/label_judge.py RUN_ID --labeler 이름` — 라벨 시트를 한 줄씩 보여 주고(judge 판정은 보여 주지 않는다) 기준마다 y/n을 받아 `judge_labels.jsonl`에 적는다. 다 매긴 뒤 `python3 evals/run_evals.py --judge-agreement RUN_ID`가 일치율·불일치 방향·기준별 일치율을 `results/RUN_ID.judge_agreement.json`에 남기고 `history.csv`의 그 실행 줄 `judge_agreement` 열에 적는다(2026-11-18)
+- **현재 상태: 라벨 미작성(대상 `2026-11-10T2303`, 22줄 — s1 7개·제안 33개의 c1·c2) → judge 점수(s1·c1·c2)는 아직 근거로 쓰지 않는다**(8절). 라벨은 사람이 매긴다 — 에이전트가 채우지 않는다
 
 라벨 형식(`judge_labels.jsonl`, 한 줄 = 한 케이스):
 
@@ -171,5 +172,5 @@ ev-002·ev-009·ev-013은 T2303·T2307에서는 통과했다 — 제품 출력�
 |---|---|---|
 | 절대 규칙 케이스의 기대 결과 — parse의 `null_fields`·`forbidden_values`(p03, p05~p18), recheck의 `llm_not_called`(ev-010)·`injection_screen`(ev-017) | 에이전트 초안. 케이스마다 "텍스트에 정말 없는가"를 사람이 확인 | 설만수·오단비 |
 | 지표 합격선(1절 표) | 재검증 3개는 11-06 팀 설계, 나머지는 초안 | 오단비(스펙 담당) 확인 |
-| judge 라벨(`judge_labels.jsonl`) | 비어 있음 — 라벨 시트로 작성 | 설만수·오단비(judge 출력을 보기 전에) |
+| judge 라벨(`judge_labels.jsonl`) | 비어 있음 — `evals/label_judge.py`로 작성, 일치율은 `history.csv` `judge_agreement` | 설만수·오단비(judge 출력을 보기 전에) |
 | 오류 분석 메모 | 에이전트 초안 | 실패 원문을 사람이 다시 읽고 확정 |

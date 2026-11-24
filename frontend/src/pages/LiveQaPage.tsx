@@ -4,19 +4,21 @@ import {
   ApiError, captureScreen, createManualQa, formatDateTime, getDeployTarget, getFirstQa, getFramePreview, getMappings, linksForPath, listIssues, listMembers,
   listScreenLinks, manualQaId,
   TEAM_LABELS, updateDeployUrl, uploadCapture, type DeployTarget, type ManualQaInput, type ProjectMember, type ProjectRun,
-  type QaCapture, type QaIssue, type ScreenFrameLink, type Team, type Viewport,
+  type QaCapture, type QaIssue, type ScreenFrameLink, type Team, type Viewport, getLiveProxy, type LiveProxy,
 } from '../lib/api'
 import { Icon } from '../components/common/Icon'
 import { WorkflowStepper } from '../components/workspace/WorkspaceCards'
 import { currentStep } from '../components/workspace/workflow'
 import { AssignPanel } from '../components/qa/AssignPanel'
 import { ErrorCard, Loading, OUTLINE_BTN, PageTitle, PRIMARY_BTN, QaShell, issueParts, loadErrorMessage, useProject } from '../components/qa/QaParts'
+import { useOverlayLauncher } from '../components/liveqa/useOverlayLauncher'
 import { LivePreview, type PreviewSurface } from '../components/liveqa/LivePreview'
+import type { EmbedStatus, PickedElement } from '../components/liveqa/embed'
 import { QaItemList } from '../components/liveqa/QaItemList'
 import { ManualQaDetail } from '../components/liveqa/ManualQaDetail'
 import { CaptureStatusBox, FrameField, OptionalFields, platformInput, RequiredFields } from '../components/liveqa/DraftFields'
 import { NoLocationForm } from '../components/liveqa/NoLocationForm'
-import { hasContent, newRequestId, type Draft } from '../components/liveqa/draft'
+import { hasContent, LIVE_VIEWPORT, newRequestId, type Draft } from '../components/liveqa/draft'
 
 // 실시간 QA 워크스페이스(시안 W-01~05, M-01~M-10C · SPEC AC29~AC31). 지금까지의 목록형 QA 결과 화면을 대신한다.
 //  위: 배포 화면(Live Preview) — 배포 주소는 소유자가 입력한 값, 없으면 GitHub 최근 성공 배포 주소(AC29)
@@ -39,6 +41,27 @@ export function LiveQaPage() {
   const [path, setPath] = useState('/')
   const [reloadKey, setReloadKey] = useState(0)
   const [registerMode, setRegisterMode] = useState(false)
+  /** 등록용 전체 페이지 캡처(2026-11-20) — 실시간 화면은 교차 출처라 스크롤·요소를 읽을 수 없어 서버가 찍은 화면 위에서 위치를 고른다 */
+  const [pageShot, setPageShot] = useState<{ state: 'loading' } | { state: 'error'; message: string } | null>(null)
+  /** 지금 캔버스의 캡처가 찍은 경로 — 주소창 경로를 바꿔도 핀은 캡처한 경로로 남긴다 */
+  const [shotPath, setShotPath] = useState<string | null>(null)
+  const shotToken = useRef(0)
+  /** 배포 사이트의 QAting 스니펫 연결 상태와 스니펫이 알려 준 지금 경로(2026-11-20) */
+  const [embed, setEmbed] = useState<{ status: EmbedStatus; path: string | null }>({ status: 'waiting', path: null })
+  /** 연결 화면(프록시) — 기본으로 쓰고, 사이트가 깨지면 원래 화면으로 바꾼다(2026-11-20) */
+  const [proxy, setProxy] = useState<LiveProxy | null>(null)
+  const [viewMode, setViewMode] = useState<'proxy' | 'direct'>('proxy')
+  const [proxyFailed, setProxyFailed] = useState(false)
+  const onViewMode = useCallback((mode: 'proxy' | 'direct', failed = false) => {
+    setViewMode(mode)
+    setProxyFailed(failed)
+  }, [])
+  const loadProxy = useCallback(() => {
+    getLiveProxy(projectId).then(setProxy).catch(() => setProxy(null))
+  }, [projectId])
+  const embedRef = useRef(embed)
+  embedRef.current = embed
+  const onEmbedChange = useCallback((status: EmbedStatus, embedPath: string | null) => setEmbed({ status, path: embedPath }), [])
   const [surface, setSurface] = useState<PreviewSurface>({ kind: 'live', attachment: null })
   const [attachBusy, setAttachBusy] = useState(false)
   const [attachError, setAttachError] = useState<string | null>(null)
@@ -72,10 +95,16 @@ export function LiveQaPage() {
       .then(([m, l]) => { setFrames(m.items.map((i) => ({ frame_id: i.frame_id, frame_name: i.frame_name }))); setLinks(l) })
       .catch(() => { setFrames([]); setLinks([]) })
   }, [projectId])
+  // 사이트 위 QAting 툴바(오버레이, 2026-11-24) — 로그인이 필요한 화면까지 원래 사이트 그대로 QA한다
+  const overlay = useOverlayLauncher(projectId, () => { void load() })
 
   useEffect(() => {
     if (me) void load()
   }, [me, load])
+
+  useEffect(() => {
+    if (me) loadProxy()
+  }, [me, loadProxy])
 
   useEffect(() => {
     if (!toast) return
@@ -115,11 +144,23 @@ export function LiveQaPage() {
     const token = ++previewToken.current
     const m = item.manual_qa
     if (m) {
-      if (m.location_basis === 'capture_image' && m.capture_id && m.viewport) {
+      // 요소가 남은 핀은 스니펫이 연결된 같은 화면이면 실시간 화면에서 그 요소로 스크롤한다(LivePreview)
+      const live = embedRef.current
+      if (m.element && m.page_path && live.status === 'connected') {
+        setSurface({ kind: 'live', attachment: null })
+        if (live.path !== m.page_path) setPath(m.page_path)
+        return
+      }
+      // 그 밖에는 좌표와 그때 찍은 캡처(서버 캡처·첨부 이미지)가 있으면 그 캡처 위에 핀을 보여 준다
+      if (m.capture_id && m.viewport && m.anchor) {
         setSurface({
           kind: 'image',
-          attachment: { id: m.capture_id, kind: 'upload', page_url: null, width: m.viewport.width, height: m.viewport.height, created_at: item.created_at },
+          attachment: {
+            id: m.capture_id, kind: m.location_basis === 'capture_image' ? 'upload' : 'auto', page_url: m.page_url,
+            width: m.viewport.width, height: m.viewport.height, created_at: item.created_at, full_page: m.location_basis === 'page_capture',
+          },
         })
+        setShotPath(m.page_path)
       } else if (m.page_path) {
         // 위치 없이 등록한 항목도 경로를 적었으면 그 경로의 배포 화면을 연다(핀은 없다)
         setSurface({ kind: 'live', attachment: null })
@@ -144,7 +185,27 @@ export function LiveQaPage() {
 
   const backToLive = () => {
     previewToken.current++
+    shotToken.current++
+    setPageShot(null)
+    setRegisterMode(false)
     setSurface({ kind: 'live', attachment: null })
+  }
+
+  /** 지금 경로를 서버가 전체 페이지로 찍고, 다 찍히면 그 캡처 위에서 등록 모드를 켠다 */
+  const shootPage = (pagePath: string) => {
+    const token = ++shotToken.current
+    setPageShot({ state: 'loading' })
+    captureScreen(projectId, pagePath, LIVE_VIEWPORT, true)
+      .then((capture) => {
+        if (shotToken.current !== token) return
+        setPageShot(null)
+        setShotPath(pagePath)
+        setSurface({ kind: 'image', attachment: capture })
+        setRegisterMode(true)
+      })
+      .catch((e) => {
+        if (shotToken.current === token) setPageShot({ state: 'error', message: e instanceof ApiError ? e.message : '서버가 화면을 찍지 못했어요.' })
+      })
   }
 
   const isOwner = !!me && !!detail && detail.owner_id === me.id
@@ -156,9 +217,9 @@ export function LiveQaPage() {
   const select = (id: string | null) => setParams(id ? { issue: id } : {}, { replace: true })
 
   // 서버 캡처는 입력을 막지 않고 뒤에서 진행한다. 결과는 같은 작성 건(requestId)일 때만 반영한다
-  const startCapture = (requestId: string, pagePath: string, viewport: Viewport) => {
+  const startCapture = (requestId: string, pagePath: string, viewport: Viewport, fullPage = false) => {
     patchDraft({ capture: { state: 'loading' } })
-    captureScreen(projectId, pagePath, viewport)
+    captureScreen(projectId, pagePath, viewport, fullPage)
       .then((capture) => setDraft((d) => (d && d.requestId === requestId ? { ...d, capture: { state: 'ok', capture } } : d)))
       .catch((e) => setDraft((d) => (d && d.requestId === requestId
         ? { ...d, capture: { state: 'failed', message: e instanceof ApiError ? e.message : '캡처하지 못했어요.' } } : d)))
@@ -166,13 +227,16 @@ export function LiveQaPage() {
 
   const onPick = (x: number, y: number, viewport: Viewport) => {
     setRegisterMode(false)
-    const basis = surface.kind === 'image' ? 'capture_image' as const : 'live_overlay' as const
-    const requestId = newRequestId()
     const attachment = surface.kind === 'image' ? surface.attachment : null
+    // 서버가 전체 페이지로 찍은 캡처면 page_capture(좌표는 페이지 맨 위 기준), 첨부 이미지면 capture_image
+    const pageCapture = attachment?.kind === 'auto' && !!attachment.full_page
+    const basis = pageCapture ? 'page_capture' as const : surface.kind === 'image' ? 'capture_image' as const : 'live_overlay' as const
+    const pagePath = pageCapture && shotPath ? shotPath : path
+    const requestId = newRequestId()
     // 연결된 프레임이 하나뿐이고 지금 분석 매핑에 있을 때만 미리 고른다 — 여럿이면(상태별 시안) 사람이 고른다
-    const linked = linksForPath(links, path).filter((l) => frames.some((f) => f.frame_id === l.frame_id))
+    const linked = linksForPath(links, pagePath).filter((l) => frames.some((f) => f.frame_id === l.frame_id))
     setDraft({
-      requestId, basis, x, y, viewport, pagePath: path, title: '', description: '', severity: null, expected: '', actual: '',
+      requestId, basis, x, y, viewport, pagePath, title: '', description: '', severity: null, expected: '', actual: '',
       frameId: linked.length === 1 ? (linked[0]?.frame_id ?? null) : null,
       platform: 'web', platformOnly: false,
       capture: attachment ? { state: 'ok', capture: attachment } : { state: 'loading' },
@@ -180,6 +244,23 @@ export function LiveQaPage() {
     })
     select(null)
     if (basis === 'live_overlay') startCapture(requestId, path, viewport)
+  }
+
+  /** 스니펫으로 실시간 화면의 요소를 골랐다 — 증거로 그 화면 전체를 서버가 뒤에서 찍는다 */
+  const onElementPicked = (p: PickedElement) => {
+    setRegisterMode(false)
+    const requestId = newRequestId()
+    const linked = linksForPath(links, p.path).filter((l) => frames.some((f) => f.frame_id === l.frame_id))
+    setDraft({
+      requestId, basis: 'live_element', x: p.point.x, y: p.point.y, viewport: p.viewport, pagePath: p.path,
+      element: p.element, screen: p.client,
+      title: '', description: '', severity: null, expected: '', actual: '',
+      frameId: linked.length === 1 ? (linked[0]?.frame_id ?? null) : null,
+      platform: 'web', platformOnly: false, capture: { state: 'loading' },
+      expanded: false, saving: false, errors: {}, saveError: null,
+    })
+    select(null)
+    startCapture(requestId, p.path, LIVE_VIEWPORT, true)
   }
 
   const attachToDraft = async (file: File) => {
@@ -227,7 +308,9 @@ export function LiveQaPage() {
       description: d.description.trim(),
       page_path: d.pagePath,
       anchor: { x_px: d.x, y_px: d.y },
-      viewport: d.viewport,
+      // 캡처 위에서 찍었으면 화면 크기는 서버가 캡처에서 정한다
+      ...(d.basis === 'page_capture' ? {} : { viewport: d.viewport }),
+      ...(d.basis === 'live_element' && d.element ? { element: d.element } : {}),
       location_basis: d.basis,
       ...(d.capture.state === 'ok' ? { capture_id: d.capture.capture.id } : { capture_status: d.capture.state === 'failed' ? 'failed' as const : 'none' as const }),
       ...(d.severity ? { severity: d.severity } : {}),
@@ -262,13 +345,13 @@ export function LiveQaPage() {
 
   // 목록의 [수동 QA 등록] — 위치는 배포 화면에서 찍으므로 등록 모드를 켜고 화면을 배포 화면으로 올린다.
   // 찍을 화면이 없으면 그 이유에 맞는 다음 단계로 보낸다(삽입 제한이면 스크린샷 첨부, 주소가 없으면 소유자에게 주소 입력)
-  const blocked = target?.embeddable === false
   // Figma 프레임을 보는 중이면 배포 화면 기준으로 판단한다 — 등록을 누르면 배포 화면으로 돌아간다
-  const canPick = surface.kind === 'image' ? !!surface.attachment : !!target?.url && !blocked
+  // QAting 화면 안 등록은 항상 캡처 위에서(2026-11-24) — 서버가 지금 화면을 찍으므로 삽입이 막힌 사이트도 된다.
+  // 로그인이 필요한 화면은 [사이트에서 QA 시작](스니펫)이나 스크린샷 첨부로 등록한다
+  const canPick = surface.kind === 'image' ? !!surface.attachment : !!target?.url
   const registerHint = !target ? null
-    : canPick ? null
-      : blocked ? '이 사이트는 화면 삽입이 막혀 있어요 — 스크린샷을 첨부해 그 위에서 찍거나, 위치 없이 등록할 수 있어요.'
-        : isOwner ? '배포 주소가 없어 위치 없이 등록해요 — 배포 주소를 넣으면 화면 위에서 위치를 찍을 수 있어요.'
+    : canPick ? '서버가 지금 화면을 찍고 그 위에서 위치를 찍어요 · 로그인이 필요한 화면은 [사이트에서 QA 시작]이나 스크린샷 첨부로 등록해요'
+      : isOwner ? '배포 주소가 없어 위치 없이 등록해요 — 배포 주소를 넣으면 화면 위에서 위치를 찍을 수 있어요.'
           : '배포 주소가 없어 위치 없이 등록해요.'
   const startRegister = () => {
     if (draft) {
@@ -276,9 +359,15 @@ export function LiveQaPage() {
       return
     }
     if (canPick) {
-      if (surface.kind === 'figma') backToLive()
-      setRegisterMode(true)
       select(null)
+      if (surface.kind === 'image' && surface.attachment) {
+        // 이미 캡처·첨부 이미지를 보고 있으면 그 위에서 바로 찍는다
+        setRegisterMode(true)
+      } else {
+        // 실시간 화면은 스크롤·요소를 읽을 수 없다 — 서버가 지금 경로를 찍고 그 위에서 고른다(2026-11-20)
+        if (surface.kind === 'figma') backToLive()
+        shootPage(path)
+      }
     } else {
       // 배포 화면이 없거나 삽입이 막혔으면 위치 없이 등록한다(2026-11-10) — 스크린샷은 선택
       setNoLocation(true)
@@ -302,7 +391,10 @@ export function LiveQaPage() {
     <>
       <div className="mt-3 flex items-center gap-1.5 text-xs text-qa-text-sub">
         <Icon name="map-pin" className="h-3.5 w-3.5" />
-        {draft.basis === 'capture_image' ? '첨부 이미지 기준' : `위치 ${draft.pagePath}`} · x {draft.x}, y {draft.y} · 기준 {draft.viewport.width}×{draft.viewport.height}
+        {draft.basis === 'live_element' ? `${draft.pagePath} · ${draft.element?.text ? `「${draft.element.text.slice(0, 20)}」 ` : ''}요소에 붙임 · 페이지 맨 위에서 x ${draft.x}, y ${draft.y}`
+          : draft.basis === 'capture_image' ? `첨부 이미지 기준 · x ${draft.x}, y ${draft.y}`
+          : draft.basis === 'page_capture' ? `캡처 기준 ${draft.pagePath} · 페이지 맨 위에서 x ${draft.x}, y ${draft.y}`
+            : `위치 ${draft.pagePath} · x ${draft.x}, y ${draft.y}`} · 기준 {draft.viewport.width}×{draft.viewport.height}
       </div>
       {draft.saveError && (
         <div role="alert" className="mt-3 rounded-lg bg-qa-warning/10 px-3 py-2 text-xs">
@@ -334,7 +426,18 @@ export function LiveQaPage() {
         description={ready
           ? `${target.url ? '배포 화면 연결됨' : '배포 주소 없음'} · 자동 QA ${autoCount}건 · 수동 QA ${manualCount}건${run?.status === 'succeeded' ? ` · 첫 QA ${formatDateTime(run.finished_at ?? run.created_at)} 완료` : ' · 첫 QA 전'}`
           : undefined}
-        actions={<Link to={`/app/projects/${projectId}/queue`} className={PRIMARY_BTN}>QA Queue로 이동</Link>}
+        actions={(
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button type="button" onClick={() => overlay.start(path)} disabled={!target?.url || overlay.state === 'opening'}
+              title={target?.url ? '배포 사이트를 새 탭에서 원래 주소 그대로 열고, 그 위에 QAting 툴바를 띄워요. 로그인·실제 기능이 그대로 동작해요' : '배포 주소를 먼저 넣어 주세요'}
+              className={PRIMARY_BTN}>사이트에서 QA 시작</button>
+            <Link to={`/app/projects/${projectId}/queue`} className={OUTLINE_BTN}>QA Queue로 이동</Link>
+            {overlay.state === 'waiting' && <span className="w-full text-right text-xs text-qa-text-sub">새 탭에서 사이트를 열었어요 — 사이트에 QAting 스니펫이 있으면 오른쪽 아래에 툴바가 떠요</span>}
+            {overlay.state === 'connected' && <span className="w-full text-right text-xs text-qa-success">새 탭의 툴바와 연결됐어요 — 등록하면 여기 목록이 바로 갱신돼요</span>}
+            {overlay.state === 'error' && <span className="w-full text-right text-xs text-qa-warning">{overlay.error}</span>}
+            {overlay.state === 'nosnippet' && <SnippetLine />}
+          </div>
+        )}
       />
       {failMessage ? <ErrorCard message={failMessage} projectId={projectId} /> : !ready ? <Loading /> : (
         <>
@@ -342,12 +445,17 @@ export function LiveQaPage() {
           <div className="mt-6 scroll-mt-4" ref={previewRef}>
             <LivePreview
               projectId={projectId} target={target} path={path}
-              onPathChange={(p) => { setPath(p); setSurface({ kind: 'live', attachment: null }) }}
+              onPathChange={(p) => { setPath(p); backToLive() }}
               reloadKey={reloadKey} onReload={() => setReloadKey((k) => k + 1)}
               surface={surface} registerMode={registerMode}
               onBackToLive={backToLive}
+              pageShot={pageShot} onRetryPageShot={() => shootPage(path)}
+              pickElement={registerMode && surface.kind === 'live'} onElementPicked={onElementPicked}
+              onPickCancel={() => setRegisterMode(false)} onEmbedChange={onEmbedChange}
+              liveDraft={draft?.basis === 'live_element' && draft.screen ? { ...draft.screen, number: nextPin } : null}
+              proxy={proxy} viewMode={viewMode} onViewMode={onViewMode} proxyFailed={proxyFailed}
               onPick={onPick} pins={manualPins}
-              draftPin={draft ? { x: draft.x, y: draft.y, viewport: draft.viewport, number: nextPin } : null}
+              draftPin={draft && draft.basis !== 'live_element' ? { x: draft.x, y: draft.y, viewport: draft.viewport, number: nextPin } : null}
               selectedId={selectedId} onSelectPin={(id) => { if (!draft) select(id) }}
               onAttachForImage={(f) => void attachForImage(f)} attachBusy={attachBusy} attachError={attachError}
               isOwner={isOwner} onEditUrl={() => setEditingUrl(true)} runLabel={runLabel}>
@@ -380,7 +488,7 @@ export function LiveQaPage() {
 
           <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(320px,440px)_minmax(0,1fr)]">
             <QaItemList issues={issues} members={members} selectedId={draft ? null : selectedId} onSelect={(id) => { if (!draft) select(id) }}
-              onRegister={startRegister} registerHint={registerHint} registerActive={registerMode || !!draft} />
+              onRegister={startRegister} registerHint={registerHint} registerActive={registerMode || !!draft || pageShot?.state === 'loading'} />
             {noLocation && !draft ? (
               <NoLocationForm projectId={projectId} frames={frames} links={links} nextPin={nextPin} onClose={() => setNoLocation(false)}
                 onCreated={(created) => {
@@ -457,7 +565,7 @@ export function LiveQaPage() {
 
       {editingUrl && target && (
         <DeployUrlDialog projectId={projectId} target={target} onClose={() => setEditingUrl(false)}
-          onSaved={(t) => { setTarget(t); setEditingUrl(false); setSurface({ kind: 'live', attachment: null }); setReloadKey((k) => k + 1) }} />
+          onSaved={(t) => { setTarget(t); setEditingUrl(false); setSurface({ kind: 'live', attachment: null }); setReloadKey((k) => k + 1); onViewMode('proxy'); loadProxy() }} />
       )}
 
       {toast && (
@@ -477,8 +585,9 @@ export function LiveQaPage() {
 
 /** 찍은 위치 근처에 띄우는 작성 창(M-03·M-04). 캔버스 밖으로 나가지 않게 좌우·위아래를 바꾼다 */
 function Popover({ draft, children }: { draft: Draft; children: React.ReactNode }) {
-  const rx = draft.x / draft.viewport.width
-  const ry = draft.y / draft.viewport.height
+  // 실시간 화면에서 고른 요소는 고른 순간의 화면 좌표 기준으로 띄운다(페이지 좌표는 화면 높이를 넘을 수 있다)
+  const rx = draft.screen ? draft.screen.x / LIVE_VIEWPORT.width : draft.x / draft.viewport.width
+  const ry = draft.screen ? draft.screen.y / LIVE_VIEWPORT.height : draft.y / draft.viewport.height
   return (
     <div className="absolute z-30 w-[360px] max-w-[calc(100%-16px)] rounded-xl border border-qa-border bg-white p-4 shadow-xl"
       role="dialog" aria-label="새 QA 항목 작성"
@@ -544,3 +653,17 @@ function DeployUrlDialog({ projectId, target, onClose, onSaved }: {
   )
 }
 
+
+/** 새 탭에 툴바가 안 뜰 때 — 사이트에 넣을 스니펫 한 줄. 넣고 다시 배포하면 [사이트에서 QA 시작]이 된다 */
+function SnippetLine() {
+  const [copied, setCopied] = useState(false)
+  const code = `<script src="${window.location.origin}/embed.js" async></script>`
+  const copy = () => { void navigator.clipboard?.writeText(code).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1500) }) }
+  return (
+    <span className="flex w-full flex-wrap items-center justify-end gap-2 text-xs text-qa-warning">
+      이 사이트에 QAting 스니펫이 없어 툴바가 뜨지 않았어요 — 사이트 &lt;head&gt;에 한 줄을 넣고 다시 배포해 주세요(그 전까지는 [수동 QA 등록]으로 캡처 위에서)
+      <code className="rounded bg-gray-900 px-2 py-0.5 font-mono text-[11px] text-white">{code}</code>
+      <button type="button" onClick={copy} className="font-medium text-qa-primary-hover hover:underline">{copied ? '복사됨' : '복사'}</button>
+    </span>
+  )
+}

@@ -13,7 +13,7 @@
 | 표준 구조 | 이 저장소의 위치 | 실행·확인 |
 | --- | --- | --- |
 | MVP AC 표시 | [docs/SPEC.md](docs/SPEC.md) 6절 — **AC1~AC28이 MVP**(각 AC 앞 `[MVP]`), AC29~AC37은 MVP 발표 이후 추가 개발(`[MVP 이후]`, 모두 구현·테스트됨) | |
-| 골든 케이스 `tests/harness/golden_cases.yaml` | 같음 — 138케이스, 케이스마다 `ac`·`category`(normal 47·boundary 69·forbidden 22) | |
+| 골든 케이스 `tests/harness/golden_cases.yaml` | 같음 — 145케이스, 케이스마다 `ac`·`category`(normal 51·boundary 71·forbidden 23) | |
 | 테스트 하니스 `tests/test_<기능>_golden.py` | **[backend/src/test/java/com/acjb/server/golden/GoldenApiHarnessTest.java](backend/src/test/java/com/acjb/server/golden/GoldenApiHarnessTest.java)** — 백엔드가 Java(Spring)라 JUnit으로 작성. 케이스 파일을 읽어 실제 API를 호출하고 판정(QA 이슈 등록·알림·상태 전이·재검증·권한, 34케이스). 케이스 파일 자체 검사(AC 번호·범주·모든 케이스의 테스트 연결)는 **[GoldenCatalogTest.java](backend/src/test/java/com/acjb/server/golden/GoldenCatalogTest.java)** | `cd backend && ./gradlew test` (MySQL 필요, 아래 개발자용 로컬 실행) |
 | 결함 주입 기록 `docs/prompts/delegation_<기능>.md` | [docs/prompts/delegation_golden.md](docs/prompts/delegation_golden.md)(골든 하니스), [docs/prompts/delegation_evals.md](docs/prompts/delegation_evals.md)(evals 러너) | |
 | evals 설계·데이터셋 | [evals/EVAL_DESIGN.md](evals/EVAL_DESIGN.md), [evals/evalset.jsonl](evals/evalset.jsonl)(35케이스, 10개 범주) | |
@@ -104,9 +104,24 @@ https://acjb-qating.com 에서 [로그인하기]를 누르고 구글 계정을 �
 
 **8) 실시간 QA — 수동으로 이슈 등록**
 1. **[QA 결과]** 위쪽 배포 화면 영역에서 **[배포 주소 입력]**을 누르고 `https://acjb-qating.com`을 저장합니다(소유자만 가능).
-2. **[QA 등록하기]**를 누르고, 배포 화면에서 문제가 있는 위치를 클릭합니다. 제목과 설명을 입력하고 등록합니다(심각도·기대/실제 결과는 선택).
-3. 목록에 `QA-M001` 같은 번호로 수동 QA가 추가되고, 화면 위 그 위치에 핀이 표시됩니다.
+2. **[수동 QA 등록]**을 누르면 서버가 지금 화면을 전체 페이지로 찍고(몇 초~30초), 그 캡처 위에서 문제가 있는 위치를 클릭합니다. 제목과 설명을 입력하고 등록합니다(심각도·기대/실제 결과는 선택).
+3. 목록에 `QA-M001` 같은 번호로 수동 QA가 추가되고, 상세에 **찍은 요소**(버튼 글자·CSS 경로)와 캡처가 표시됩니다.
+   - 배포 화면 영역은 **보기 전용**입니다. 등록된 핀 번호가 실제 화면의 요소에 붙어 스크롤을 따라가지만, 이 안에서는 로그인·실제 기능이 동작하지 않습니다.
    - 배포 화면이 없거나 위치를 찍기 어렵다면 **스크린샷 첨부**나 **위치 없이 등록**(화면 경로와 재현 절차를 직접 입력)도 할 수 있습니다.
+
+**9) 실시간 QA — 실제 사이트에서 등록(스니펫, 로그인이 필요한 화면까지)**
+1. 배포 사이트 HTML `<head>`(React·Vite면 `index.html`, Next.js면 `layout`·`_document`)에 아래 한 줄을 넣고 다시 배포합니다(처음 한 번만).
+2. **[QA 결과]**에서 **[사이트에서 QA 시작]**을 누르면 배포 사이트가 **새 탭에서 원래 주소 그대로** 열리고, 오른쪽 아래에 QAting 툴바가 뜹니다. 로그인과 실제 기능이 그대로 동작합니다.
+3. 툴바의 **[핀 찍기]** → 문제가 있는 요소 클릭 → 제목·설명 입력 → **[등록]**. "지금 화면을 캡처해 붙이기"를 켜 두면 브라우저가 이 탭 공유를 한 번 묻고 그 화면을 증거로 붙입니다(스크린샷 붙여넣기도 가능).
+4. 등록한 핀은 그 사이트 화면의 요소에 붙어 보이고, QAting 목록에도 바로 추가됩니다.
+
+```html
+<script src="https://acjb-qating.com/embed.js" async></script>
+```
+
+- 스니펫은 QAting이 연 탭에서만 동작하고, 일반 방문자에게는 아무것도 하지 않습니다. 고른 요소의 위치·CSS 경로·글자 앞부분과 사람이 쓴 내용만 QAting으로 보냅니다(입력값·쿠키는 보내지 않음).
+- 사이트에 스니펫이 없으면 새 탭에 툴바가 뜨지 않고, QAting 화면에 설치 한 줄과 [복사]가 안내됩니다. 그 전까지는 8)처럼 캡처 위에서 등록합니다.
+- 사이트에 CSP가 있으면 `script-src`와 `connect-src`에 `https://acjb-qating.com`을 더해 주세요.
 
 ## 4. 기대 결과와 확인 방법
 
@@ -118,7 +133,7 @@ https://acjb-qating.com 에서 [로그인하기]를 누르고 구글 계정을 �
 | 이슈 상세 | 이슈 하나 선택 | 디자인 기준값 vs 구현값, 코드 파일·줄, 그 줄이 들어온 커밋·PR | AC5, AC34 |
 | 담당 팀·상태 | 담당 팀 `프론트엔드` → [수정 시작] → [수정 완료로 변경] | 그 팀 멤버에게 알림 1건, 상태가 확인 필요 → 수정 중 → 수정 완료로 바뀌고 상태 이력에 변경자와 시각이 남음, 등록자에게 수정 완료 알림 1건. 담당 팀 역할이 아니면 상태를 바꿀 수 없음 | AC3, AC4, AC6, AC13, AC14 |
 | Re-QA | [Re-QA 실행] | 이슈 상세의 재검증 기록에 FAIL과 다시 읽은 코드 값이 남고, 상태가 "재확인 필요"로 바뀜, 담당 팀에 재실패 알림 | AC28, AC7, AC11 |
-| 수동 QA | 배포 주소 `https://acjb-qating.com`, 화면 위치 클릭, 제목·설명 입력 | 목록에 `QA-M###` 항목이 생기고 배포 화면 위에 핀이 표시됨. 제목이나 설명을 비우면 등록되지 않음 | AC29, AC31, AC1 |
+| 수동 QA | 배포 주소 `https://acjb-qating.com`, [수동 QA 등록] → 찍힌 화면에서 위치 클릭, 제목·설명 입력 | 목록에 `QA-M###` 항목이 생기고, 항목을 고르면 등록 당시 캡처 위에 핀과 찍은 요소가 표시됨(스크롤해도 어긋나지 않음). 제목이나 설명을 비우면 등록되지 않음 | AC29, AC30, AC31, AC1 |
 | 필수 정보 누락(경계) | 위치 없이 등록에서 재현 절차를 비우고 등록 시도 | 등록되지 않음 — 서버도 재현 절차 없는 등록을 400으로 거부하고 지어내 채우지 않음(골든 `mq-004`·`qi-001`) | AC1, AC31 |
 
 AI 판단이 섞여 있어 이슈 개수는 실행할 때마다 조금씩 다를 수 있습니다.

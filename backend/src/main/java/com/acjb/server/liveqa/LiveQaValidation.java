@@ -119,4 +119,25 @@ final class LiveQaValidation {
         String authority = u.getRawAuthority() == null ? "" : u.getRawAuthority();
         return u.getScheme() + "://" + authority + basePath + path;
     }
+
+    /** 스니펫이 알려 준 요소(live_element) — CSS 경로는 필수, 글자는 선택, 상자는 0 이상·크기 1 이상(2026-11-20) */
+    static com.acjb.server.domain.PageElement element(LiveQaRequests.ElementInput in) {
+        if (in == null || in.selector() == null || in.selector().isBlank()) {
+            throw ApiException.badRequest("필수 항목이 비어 있습니다: element.selector");
+        }
+        String selector = in.selector().trim();
+        if (selector.length() > com.acjb.server.domain.PageElement.SELECTOR_MAX) {
+            throw ApiException.badRequest("element.selector는 " + com.acjb.server.domain.PageElement.SELECTOR_MAX + "자 이하여야 합니다.");
+        }
+        String text = in.text() == null ? "" : in.text().replaceAll("\\s+", " ").trim();
+        if (text.length() > com.acjb.server.domain.PageElement.TEXT_MAX) {
+            throw ApiException.badRequest("element.text는 " + com.acjb.server.domain.PageElement.TEXT_MAX + "자 이하여야 합니다.");
+        }
+        LiveQaRequests.BoxInput b = in.box();
+        if (b == null || b.x() == null || b.y() == null || b.width() == null || b.height() == null
+            || b.x() < 0 || b.y() < 0 || b.width() < 1 || b.height() < 1) {
+            throw ApiException.badRequest("element.box는 x·y가 0 이상, width·height가 1 이상이어야 합니다.");
+        }
+        return new com.acjb.server.domain.PageElement(selector, text, b.x(), b.y(), b.width(), b.height());
+    }
 }

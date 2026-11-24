@@ -28,6 +28,10 @@ export interface Draft {
   platform: AppPlatform
   platformOnly: boolean
   capture: DraftCapture
+  /** live_element — 스니펫이 알려 준 요소 */
+  element?: { selector: string; text: string; box: { x: number; y: number; width: number; height: number } }
+  /** live_element — 고른 순간의 화면 기준 좌표(실시간 화면 위에 작성 핀·창을 띄운다) */
+  screen?: { x: number; y: number }
   expanded: boolean
   saving: boolean
   errors: { title?: string; description?: string }

@@ -69,8 +69,29 @@ public class QaCapture {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** 전체 페이지 캡처(2026-11-20) — width·height는 이미지 크기(페이지 전체), viewportHeight는 브라우저 화면 높이 */
+    @Column(name = "full_page", nullable = false, updatable = false)
+    private boolean fullPage;
+
+    @Column(name = "viewport_height", updatable = false)
+    private Integer viewportHeight;
+
+    /** 찍는 순간 화면 요소의 위치 목록(JSON, 페이지 맨 위 기준) — 핀을 찍은 점의 요소를 고를 때 읽는다 */
+    @Lob
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "elements", updatable = false, columnDefinition = "MEDIUMTEXT")
+    private String elements;
+
     public QaCapture(Project project, CaptureKind kind, String contentType, String pageUrl, int width, int height, byte[] image,
                      Member createdBy, Instant createdAt) {
+        this(project, kind, contentType, pageUrl, width, height, image, createdBy, createdAt, false, null, null);
+    }
+
+    public QaCapture(Project project, CaptureKind kind, String contentType, String pageUrl, int width, int height, byte[] image,
+                     Member createdBy, Instant createdAt, boolean fullPage, Integer viewportHeight, String elements) {
+        this.fullPage = fullPage;
+        this.viewportHeight = viewportHeight;
+        this.elements = elements;
         this.project = project;
         this.kind = kind;
         this.contentType = contentType;

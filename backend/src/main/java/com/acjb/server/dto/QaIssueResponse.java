@@ -102,7 +102,7 @@ public record QaIssueResponse(
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ManualQaView(int pinNumber, String title, String pagePath, String pageUrl, AnchorView anchor, ViewportView viewport,
                                String locationBasis, String captureStatus, String captureId, String severity, String expectedResult,
-                               String actualResult, FigmaFrameView figmaFrame) {
+                               String actualResult, FigmaFrameView figmaFrame, ElementView element) {
         static ManualQaView of(ManualQaPin p) {
             if (p == null) {
                 return null;
@@ -114,7 +114,9 @@ public record QaIssueResponse(
                 p.getViewportWidth() == null ? null : new ViewportView(p.getViewportWidth(), p.getViewportHeight()),
                 lower(p.getLocationBasis()), lower(p.getCaptureStatus()),
                 p.getCapture() == null ? null : String.valueOf(p.getCapture().getId()), lower(p.getSeverity()), p.getExpectedResult(),
-                p.getActualResult(), p.getFigmaFrameId() == null ? null : new FigmaFrameView(p.getFigmaFrameId(), p.getFigmaFrameName()));
+                p.getActualResult(), p.getFigmaFrameId() == null ? null : new FigmaFrameView(p.getFigmaFrameId(), p.getFigmaFrameName()),
+                p.getElementSelector() == null ? null : new ElementView(p.getElementSelector(), p.getElementText(),
+                    new BoxView(p.getElementX(), p.getElementY(), p.getElementWidth(), p.getElementHeight())));
         }
 
         private static double ratio(int v, int size) {
@@ -125,6 +127,15 @@ public record QaIssueResponse(
     /** 수동 QA를 등록할 때 고른 기준 Figma 프레임(AC33) */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record FigmaFrameView(String frameId, String frameName) {
+    }
+
+    /** 캡처 위에서 찍은 점의 요소(page_capture, 2026-11-20) — 위치는 페이지 맨 위 기준 픽셀 */
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ElementView(String selector, String text, BoxView box) {
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record BoxView(int x, int y, int width, int height) {
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

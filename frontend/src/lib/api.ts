@@ -489,8 +489,13 @@ export const SEVERITY_LABELS: Record<Severity, string> = {
 }
 
 export type CaptureStatus = 'captured' | 'failed' | 'user_attached' | 'none'
-/** none=위치 없이 등록(배포 화면 없음, 2026-11-10) — 좌표·화면 크기가 없다 */
-export type LocationBasis = 'live_overlay' | 'capture_image' | 'none'
+/**
+ * none=위치 없이 등록(배포 화면 없음, 2026-11-10) — 좌표·화면 크기가 없다.
+ * page_capture=서버가 찍은 전체 페이지 캡처 위에서 찍음(2026-11-20) — 좌표는 페이지 맨 위 기준, 화면 크기는 캡처 이미지 크기.
+ * live_element=배포 사이트의 QAting 스니펫으로 실시간 화면의 요소를 골랐다(2026-11-20) — 핀이 그 요소를 따라간다.
+ * live_overlay는 예전 방식(실시간 화면 위 고정 좌표) — 화면 조작을 따라가지 못해 새로 등록하지 않는다
+ */
+export type LocationBasis = 'live_overlay' | 'capture_image' | 'page_capture' | 'live_element' | 'none'
 
 export interface Viewport { width: number; height: number }
 
@@ -510,6 +515,8 @@ export interface ManualQa {
   actual_result: string | null
   /** 등록할 때 고른 기준 Figma 프레임(AC33) — 이름은 등록 때 값 */
   figma_frame: { frame_id: string; frame_name: string } | null
+  /** page_capture로 찍은 점의 요소 — 서버 캡처 때 모은 요소 중 그 점을 담는 가장 작은 것. 위치는 페이지 맨 위 기준 */
+  element?: { selector: string; text: string; box: { x: number; y: number; width: number; height: number } } | null
 }
 
 export interface DeployTarget {
@@ -526,9 +533,14 @@ export interface QaCapture {
   id: string
   kind: 'auto' | 'upload'
   page_url: string | null
+  /** 이미지 크기 — 전체 페이지 캡처면 height는 페이지 높이 */
   width: number
   height: number
   created_at: string
+  /** 서버가 페이지 전체를 찍었는지(2026-11-20) */
+  full_page?: boolean
+  /** 전체 페이지 캡처의 브라우저 화면 높이 */
+  viewport_height?: number | null
 }
 
 export interface ManualQaInput {
@@ -551,6 +563,8 @@ export interface ManualQaInput {
   platform?: AppPlatform
   /** 적용 범위 — 보내지 않으면 common. aos·ios면 platform과 같아야 한다 */
   platform_scope?: 'common' | 'aos' | 'ios'
+  /** live_element일 때 필수 — 스니펫이 알려 준 요소(상자는 페이지 맨 위 기준) */
+  element?: { selector: string; text: string; box: { x: number; y: number; width: number; height: number } }
 }
 
 export type AppPlatform = 'web' | 'aos' | 'ios'
@@ -560,12 +574,36 @@ export function getDeployTarget(projectId: string): Promise<DeployTarget> {
   return request<DeployTarget>('GET', `/api/v1/projects/${projectId}/deploy-target`)
 }
 
+/** 연결 화면(프록시, 2026-11-20) — 배포 사이트를 QAting과 다른 호스트로 대신 띄우고 스니펫을 넣는다. enter_url 뒤에 &path=를 붙여 연다 */
+export interface LiveProxy {
+  enabled: boolean
+  origin: string | null
+  enter_url: string | null
+}
+
+export function getLiveProxy(projectId: string): Promise<LiveProxy> {
+  return request<LiveProxy>('GET', `/api/v1/projects/${projectId}/live-proxy`)
+}
+
+/** 배포 사이트 위 QAting 툴바(오버레이, 2026-11-24) 입장권 — 새 탭에서 연 사이트의 스니펫에 postMessage로만 넘긴다 */
+export interface OverlaySession {
+  token: string
+  expires_at: string
+  target_origin: string
+  open_url: string
+}
+
+export function openOverlaySession(projectId: string, pagePath: string | null): Promise<OverlaySession> {
+  return request<OverlaySession>('POST', `/api/v1/projects/${projectId}/overlay-sessions`, { page_path: pagePath })
+}
+
 export function updateDeployUrl(projectId: string, url: string | null): Promise<DeployTarget> {
   return request<DeployTarget>('PUT', `/api/v1/projects/${projectId}/deploy-url`, { url })
 }
 
-export function captureScreen(projectId: string, pagePath: string, viewport: Viewport): Promise<QaCapture> {
-  return request<QaCapture>('POST', `/api/v1/projects/${projectId}/captures`, { page_path: pagePath, viewport })
+export function captureScreen(projectId: string, pagePath: string, viewport: Viewport, fullPage = false): Promise<QaCapture> {
+  return request<QaCapture>('POST', `/api/v1/projects/${projectId}/captures`,
+    fullPage ? { page_path: pagePath, viewport, full_page: true } : { page_path: pagePath, viewport })
 }
 
 /** multipart라 JSON 요청 함수를 쓰지 않는다 — Content-Type은 브라우저가 경계값과 함께 정한다 */

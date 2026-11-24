@@ -43,6 +43,10 @@ public class LiveQaController {
     private final FramePreviewService framePreviews;
     private final ScreenLinkService screenLinks;
     private final CurrentMember currentMember;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.liveqa.proxy.LiveProxyService liveProxy;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.acjb.server.liveqa.overlay.OverlayService overlay;
 
     public LiveQaController(DeployTargetService deployTargets, CaptureService captures, ManualQaService manualQa,
                             FramePreviewService framePreviews, ScreenLinkService screenLinks, CurrentMember currentMember) {
@@ -57,6 +61,12 @@ public class LiveQaController {
     @GetMapping("/deploy-target")
     public Map<String, Object> deployTarget(@PathVariable Long projectId) {
         return ApiResponses.ok(deployTargets.get(projectId));
+    }
+
+    /** 연결 화면(프록시) 입장권 — 배포 사이트에 스니펫이 없어도 실시간 화면에 핀을 붙이게(2026-11-20) */
+    @GetMapping("/live-proxy")
+    public Map<String, Object> liveProxy(@PathVariable Long projectId) {
+        return ApiResponses.ok(liveProxy.issue(projectId));
     }
 
     @PutMapping("/deploy-url")
@@ -113,6 +123,14 @@ public class LiveQaController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteScreenLink(@PathVariable Long projectId, @PathVariable String frameId, @AuthenticationPrincipal OAuth2User principal) {
         screenLinks.delete(projectId, frameId, currentMember.require(principal));
+    }
+
+    /** 배포 사이트 위 QAting 툴바(오버레이) 입장권 — 로그인한 프로젝트 멤버만(AC12), 4시간(2026-11-24) */
+    @PostMapping("/overlay-sessions")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Map<String, Object> openOverlay(@PathVariable Long projectId, @RequestBody(required = false) LiveQaRequests.ScreenLinkRequest request,
+                                           @AuthenticationPrincipal OAuth2User principal) {
+        return ApiResponses.ok(overlay.openSession(projectId, request == null ? null : request.pagePath(), currentMember.require(principal)));
     }
 
     @PostMapping("/manual-qa")

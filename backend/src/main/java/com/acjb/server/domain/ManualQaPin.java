@@ -108,6 +108,38 @@ public class ManualQaPin {
     @Column(name = "figma_frame_name", length = 255, updatable = false)
     private String figmaFrameName;
 
+    /** PAGE_CAPTURE로 찍은 점의 요소(2026-11-20) — 서버 캡처 때 모은 요소 중 그 점을 담는 가장 작은 것. 없으면 null */
+    @Column(name = "element_selector", length = 500, updatable = false)
+    private String elementSelector;
+
+    @Column(name = "element_text", length = 200, updatable = false)
+    private String elementText;
+
+    @Column(name = "element_x", updatable = false)
+    private Integer elementX;
+
+    @Column(name = "element_y", updatable = false)
+    private Integer elementY;
+
+    @Column(name = "element_width", updatable = false)
+    private Integer elementWidth;
+
+    @Column(name = "element_height", updatable = false)
+    private Integer elementHeight;
+
+    /** 등록하는 트랜잭션 안에서만 부른다(저장 전) */
+    public void attachElement(PageElement e) {
+        if (e == null) {
+            return;
+        }
+        this.elementSelector = e.selector();
+        this.elementText = e.text();
+        this.elementX = e.x();
+        this.elementY = e.y();
+        this.elementWidth = e.width();
+        this.elementHeight = e.height();
+    }
+
     @SuppressWarnings("java:S107") // 위치·캡처·선택 입력을 한 번에 받는 등록 전용 생성자
     public ManualQaPin(Project project, QAIssue issue, int pinNumber, String clientRequestId, String title, String pagePath,
                        String pageUrl, Integer xPx, Integer yPx, Integer viewportWidth, Integer viewportHeight, LocationBasis locationBasis,

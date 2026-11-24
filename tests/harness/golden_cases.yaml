@@ -1,5 +1,5 @@
 # 골든 케이스 (데이터)
-# 결정 층 기준 데이터 — 케이스 138개(2026-11-18). 각 케이스는 docs/SPEC.md의 AC 번호(ac)와 범주(category: normal·boundary·forbidden)를 가진다.
+# 결정 층 기준 데이터 — 케이스 145개(2026-11-20). 각 케이스는 docs/SPEC.md의 AC 번호(ac)와 범주(category: normal·boundary·forbidden)를 가진다.
 # 하니스 backend/src/test/java/com/acjb/server/golden/GoldenApiHarnessTest가 이 파일을 직접 읽어 harness: api인 케이스를 실행·판정한다(given = 기계가 읽는 사전 조건).
 # 나머지 케이스는 메서드 이름 앞 id(예: qi001_)나 @GoldenCase("id")로 백엔드 테스트에 연결되고, GoldenCatalogTest가 연결 누락·AC 누락을 검사한다. 자세한 것은 tests/README.md.
 # 판정 규칙: expected에 명시된 키가 응답에 존재하고 조건을 만족하면 통과. 명시 안 된 키는 판정에 안 씀.
@@ -2068,3 +2068,98 @@ cases:
       precondition: 같은 사람이 같은 프로젝트에 연결 6개
     expected:
       followup: { open_streams: 5, oldest_closed: true }
+
+  # --- 수동 QA를 서버 캡처 위에서 등록(2026-11-20, AC30 full_page·AC31 page_capture) — MVP 이후 ---
+  # 배포 화면은 교차 출처 iframe이라 스크롤·요소를 읽을 수 없어 핀이 화면 조작을 따라가지 못했다(사용자 제보)
+
+  - id: cp-005
+    ac: AC30
+    category: normal
+    description: full_page로 캡처하면 페이지 전체(최대 12000px)를 찍고 그때의 요소 위치를 남기며, 이미지 크기와 브라우저 화면 높이를 따로 준다
+    input:
+      endpoint: POST /projects/{projectId}/captures
+      precondition: 배포 주소 있음, 페이지 높이 2400px
+      body: { page_path: "/checkout", viewport: { width: 1280, height: 720 }, full_page: true }
+    expected:
+      status: 201
+      body: { data: { kind: "auto", full_page: true, width: 1280, height: 2400, viewport_height: 720 } }
+
+  - id: mq-006
+    ac: AC31
+    category: normal
+    description: 전체 페이지 캡처 위에서 찍으면 페이지 맨 위 기준 좌표와 그 점을 담는 가장 작은 요소(selector·글자·위치)를 핀에 남기고, 재현 절차를 그 위치·요소로 만든다
+    input:
+      endpoint: POST /projects/{projectId}/manual-qa
+      precondition: cp-005의 캡처, 요소 #pay("결제하기", 540·1480·200×48)가 그 점을 담는 가장 작은 요소
+      body: { client_request_id: "pc-1", title: "결제 버튼 색이 달라요", description: "결제하기 버튼이 회색으로 보입니다.", page_path: "/checkout", anchor: { x_px: 600, y_px: 1500 }, location_basis: "page_capture", capture_id: "{captureId}" }
+    expected:
+      status: 201
+      body:
+        data:
+          screen_location: "/checkout (x 600, y 1500 · 페이지 맨 위 기준 · 1280×720 화면)"
+          manual_qa: { location_basis: "page_capture", capture_status: "captured", viewport: { width: 1280, height: 2400 }, element: { selector: "#pay", text: "결제하기" } }
+      followup: { expected_notification_count_total_delta: 0 }
+
+  - id: mq-007
+    ac: AC31
+    category: boundary
+    description: page_capture는 이 프로젝트의 전체 페이지 서버 캡처와 그 안의 좌표만 받는다 — 캡처 없음·첫 화면만 찍은 캡처·다른 프로젝트 캡처·캡처 밖 좌표·viewport를 보냄·다른 경로·repro_steps를 보냄은 400이고 아무것도 저장하지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/manual-qa
+    expected:
+      status: 400
+      followup: { expected_issue_count_delta: 0, expected_pin_count: 0 }
+
+  # --- 스니펫(embed.js)으로 실시간 화면의 요소를 골라 등록(2026-11-20, AC31 live_element) — MVP 이후 ---
+  # 배포 사이트에 스크립트 한 줄을 넣으면 핀이 그 요소에 붙어 스크롤·화면 변화를 따라간다(Figma 댓글처럼)
+
+  - id: mq-008
+    ac: AC31
+    category: normal
+    description: 스니펫으로 고른 요소(CSS 경로·글자·상자)와 그 안의 점을 핀에 남기고, 재현 절차를 그 위치·요소로 만들며 알림은 만들지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/manual-qa
+      precondition: 배포 주소 있음
+      body: { client_request_id: "le-1", title: "결제 버튼 색이 달라요", description: "결제하기 버튼이 회색으로 보입니다.", page_path: "/checkout", anchor: { x_px: 640, y_px: 1400 }, viewport: { width: 1280, height: 720 }, location_basis: "live_element", element: { selector: "#pay", text: "결제하기", box: { x: 540, y: 1380, width: 200, height: 48 } } }
+    expected:
+      status: 201
+      body:
+        data:
+          screen_location: "/checkout (x 640, y 1400 · 페이지 맨 위 기준 · 1280×720 화면)"
+          manual_qa: { location_basis: "live_element", element: { selector: "#pay", text: "결제하기" } }
+      followup: { expected_notification_count_total_delta: 0 }
+
+  - id: mq-009
+    ac: AC31
+    category: boundary
+    description: live_element는 요소가 없음·빈 CSS 경로·크기 0 상자·500자 넘는 경로·요소 밖의 점·화면 너비 밖·첨부 이미지를 증거 캡처로 보냄·repro_steps를 보냄이면 400이고, 다른 방식에 element를 보내도 400이다 — 아무것도 저장하지 않는다
+    input:
+      endpoint: POST /projects/{projectId}/manual-qa
+    expected:
+      status: 400
+      followup: { expected_issue_count_delta: 0, expected_pin_count: 0 }
+
+  # --- 연결 화면(프록시, 2026-11-20, AC29) — 배포 사이트에 스니펫이 없어도 주소만으로 실시간 화면에 핀을 붙인다 — MVP 이후 ---
+
+  - id: lp-001
+    ac: AC29
+    category: normal
+    description: 프로젝트 멤버가 입장권(GET live-proxy)을 받아 들어가면 프록시 호스트가 원래 배포 사이트를 대신 보여 주고 HTML에 스니펫을 넣으며, 화면 삽입을 막는 헤더(X-Frame-Options·CSP)는 빼고 쿠키 Domain은 지운다
+    input:
+      endpoint: GET /projects/{projectId}/live-proxy → GET {proxy}/__qating/enter?t={token}&path=/checkout → GET {proxy}/checkout
+      precondition: 프록시 주소(app.proxy.origin) 설정, 배포 주소 있음
+    expected:
+      status: 200
+      body: { data: { enabled: true } }
+      followup: { enter_redirects_to: "/checkout", html_contains_snippet: true, x_frame_options: null }
+
+  - id: lp-002
+    ac: AC29
+    category: forbidden
+    rule: N19
+    description: 입장권이 없거나 위조·만료된 요청은 403이고 원래 사이트를 부르지 않는다. 입장권이 있어도 내부망·메타데이터·http(s)가 아닌 주소는 열지 않는다(열린 프록시·SSRF가 되지 않는다)
+    input:
+      endpoint: GET {proxy}/checkout · GET {proxy}/__qating/ext/{169.254.169.254 주소}
+    expected:
+      status: 403
+      followup: { upstream_calls: 0 }

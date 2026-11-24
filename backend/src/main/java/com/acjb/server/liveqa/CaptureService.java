@@ -60,14 +60,31 @@ public class CaptureService {
         if (!policy.allows(pageUrl)) {
             throw new ApiException(HttpStatus.BAD_GATEWAY, ErrorCodes.CAPTURE_FAILED, "허용되지 않은 주소라 캡처하지 않았어요.");
         }
+        boolean fullPage = Boolean.TRUE.equals(req.fullPage());
         byte[] png;
+        PageCapturer.PageShot shot = null;
         try {
-            png = capturer.capture(pageUrl, viewport.width(), viewport.height());
+            if (fullPage) {
+                shot = capturer.captureFullPage(pageUrl, viewport.width(), viewport.height());
+                png = shot.png();
+            } else {
+                png = capturer.capture(pageUrl, viewport.width(), viewport.height());
+            }
         } catch (CaptureFailedException e) {
             throw new ApiException(HttpStatus.BAD_GATEWAY, ErrorCodes.CAPTURE_FAILED, e.getMessage());
         } catch (com.acjb.server.scan.BrowserSlots.Busy e) {
             // 동시에 띄우는 브라우저 수를 넘었다(2026-11-11) — 서버 문제가 아니라 잠시 뒤 다시 하면 된다
             throw com.acjb.server.service.UsageLimits.limited(e.getMessage());
+        }
+        if (shot != null) {
+            String elements = PageElements.write(shot.elements());
+            int pageHeight = shot.pageHeight();
+            return tx.execute(status -> {
+                Project project = projects.findById(projectId).orElseThrow(() -> ApiException.notFound("프로젝트를 찾을 수 없습니다."));
+                QaCapture saved = captures.save(new QaCapture(project, CaptureKind.AUTO, "image/png", pageUrl, viewport.width(), pageHeight,
+                    png, requester, clock.instant(), true, viewport.height(), elements));
+                return QaCaptureView.of(saved);
+            });
         }
         return save(projectId, requester, CaptureKind.AUTO, "image/png", pageUrl, viewport.width(), viewport.height(), png);
     }

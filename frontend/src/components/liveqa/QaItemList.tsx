@@ -56,7 +56,7 @@ export function QaItemList({ issues, members, selectedId, onSelect, onRegister, 
           <h2 className="text-base font-bold text-black">QA 항목</h2>
           <span className="text-xs font-medium text-qa-text-sub">{issues.length}개</span>
           <button type="button" onClick={onRegister} aria-pressed={registerActive}
-            title={registerHint ?? '배포 화면에서 문제 위치를 클릭해 수동 QA를 등록해요'}
+            title={registerHint ?? '배포 화면에서 문제 위치를 클릭해 수동 QA를 등록해요(스니펫이 없으면 서버가 찍은 화면 위에서)'}
             className={`ml-auto inline-flex h-8 items-center gap-1 rounded-lg px-3 text-xs font-medium ${
               registerActive ? 'bg-[#7c3aed] text-white' : 'bg-qa-primary text-white hover:bg-qa-primary-hover'}`}>
             <Icon name={registerActive ? 'map-pin' : 'plus'} className="h-3.5 w-3.5" />
@@ -65,7 +65,7 @@ export function QaItemList({ issues, members, selectedId, onSelect, onRegister, 
         </div>
         {registerHint && <p className="mt-2 text-xs text-[#a85a00]">{registerHint}</p>}
         {registerActive && !registerHint && (
-          <p className="mt-2 text-xs text-[#7c3aed]">위쪽 배포 화면에서 문제가 있는 위치를 클릭하세요 · Esc로 취소</p>
+          <p className="mt-2 text-xs text-[#7c3aed]">위쪽 화면에서 문제가 있는 위치를 클릭하세요(스크롤해도 돼요) · Esc로 취소</p>
         )}
         <label className="mt-3 flex h-9 items-center gap-2 rounded-lg border border-qa-border px-3">
           <Icon name="search" className="h-4 w-4 text-qa-text-sub" />

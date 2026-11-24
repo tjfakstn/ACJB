@@ -59,6 +59,7 @@ services:
       - backend
     environment:
       DOMAIN: ${DOMAIN:?deploy/.env 에 DOMAIN}
+      PROXY_DOMAIN: ${PROXY_DOMAIN:-view.localhost}
     ports:
       - "80:80"
       - "443:443"

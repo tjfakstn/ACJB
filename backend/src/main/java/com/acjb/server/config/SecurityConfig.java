@@ -46,6 +46,7 @@ public class SecurityConfig {
     private static final String AUTH_ME_URI = "/api/v1/auth/me";
 
     private static final String PROJECT_SCOPED_PATH = "/api/v1/projects/{projectId}/**";
+    private static final String OVERLAY_PATH = "/api/v1/overlay/**";
 
     private final CorsProperties corsProperties;
     private final ProjectMemberAuthorizationManager projectMemberAuthorization;
@@ -72,7 +73,7 @@ public class SecurityConfig {
             // 세션 쿠키 인증이라 상태 변경 요청(POST·PATCH)에 CSRF 토큰을 요구한다(SPEC 5절).
             // spa(): 토큰을 JS가 읽을 수 있는 XSRF-TOKEN 쿠키로 내려주고, 요청 헤더 X-XSRF-TOKEN 값과 대조한다.
             // GET은 검사하지 않는다. 토큰이 없거나 틀리면 AccessDeniedHandler(JsonErrorResponder.forbidden)로 403.
-            .csrf(csrf -> csrf.spa())
+            .csrf(csrf -> csrf.spa().ignoringRequestMatchers(PathPatternRequestMatcher.withDefaults().matcher(OVERLAY_PATH)))
             .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
@@ -81,6 +82,8 @@ public class SecurityConfig {
                     AUTH_ME_URI,
                     AUTH_LOGIN_BASE_URI + "/**", AUTH_CALLBACK_BASE_URI + "/**", AUTH_LOGOUT_URI
                 ).permitAll()
+                // 오버레이(배포 사이트 위 툴바)는 세션이 아니라 입장권으로 인증한다 — OverlayAuthFilter(2026-11-24)
+                .requestMatchers(PathPatternRequestMatcher.withDefaults().matcher(OVERLAY_PATH)).permitAll()
                 // AC12: 프로젝트 하위 경로는 그 프로젝트 멤버만 (미인증 401, 비멤버 403)
                 .requestMatchers(PathPatternRequestMatcher.withDefaults().matcher(PROJECT_SCOPED_PATH))
                     .access(projectMemberAuthorization)
@@ -134,7 +137,17 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
 
+        // 오버레이는 배포 사이트(프로젝트마다 다른 출처)에서 부른다. 쿠키를 쓰지 않아(credentials 없음) 출처를 열어 두고,
+        // 입장권의 배포 출처와 Origin이 같은지는 OverlayAuthFilter가 요청마다 본다. 먼저 등록해야 "/**"보다 먼저 맞는다
+        CorsConfiguration overlay = new CorsConfiguration();
+        overlay.setAllowedOriginPatterns(List.of("*"));
+        overlay.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        overlay.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        overlay.setAllowCredentials(false);
+        overlay.setMaxAge(600L);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration(OVERLAY_PATH, overlay);
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }

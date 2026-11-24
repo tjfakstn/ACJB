@@ -18,6 +18,7 @@ import com.acjb.server.domain.Environment;
 import com.acjb.server.domain.IssueStatus;
 import com.acjb.server.domain.LocationBasis;
 import com.acjb.server.domain.ManualQaPin;
+import com.acjb.server.domain.PageElement;
 import com.acjb.server.domain.Member;
 import com.acjb.server.domain.PlatformScope;
 import com.acjb.server.domain.Project;
@@ -76,6 +77,15 @@ public class ManualQaService {
     }
 
     public Created create(Long projectId, LiveQaRequests.ManualQaRequest req, Member reporter) {
+        return create(projectId, req, reporter, false);
+    }
+
+    /**
+     * overlay(2026-11-24): 배포 사이트 위 QAting 툴바에서 온 등록 — 로그인한 화면은 서버가 다시 찍을 수 없어
+     * 브라우저가 찍은 증거 캡처(첨부)를 받고, 사람이 적은 재현 절차(로그인 등)를 위치에서 만든 절차 뒤에 덧붙인다.
+     * QAting 화면 안 등록(overlay=false)의 규칙(골든 mq-009)은 그대로다.
+     */
+    public Created create(Long projectId, LiveQaRequests.ManualQaRequest req, Member reporter, boolean overlay) {
         if (req == null) {
             throw ApiException.badRequest("요청 본문이 비어 있습니다.");
         }
@@ -89,6 +99,16 @@ public class ManualQaService {
         LocationBasis basis = LiveQaValidation.parseEnum(LocationBasis.class, req.locationBasis(), "location_basis");
         // 위치 없이 등록(none, 2026-11-10) — 배포 화면이 없어도 된다. 좌표가 없으니 재현 절차는 사람이 적는다(AC1·N1)
         boolean none = basis == LocationBasis.NONE;
+        // 서버 캡처 위에서 등록(2026-11-20) — 화면 크기는 캡처에서 정하고, 좌표는 페이지 맨 위 기준이라 화면 높이를 넘을 수 있다
+        boolean pageCapture = basis == LocationBasis.PAGE_CAPTURE;
+        // 스니펫으로 실시간 화면의 요소를 골랐다(2026-11-20) — 좌표는 페이지 맨 위 기준이라 화면 높이를 넘을 수 있다
+        boolean liveElement = basis == LocationBasis.LIVE_ELEMENT;
+        PageElement pickedElement = null;
+        if (liveElement) {
+            pickedElement = LiveQaValidation.element(req.element());
+        } else if (req.element() != null) {
+            throw ApiException.badRequest("element는 스니펫으로 고른 위치(live_element)일 때만 보냅니다.");
+        }
         String path;
         LiveQaValidation.Viewport viewport = null;
         Integer x = null;
@@ -105,16 +125,35 @@ public class ManualQaService {
             userSteps = LiveQaValidation.reproSteps(req.reproSteps());
         } else {
             if (req.reproSteps() != null && !req.reproSteps().isEmpty()) {
-                throw ApiException.badRequest("위치를 찍어 등록하면 재현 절차는 위치에서 만듭니다 — repro_steps는 location_basis none일 때만 보냅니다.");
+                if (!(overlay && liveElement)) {
+                    throw ApiException.badRequest("위치를 찍어 등록하면 재현 절차는 위치에서 만듭니다 — repro_steps는 location_basis none일 때만 보냅니다.");
+                }
+                userSteps = LiveQaValidation.reproSteps(req.reproSteps());
             }
             path = LiveQaValidation.pagePath(req.pagePath());
-            viewport = LiveQaValidation.viewport(req.viewport());
+            if (pageCapture) {
+                if (req.viewport() != null) {
+                    throw ApiException.badRequest("캡처 위에서 등록(page_capture)할 때는 viewport를 보내지 않습니다 — 캡처에서 정합니다.");
+                }
+            } else {
+                viewport = LiveQaValidation.viewport(req.viewport());
+            }
             if (req.anchor() == null || req.anchor().xPx() == null || req.anchor().yPx() == null) {
                 throw ApiException.badRequest("필수 항목이 비어 있습니다: anchor");
             }
             x = req.anchor().xPx();
             y = req.anchor().yPx();
-            if (x < 0 || y < 0 || x >= viewport.width() || y >= viewport.height()) {
+            if (x < 0 || y < 0) {
+                throw ApiException.badRequest("anchor는 0 이상이어야 합니다.");
+            }
+            if (liveElement) {
+                if (x >= viewport.width()) {
+                    throw ApiException.badRequest("anchor가 viewport 너비(" + viewport.width() + ") 밖에 있습니다.");
+                }
+                if (!pickedElement.contains(x, y)) {
+                    throw ApiException.badRequest("anchor가 element.box 안에 있어야 합니다 — 고른 요소 안의 점이어야 합니다.");
+                }
+            } else if (viewport != null && (x >= viewport.width() || y >= viewport.height())) {
                 throw ApiException.badRequest("anchor가 viewport(" + viewport.width() + "×" + viewport.height() + ") 밖에 있습니다.");
             }
         }
@@ -130,6 +169,9 @@ public class ManualQaService {
         }
         if (basis == LocationBasis.CAPTURE_IMAGE && captureId == null) {
             throw ApiException.badRequest("첨부 이미지 위에서 찍은 위치(capture_image)는 capture_id가 필요합니다.");
+        }
+        if (pageCapture && captureId == null) {
+            throw ApiException.badRequest("캡처 위에서 찍은 위치(page_capture)는 capture_id가 필요합니다.");
         }
         CaptureStatus requestedStatus = CaptureStatus.NONE;
         if (captureId == null && req.captureStatus() != null) {
@@ -170,7 +212,7 @@ public class ManualQaService {
 
         // 3) 배포 주소는 트랜잭션 밖에서 정한다(GitHub 호출이 있을 수 있다). 실시간 화면 위에서 찍었다면 주소가 있어야 한다
         String pageUrl = null;
-        if (basis == LocationBasis.LIVE_OVERLAY) {
+        if (basis == LocationBasis.LIVE_OVERLAY || liveElement) {
             DeployTargetService.Target target = deployTargets.resolve(projectId);
             if (target.url() == null) {
                 throw new ApiException(HttpStatus.CONFLICT, ErrorCodes.NOT_READY, "배포 주소가 없어 배포 화면 위치로 등록할 수 없어요.");
@@ -186,6 +228,7 @@ public class ManualQaService {
         final Integer finalX = x;
         final Integer finalY = y;
         final List<String> finalUserSteps = userSteps;
+        final PageElement finalPicked = pickedElement;
 
         return tx.execute(status -> {
             // 프로젝트 행을 잠가 핀 번호 발급과 요청 id 중복 확인을 줄 세운다
@@ -205,7 +248,44 @@ public class ManualQaService {
 
             String screenLocation;
             List<String> steps;
-            if (basis == LocationBasis.NONE) {
+            String pinPageUrl = finalPageUrl;
+            LiveQaValidation.Viewport pinViewport = finalViewport;
+            PageElement element = null;
+            if (basis == LocationBasis.PAGE_CAPTURE) {
+                // 서버가 이 프로젝트의 배포 화면을 전체 페이지로 찍은 캡처여야 한다 — 첨부 이미지나 첫 화면만 찍은 캡처로는 페이지 좌표를 정할 수 없다
+                if (capture.getKind() != CaptureKind.AUTO || !capture.isFullPage() || capture.getViewportHeight() == null) {
+                    throw ApiException.badRequest("page_capture는 전체 페이지로 찍은 서버 캡처(full_page)가 필요합니다.");
+                }
+                if (capture.getPageUrl() == null || !capture.getPageUrl().endsWith(finalPath)) {
+                    throw ApiException.badRequest("page_path가 캡처한 화면의 경로와 다릅니다.");
+                }
+                if (finalX >= capture.getWidth() || finalY >= capture.getHeight()) {
+                    throw ApiException.badRequest("anchor가 캡처(" + capture.getWidth() + "×" + capture.getHeight() + ") 밖에 있습니다.");
+                }
+                pinPageUrl = capture.getPageUrl();
+                pinViewport = new LiveQaValidation.Viewport(capture.getWidth(), capture.getHeight());
+                element = PageElements.at(PageElements.read(capture.getElements()), finalX, finalY);
+                String screen = capture.getWidth() + "×" + capture.getViewportHeight();
+                screenLocation = truncate(finalPath + " (x " + finalX + ", y " + finalY + " · 페이지 맨 위 기준 · " + screen + " 화면)", 255);
+                steps = List.of(truncate("'" + pinPageUrl + "'를 " + screen + " 화면으로 연다", 500),
+                    truncate("페이지 맨 위에서 (x " + finalX + ", y " + finalY + ") 위치" + describe(element) + "를 확인한다", 500));
+            } else if (basis == LocationBasis.LIVE_ELEMENT) {
+                // 증거 캡처(선택)는 서버가 찍은 이 프로젝트의 배포 화면이어야 한다. 전체 페이지면 핀 화면 크기를 캡처 크기로 둬 캡처 위에도 그대로 그린다
+                if (capture != null && capture.getKind() != CaptureKind.AUTO && !overlay) {
+                    throw ApiException.badRequest("live_element의 capture_id는 서버가 찍은 배포 화면 캡처여야 합니다.");
+                }
+                if (capture != null && capture.isFullPage()) {
+                    pinViewport = new LiveQaValidation.Viewport(capture.getWidth(), capture.getHeight());
+                }
+                element = finalPicked;
+                String screen = finalViewport.width() + "×" + finalViewport.height();
+                screenLocation = truncate(finalPath + " (x " + finalX + ", y " + finalY + " · 페이지 맨 위 기준 · " + screen + " 화면)", 255);
+                List<String> located = List.of(truncate("'" + finalPageUrl + "'를 " + screen + " 화면으로 연다", 500),
+                    truncate("페이지 맨 위에서 (x " + finalX + ", y " + finalY + ") 위치" + describe(element) + "를 확인한다", 500));
+                // 툴바에서 사람이 적은 절차(로그인 등)는 위치에서 만든 절차 뒤에 붙인다 — 지어내지 않고 적은 그대로(N1)
+                steps = finalUserSteps.isEmpty() ? located
+                    : java.util.stream.Stream.concat(located.stream(), finalUserSteps.stream()).toList();
+            } else if (basis == LocationBasis.NONE) {
                 // 위치가 없으면 사람이 알려 준 화면(경로, 없으면 고른 프레임 이름)과 사람이 적은 재현 절차 그대로
                 screenLocation = truncate(finalPath != null ? finalPath : finalFrame.frameName(), 255);
                 steps = finalUserSteps;
@@ -223,10 +303,12 @@ public class ManualQaService {
                 new Environment(platform, null, null, null), List.of(), figmaLink, null, null, reporter));
             StatusHistory first = histories.save(new StatusHistory(issue, IssueStatus.NEEDS_CHECK, reporter));
             int pinNumber = pins.maxPinNumber(projectId) + 1;
-            ManualQaPin pin = pins.save(new ManualQaPin(project, issue, pinNumber, requestId, title, finalPath, finalPageUrl, finalX, finalY,
-                finalViewport == null ? null : finalViewport.width(), finalViewport == null ? null : finalViewport.height(), basis, captureStatus,
+            ManualQaPin newPin = new ManualQaPin(project, issue, pinNumber, requestId, title, finalPath, pinPageUrl, finalX, finalY,
+                pinViewport == null ? null : pinViewport.width(), pinViewport == null ? null : pinViewport.height(), basis, captureStatus,
                 capture, severity, expected, actual,
-                finalFrame == null ? null : finalFrame.frameId(), finalFrame == null ? null : finalFrame.frameName(), clock.instant()));
+                finalFrame == null ? null : finalFrame.frameId(), finalFrame == null ? null : finalFrame.frameName(), clock.instant());
+            newPin.attachElement(element);
+            ManualQaPin pin = pins.save(newPin);
             issues.flush();
             // 이슈는 재검증 범위 제안(AC20)의 검색 문서가 된다 — 일반 등록과 같다
             events.publishEvent(new EmbeddingSourcesChanged(projectId));
@@ -247,6 +329,14 @@ public class ManualQaService {
     /** 연결된 Figma 파일에서 그 프레임을 여는 주소 — 화면의 figmaFrameUrl과 같은 모양. 파일 연결이 없으면 남기지 않는다 */
     static String figmaFrameUrl(String fileKey, String frameId) {
         return fileKey == null ? null : "https://www.figma.com/design/" + fileKey + "/?node-id=" + frameId.replace(':', '-');
+    }
+
+    /** 재현 절차에 넣는 요소 설명 — 「글자」 요소(CSS 경로). 요소가 없으면 빈 문자열 */
+    private static String describe(PageElement element) {
+        if (element == null) {
+            return "";
+        }
+        return "의 " + (element.text().isBlank() ? "" : "「" + truncate(element.text(), 40) + "」 ") + "요소(" + truncate(element.selector(), 200) + ")";
     }
 
     private static String truncate(String s, int max) {

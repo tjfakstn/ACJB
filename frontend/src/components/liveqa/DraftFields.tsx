@@ -63,10 +63,10 @@ export function CaptureStatusBox({ draft, projectId, onRetry, onAttach }: {
     return (
       <div className="flex items-center gap-3 rounded-lg bg-qa-surface px-3 py-2">
         <span className="relative h-10 w-16 flex-none overflow-hidden rounded border border-qa-border bg-white">
-          <img src={captureImageUrl(projectId, c.capture.id)} alt="" className="h-full w-full object-cover" />
+          <img src={captureImageUrl(projectId, c.capture.id)} alt="" className="h-full w-full object-cover object-top" />
         </span>
         <span className="min-w-0 text-xs">
-          <span className="block font-medium text-black">{isUpload ? '첨부 이미지 연결됨' : `위치 캡처 연결됨 · ${new Date(c.capture.created_at).toLocaleTimeString('ko-KR')}`}</span>
+          <span className="block font-medium text-black">{isUpload ? '첨부 이미지 연결됨' : `${c.capture.full_page ? '전체 페이지 캡처' : '위치 캡처'} 연결됨 · ${new Date(c.capture.created_at).toLocaleTimeString('ko-KR')}`}</span>
           <span className="block text-qa-text-sub">{c.capture.width}×{c.capture.height} · {isUpload ? '사용자 첨부' : '서버 캡처'}</span>
         </span>
       </div>
